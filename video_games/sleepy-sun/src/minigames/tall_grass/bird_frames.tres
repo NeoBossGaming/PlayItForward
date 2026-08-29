@@ -1,0 +1,18 @@
+[gd_resource type="SpriteFrames" load_steps=3 format=3]
+
+[ext_resource type="Texture2D" path="res://assets/game/tall_grass/bird_0.png" id="t1"]
+[ext_resource type="Texture2D" path="res://assets/game/tall_grass/bird_1.png" id="t2"]
+
+[resource]
+animations = [{
+"frames": [{
+"duration": 1.0,
+"texture": ExtResource("t1")
+}, {
+"duration": 1.0,
+"texture": ExtResource("t2")
+}],
+"loop": true,
+"name": &"fly",
+"speed": 6.0
+}]
