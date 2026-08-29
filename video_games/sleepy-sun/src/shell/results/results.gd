@@ -52,12 +52,13 @@ func _process(delta: float) -> void:
 
 
 func _play_summary() -> void:
-	var par := 0
-	for entry in Game.MINIGAMES:
+	# Only the three games that were dealt, or the rank would compare a
+	# three-game score against eight games' worth of par and always read GENTLE.
+	var par := Game.playlist_par()
+	for id: StringName in Game.playlist:
 		await Wait.on(self, ROW_DELAY)
-		var id: StringName = entry["id"]
+		var entry := Game.definition(id)
 		var result: MiniGameResult = Game.results.get(id)
-		par += _par_for(id)
 		_add_row(String(entry["title"]), result, entry["color"])
 		Audio.sfx(&"tick", 1.0 + 0.12 * _rows.get_child_count())
 
@@ -90,17 +91,6 @@ func _flavour_text(place: int) -> String:
 				% [plastic, "" if plastic == 1 else "s"])
 	lines.append("Thank you. Your credit becomes a donation.")
 	return "\n".join(lines)
-
-
-func _par_for(id: StringName) -> int:
-	# Read from the packed scene so par lives with the minigame that defines it.
-	var entry := Game.definition(id)
-	var packed: PackedScene = load(entry["scene"])
-	var state := packed.get_state()
-	for i in state.get_node_property_count(0):
-		if state.get_node_property_name(0, i) == &"par_score":
-			return int(state.get_node_property_value(0, i))
-	return 1000
 
 
 func _add_row(title: String, result: MiniGameResult, color: Color) -> void:
@@ -148,14 +138,29 @@ static func _detail_for(result: MiniGameResult) -> String:
 			return "%s, %s" % [_count(stats, "chimes", "chime"),
 					_count(stats, "splashes", "splash", "splashes")]
 		&"tall_grass":
-			return "%s, spotted %d" % [_count(stats, "petals", "petal"),
-					stats.get("spotted", 0)]
+			return "%s, dusk x%.2f" % [_count(stats, "petals", "petal"),
+					float(stats.get("daylight", 1.0))]
 		&"cave":
 			return "%s, %s" % [_count(stats, "stages", "chamber"),
 					_count(stats, "mistakes", "slip")]
-		&"fishing":
-			return "%s, %s" % [_count(stats, "fish", "fish", "fish"),
+		&"harpoon":
+			var line := "%s, %s" % [_count(stats, "fish", "fish", "fish"),
 					_count(stats, "plastic", "bottle")]
+			if int(stats.get("multikill", 0)) >= 2:
+				line += ", x%d shot" % int(stats["multikill"])
+			return line
+		&"acorn_storm":
+			return "%s, %s" % [_count(stats, "fruit", "sunfruit", "sunfruit"),
+					_count(stats, "hits", "knock")]
+		&"firefly":
+			return "%s, best x%d" % [_count(stats, "flies", "firefly", "fireflies"),
+					int(stats.get("best_multiplier", 1))]
+		&"temple_bell":
+			return "%s, best chain %d" % [_count(stats, "perfect", "perfect", "perfect"),
+					int(stats.get("chain", 0))]
+		&"crow_watch":
+			return "%s saved, %s scared" % [_count(stats, "crop", "crop"),
+					_count(stats, "scares", "crow")]
 	return "%.0fs" % result.duration
 
 

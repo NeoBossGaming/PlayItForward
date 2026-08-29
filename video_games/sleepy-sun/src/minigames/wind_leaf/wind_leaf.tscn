@@ -23,7 +23,7 @@ fill_to = Vector2(0, 1)
 [node name="WindLeaf" type="Node2D"]
 script = ExtResource("1")
 id = &"wind_leaf"
-par_score = 1600
+par_score = 1800
 
 [node name="World" type="Node2D" parent="."]
 

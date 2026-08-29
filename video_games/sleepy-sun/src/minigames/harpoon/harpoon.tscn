@@ -1,0 +1,93 @@
+[gd_scene load_steps=13 format=3]
+
+[ext_resource type="Script" path="res://src/minigames/harpoon/harpoon.gd" id="1"]
+[ext_resource type="PackedScene" path="res://src/core/player.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://src/ui/hud.tscn" id="3"]
+[ext_resource type="Script" path="res://src/core/scrolling_texture.gd" id="4"]
+[ext_resource type="Texture2D" path="res://assets/game/shared/water_0.png" id="5"]
+[ext_resource type="Texture2D" path="res://assets/game/shared/water_1.png" id="6"]
+[ext_resource type="Texture2D" path="res://assets/game/shared/water_2.png" id="7"]
+[ext_resource type="Texture2D" path="res://assets/game/shared/bank_bottom.png" id="8"]
+[ext_resource type="Texture2D" path="res://assets/game/village/ground_0.png" id="9"]
+[ext_resource type="Texture2D" path="res://assets/game/harpoon/aim.png" id="10"]
+[ext_resource type="Texture2D" path="res://assets/game/harpoon/launcher.png" id="11"]
+
+[sub_resource type="StyleBoxFlat" id="reload_bg"]
+bg_color = Color(0.09, 0.08, 0.14, 0.75)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[sub_resource type="StyleBoxFlat" id="reload_fill"]
+bg_color = Color(0.85, 0.86, 0.95, 1)
+corner_radius_top_left = 2
+corner_radius_top_right = 2
+corner_radius_bottom_right = 2
+corner_radius_bottom_left = 2
+
+[node name="Harpoon" type="Node2D"]
+script = ExtResource("1")
+id = &"harpoon"
+par_score = 2300
+
+[node name="Water" type="Sprite2D" parent="."]
+position = Vector2(320, 150)
+texture = ExtResource("5")
+script = ExtResource("4")
+frames = Array[Texture2D]([ExtResource("5"), ExtResource("6"), ExtResource("7")])
+frames_per_second = 3.0
+scroll = Vector2(9, 0)
+area = Vector2i(672, 304)
+
+[node name="BankEdge" type="Sprite2D" parent="."]
+position = Vector2(320, 302)
+texture = ExtResource("8")
+script = ExtResource("4")
+area = Vector2i(672, 32)
+
+[node name="Ground" type="Sprite2D" parent="."]
+position = Vector2(320, 340)
+texture = ExtResource("9")
+script = ExtResource("4")
+area = Vector2i(672, 48)
+
+[node name="Aim" type="Sprite2D" parent="."]
+modulate = Color(1, 0.95, 0.7, 0.75)
+position = Vector2(320, 170)
+texture = ExtResource("10")
+script = ExtResource("4")
+area = Vector2i(3, 268)
+
+[node name="Swimmers" type="Node2D" parent="."]
+
+[node name="Bolts" type="Node2D" parent="."]
+
+[node name="Player" parent="." instance=ExtResource("2")]
+position = Vector2(320, 318)
+z_index = 8
+
+[node name="Launcher" type="Sprite2D" parent="Player"]
+position = Vector2(0, -30)
+scale = Vector2(1.4, 1.4)
+texture = ExtResource("11")
+
+[node name="HUD" parent="." instance=ExtResource("3")]
+
+[node name="ReloadLayer" type="CanvasLayer" parent="."]
+layer = 9
+
+[node name="Reload" type="ProgressBar" parent="ReloadLayer"]
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -40.0
+offset_top = -14.0
+offset_right = 40.0
+offset_bottom = -8.0
+theme_override_styles/background = SubResource("reload_bg")
+theme_override_styles/fill = SubResource("reload_fill")
+value = 0.0
+show_percentage = false

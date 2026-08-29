@@ -15,7 +15,7 @@ size = Vector2(46, 22)
 [node name="Cave" type="Node2D"]
 script = ExtResource("1")
 id = &"cave"
-par_score = 1800
+par_score = 2200
 
 [node name="Wall" type="Sprite2D" parent="."]
 position = Vector2(320, 180)

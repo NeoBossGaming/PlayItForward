@@ -11,16 +11,27 @@ extends MiniGame
 ## No fail state. Being spotted returns you to the start of the current section
 ## and costs points. Petals you already picked up stay picked up.
 
-const SECTIONS := 3
+const SECTIONS := 5
 const SECTION_WIDTH := 560.0
 const LEVEL_HEIGHT := 360.0
 const MARGIN := 34.0
 
-const SCORE_PETAL := 300
+const SCORE_PETAL := 130
 const SCORE_ARRIVAL := 400
 const SCORE_SPOTTED := -100
-const SCORE_TIME_BONUS := 400
-const PAR_SECONDS := 95.0
+
+## Dusk drains for the whole round and the final score is multiplied by the
+## daylight left. It rewards speed directly, it is exactly the right fiction for
+## this game, and it puts a visibly emptying bar on screen -- far more
+## motivating than a time bonus the player only learns about at the end.
+const DAYLIGHT_SECONDS := 110.0
+const DAYLIGHT_MAX_MULTIPLIER := 2.0
+
+## Grabbing a petal close to a bird is worth more. Without this the optimal play
+## is to crawl through grass forever; the daylight bar punishes slowness and
+## this rewards nerve, and between them there is an actual skill ceiling.
+const NERVE_CLOSE := 40.0
+const NERVE_NEAR := 80.0
 
 const SPRINT_NOISE_RADIUS := 96.0
 
@@ -40,6 +51,9 @@ var _section_starts: PackedVector2Array = PackedVector2Array()
 
 var _petals: int = 0
 var _spotted: int = 0
+var _petal_score: int = 0
+var _best_nerve: int = 1
+var _daylight: float = 1.0
 var _section: int = 0
 var _concealed: bool = false
 var _recovering: bool = false
@@ -89,11 +103,13 @@ func _process(delta: float) -> void:
 		Vector2(MARGIN, MARGIN + 12.0),
 		Vector2(SECTION_WIDTH * SECTIONS - MARGIN, LEVEL_HEIGHT - MARGIN))
 
+	_daylight = maxf(_daylight - delta / DAYLIGHT_SECONDS, 0.0)
 	_update_concealment()
 	_update_birds()
 	_check_pickups()
 	_check_goal()
 	_section = clampi(int(_player.position.x / SECTION_WIDTH), 0, SECTIONS - 1)
+	_hud.set_meter(_daylight, "daylight  x%.2f" % daylight_multiplier())
 
 
 # --- concealment and sight ---------------------------------------------------
@@ -188,13 +204,37 @@ func _return_to_checkpoint() -> void:
 func _check_pickups() -> void:
 	for petal: Sprite2D in _petals_root.get_children():
 		petal.rotation += get_process_delta_time() * 1.4
-		if petal.position.distance_to(_player.position) < 16.0:
-			_petals += 1
-			Audio.sfx(&"pickup")
-			_hud.toast("+%d" % SCORE_PETAL, Color(1, 0.9, 0.55), 0.6)
-			_hud.set_score(_current_score())
-			_update_objective()
-			petal.queue_free()
+		if petal.position.distance_to(_player.position) < 18.0:
+			_collect_petal(petal)
+
+
+func _collect_petal(petal: Sprite2D) -> void:
+	_petals += 1
+	var nerve := _nerve_multiplier(petal.position)
+	_best_nerve = maxi(_best_nerve, nerve)
+	_petal_score += SCORE_PETAL * nerve
+
+	Audio.sfx(&"pickup", 1.0 + 0.12 * nerve)
+	if nerve > 1:
+		_hud.toast("NERVE x%d   +%d" % [nerve, SCORE_PETAL * nerve],
+				Color(1, 0.75, 0.4), 0.85)
+	else:
+		_hud.toast("+%d" % SCORE_PETAL, Color(1, 0.9, 0.55), 0.6)
+	_hud.set_score(_current_score())
+	_update_objective()
+	petal.queue_free()
+
+
+## How close the nearest bird's eye was when the petal was taken.
+func _nerve_multiplier(at: Vector2) -> int:
+	var closest := INF
+	for bird in _birds:
+		closest = minf(closest, bird.global_position.distance_to(at))
+	if closest <= PatrolBird.VISION_RANGE + NERVE_CLOSE:
+		return 3
+	if closest <= PatrolBird.VISION_RANGE + NERVE_NEAR:
+		return 2
+	return 1
 
 
 func _check_goal() -> void:
@@ -207,25 +247,32 @@ func _check_goal() -> void:
 
 
 func _update_objective() -> void:
-	_hud.set_meter(float(_petals) / float(SECTIONS), "sunpetals")
+	_hud.set_meter(_daylight, "daylight  x%.2f" % daylight_multiplier())
 	if _petals >= SECTIONS:
-		_hud.set_objective("All petals found. Reach the hollow tree.")
+		_hud.set_objective("All %d petals. Run for the hollow tree!" % SECTIONS)
 	else:
-		_hud.set_objective("Gather %d sunpetal%s. Keep out of the birds' sight."
+		_hud.set_objective("%d sunpetal%s left. Closer to a bird pays more."
 				% [SECTIONS - _petals, "" if SECTIONS - _petals == 1 else "s"])
 
 
 func _current_score() -> int:
-	return _petals * SCORE_PETAL + _spotted * SCORE_SPOTTED
+	return maxi(_petal_score + _spotted * SCORE_SPOTTED, 0)
+
+
+## 1.0 at nightfall, DAYLIGHT_MAX_MULTIPLIER if you finished instantly.
+func daylight_multiplier() -> float:
+	return 1.0 + (DAYLIGHT_MAX_MULTIPLIER - 1.0) * _daylight
 
 
 func _finish() -> void:
 	_player.freeze()
 	Audio.sfx(&"complete")
-	var pace := clampf(PAR_SECONDS / maxf(elapsed, 1.0), 0.0, 1.0)
-	var score := _current_score() + SCORE_ARRIVAL + int(SCORE_TIME_BONUS * pace)
+	var multiplier := daylight_multiplier()
+	var score := int((_current_score() + SCORE_ARRIVAL) * multiplier)
 	_hud.set_score(maxi(score, 0))
-	finish(score, {"petals": _petals, "spotted": _spotted})
+	_hud.toast("DAYLIGHT x%.2f" % multiplier, Color(1, 0.88, 0.5), 1.2)
+	finish(score, {"petals": _petals, "spotted": _spotted,
+			"nerve": _best_nerve, "daylight": snappedf(multiplier, 0.01)})
 
 
 # --- level construction ------------------------------------------------------
@@ -261,21 +308,22 @@ func _build_grass(left: float) -> void:
 			var cover := Sprite2D.new()
 			cover.texture = _cover_texture
 			cover.position = centre
-			cover.scale = Vector2(1.15, 0.85)
+			cover.scale = Vector2(1.4, 1.0)
 			cover.modulate = Color(0.16, 0.30, 0.13, 0.42)
 			cover.z_index = 2
 			_grass_root.add_child(cover)
 
 			var clump := _rng.randi_range(3, 5)
 			for i in clump:
-				var offset := Vector2(_rng.randf_range(-20.0, 20.0),
-						_rng.randf_range(-14.0, 14.0))
+				var offset := Vector2(_rng.randf_range(-24.0, 24.0),
+						_rng.randf_range(-17.0, 17.0))
 				var blade := Sprite2D.new()
 				blade.texture = _grass_textures[_rng.randi() % 3]
 				blade.position = centre + offset
+				blade.scale = Vector2(1.25, 1.25)
 				blade.z_index = 8
 				_grass_root.add_child(blade)
-			_grass_areas.append(Rect2(centre - Vector2(30, 22), Vector2(60, 44)))
+			_grass_areas.append(Rect2(centre - Vector2(36, 26), Vector2(72, 52)))
 
 
 func _build_props(left: float) -> void:

@@ -5,7 +5,7 @@ extends Node
 ## decides what happens next. That keeps every minigame runnable standalone.
 
 const ATTRACT := "res://src/shell/attract/attract.tscn"
-const HUB := "res://src/hub/hub.tscn"
+const DRAW := "res://src/shell/draw/draw.tscn"
 const RESULTS := "res://src/shell/results/results.tscn"
 
 const FADE_TIME := 0.35
@@ -15,6 +15,7 @@ signal scene_ready(scene: Node)
 var _fade: ColorRect
 var _busy: bool = false
 var _pending: String = ""
+var _draw_deals: bool = false
 
 
 func _ready() -> void:
@@ -94,8 +95,23 @@ func play_minigame(id: StringName) -> void:
 	await change_scene(entry["scene"])
 
 
-func go_to_hub() -> void:
-	await change_scene(HUB)
+## Plays whatever card the session is currently on.
+func play_current() -> void:
+	await play_minigame(Game.current_id())
+
+
+## Opens the card table. `deal` shuffles a fresh hand; otherwise the cards are
+## already dealt and this is the between-games beat that shows the running score
+## and flips up whatever is next.
+func go_to_draw(deal: bool = false) -> void:
+	_draw_deals = deal
+	await change_scene(DRAW)
+
+
+## True when the draw scene should shuffle rather than advance. Read by draw.gd
+## on ready, because scene arguments cannot be passed through change_scene.
+func draw_should_deal() -> bool:
+	return _draw_deals
 
 
 func go_to_attract() -> void:
@@ -110,9 +126,15 @@ func go_to_results() -> void:
 
 func _on_minigame_finished(result: MiniGameResult, _game: MiniGame) -> void:
 	Game.record(result)
+	Game.advance()
 	Audio.sfx(&"complete")
+	# A beat on the finished game's own screen before the scene changes, so the
+	# last thing that happened is still readable when the score lands.
 	await Wait.on(self, 1.4)
-	await go_to_hub()
+	if Game.all_complete():
+		await go_to_results()
+	else:
+		await go_to_draw(false)
 
 
 func _fade_to(alpha: float) -> void:

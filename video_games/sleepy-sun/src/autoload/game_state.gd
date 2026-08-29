@@ -11,6 +11,11 @@ const REQUIRE_CREDIT := false
 ## Seconds without any input before the cabinet gives up and returns to attract.
 const IDLE_TIMEOUT := 45.0
 
+## How many minigames one credit deals. Drawn from a pool of eight, so the same
+## three almost never come up twice -- that unpredictability is the point of the
+## card draw and the reason the pool is worth keeping deep.
+const PLAYLIST_SIZE := 3
+
 const MINIGAMES: Array[Dictionary] = [
 	{
 		"id": &"wind_leaf",
@@ -22,7 +27,7 @@ const MINIGAMES: Array[Dictionary] = [
 	{
 		"id": &"tall_grass",
 		"title": "Hush Meadow",
-		"blurb": "Gather sunpetals. Stay in the tall grass, out of sight of the birds.",
+		"blurb": "Gather sunpetals before dusk. Stay out of the birds' sight.",
 		"scene": "res://src/minigames/tall_grass/tall_grass.tscn",
 		"color": Color(0.55, 0.78, 0.36),
 	},
@@ -34,11 +39,39 @@ const MINIGAMES: Array[Dictionary] = [
 		"color": Color(0.66, 0.45, 0.82),
 	},
 	{
-		"id": &"fishing",
-		"title": "Still Water",
-		"blurb": "Strike when a fish nudges the float. Bottles cost you.",
-		"scene": "res://src/minigames/fishing/fishing.tscn",
+		"id": &"harpoon",
+		"title": "Riverstrike",
+		"blurb": "Line up and fire. Lead the fish, spear the line, dodge the bottles.",
+		"scene": "res://src/minigames/harpoon/harpoon.tscn",
 		"color": Color(0.36, 0.64, 0.84),
+	},
+	{
+		"id": &"acorn_storm",
+		"title": "Acorn Storm",
+		"blurb": "Dodge the falling acorns. Catch the sunfruit between them.",
+		"scene": "res://src/minigames/acorn_storm/acorn_storm.tscn",
+		"color": Color(0.86, 0.56, 0.30),
+	},
+	{
+		"id": &"firefly",
+		"title": "Firefly Lantern",
+		"blurb": "Your light is dying. The darker it gets, the more they are worth.",
+		"scene": "res://src/minigames/firefly/firefly.tscn",
+		"color": Color(0.95, 0.85, 0.42),
+	},
+	{
+		"id": &"temple_bell",
+		"title": "Temple Bell",
+		"blurb": "Strike on the beat. It only gets faster.",
+		"scene": "res://src/minigames/temple_bell/temple_bell.tscn",
+		"color": Color(0.90, 0.42, 0.44),
+	},
+	{
+		"id": &"crow_watch",
+		"title": "Crow Watch",
+		"blurb": "Crows are diving on the rice. Scare them off before they land.",
+		"scene": "res://src/minigames/crow_watch/crow_watch.tscn",
+		"color": Color(0.52, 0.56, 0.72),
 	},
 ]
 
@@ -49,6 +82,10 @@ signal run_finished(total: int)
 var results: Dictionary = {}          ## StringName -> MiniGameResult
 var run_active: bool = false
 var run_started_at: float = 0.0
+
+## The three minigames dealt for this credit, in the order they will be played.
+var playlist: Array[StringName] = []
+var playlist_index: int = 0
 
 var _last_input_msec: int = 0
 
@@ -73,10 +110,34 @@ func poke() -> void:
 
 func start_run() -> void:
 	results.clear()
+	playlist.clear()
+	playlist_index = 0
 	run_active = true
 	run_started_at = Time.get_ticks_msec() / 1000.0
 	poke()
 	run_started.emit()
+
+
+## Deals the session. Sampling without replacement, so a draw can never show the
+## same game on two cards.
+func draw_playlist(count: int = PLAYLIST_SIZE) -> Array[StringName]:
+	var pool: Array[StringName] = []
+	for entry in MINIGAMES:
+		pool.append(entry["id"])
+	pool.shuffle()
+	playlist = pool.slice(0, mini(count, pool.size()))
+	playlist_index = 0
+	return playlist
+
+
+func current_id() -> StringName:
+	if playlist_index < 0 or playlist_index >= playlist.size():
+		return &""
+	return playlist[playlist_index]
+
+
+func advance() -> void:
+	playlist_index += 1
 
 
 ## Records a finished chore. A chore can be replayed from the hub, and the
@@ -114,14 +175,40 @@ func completed_count() -> int:
 	return results.size()
 
 
+## Sum of par for the games actually dealt. The results rank compares against
+## this, not against the whole pool -- otherwise every run would rank GENTLE.
+func playlist_par() -> int:
+	var total := 0
+	for id in playlist:
+		total += par_for(id)
+	return total
+
+
+## Par lives on the minigame scene itself, so it stays next to the design it
+## describes rather than in a table that drifts out of date.
+static func par_for(id: StringName) -> int:
+	var entry := definition(id)
+	if entry.is_empty():
+		return 1000
+	var packed: PackedScene = load(entry["scene"])
+	if packed == null:
+		return 1000
+	var state := packed.get_state()
+	for i in state.get_node_property_count(0):
+		if state.get_node_property_name(0, i) == &"par_score":
+			return int(state.get_node_property_value(0, i))
+	return 1000
+
+
+## True once every dealt card has been played -- not every game in the pool.
 func all_complete() -> bool:
-	return results.size() >= MINIGAMES.size()
+	return not playlist.is_empty() and playlist_index >= playlist.size()
 
 
 ## Bottles pulled out of the river across the run. Flavour for the results
-## screen -- it ties the fishing minigame to what the cabinet is actually for.
+## screen -- it ties Riverstrike to what the cabinet is actually for.
 func plastic_removed() -> int:
-	var result: MiniGameResult = results.get(&"fishing")
+	var result: MiniGameResult = results.get(&"harpoon")
 	return int(result.stats.get("plastic", 0)) if result != null else 0
 
 

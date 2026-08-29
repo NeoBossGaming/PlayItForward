@@ -15,9 +15,13 @@ const ROW_Y := 232.0
 
 const CROSSING_SECONDS := 62.0
 const HOP_TIME := 0.26
+## A short beat after landing before another hop can start, so the river cannot
+## be crossed by drumming the stick. Small on purpose -- it should read as
+## weight, not as the controls being sticky.
+const HOP_COOLDOWN := 0.10
 const HOP_HEIGHT := 15.0
 const INPUT_BUFFER := 0.16
-const RECOVERY_TIME := 1.25
+const RECOVERY_TIME := 1.4
 const RESPAWN_DELAY := 2.2
 
 ## Difficulty bands by fraction of the river crossed:
@@ -28,12 +32,16 @@ const BANDS: Array[Array] = [
 	[0.66, 0.90, 0.55, 2],
 ]
 
-const CHIME_INTERVAL := 3.4
+const CHIME_INTERVAL := 2.5
 const CHIME_SPEED := 62.0
-const SCORE_ARRIVAL := 1000
-const SCORE_CHIME := 50
-const SCORE_SPLASH := -75
+const SCORE_ARRIVAL := 1500
+const SCORE_CHIME := 80
+const SCORE_SPLASH := -150
 const SCORE_TIME_BONUS := 600
+## Chimes collected back to back without a splash multiply. Going in the water
+## therefore costs twice: the points, and the chain you were building.
+const CHIME_CHAIN_STEP := 2
+const CHIME_CHAIN_MAX := 5
 
 @onready var _player: TopDownPlayer = $Player
 @onready var _hud: HUD = $HUD
@@ -59,6 +67,10 @@ var _chime_timer: float = 0.0
 
 var _chimes: int = 0
 var _splashes: int = 0
+var _chain: int = 0
+var _best_chain: int = 0
+var _score: int = 0
+var _hop_cooldown: float = 0.0
 
 var _leaf_scene := preload("res://src/minigames/wind_leaf/leaf.tscn")
 var _chime_texture := preload("res://assets/game/wind_leaf/chime.png")
@@ -155,11 +167,11 @@ func _score_run() -> void:
 	# crossing itself is done -- there is no way to lose by being slow.
 	var pace := clampf(CROSSING_SECONDS * 1.35 / maxf(elapsed, 1.0), 0.0, 1.0)
 	var score := SCORE_ARRIVAL \
-			+ _chimes * SCORE_CHIME \
+			+ _score \
 			+ _splashes * SCORE_SPLASH \
 			+ int(SCORE_TIME_BONUS * pace)
 	_hud.set_score(maxi(score, 0))
-	finish(score, {"chimes": _chimes, "splashes": _splashes})
+	finish(score, {"chimes": _chimes, "splashes": _splashes, "chain": _best_chain})
 
 
 # --- hopping -----------------------------------------------------------------
@@ -172,6 +184,7 @@ func _queue_hop(direction: int) -> void:
 
 
 func _tick_buffer(delta: float) -> void:
+	_hop_cooldown = maxf(_hop_cooldown - delta, 0.0)
 	if _buffer_timer <= 0.0:
 		return
 	_buffer_timer -= delta
@@ -180,6 +193,12 @@ func _tick_buffer(delta: float) -> void:
 
 
 func _consume_buffer() -> void:
+	# _unhandled_input already refuses to queue a hop in the water, but the
+	# buffer drains from _process, so a direction pressed in the 0.16s before
+	# falling used to fire anyway and lift the player straight back out. That
+	# made drowning optional as long as you were holding a direction.
+	if _in_water or _arriving or _hop_cooldown > 0.0:
+		return
 	if _buffered_direction == 0 or _buffer_timer <= 0.0:
 		return
 	var target := _lane + _buffered_direction
@@ -202,15 +221,15 @@ func _hop_to(target_lane: int) -> void:
 	tween.tween_method(
 		func(t: float) -> void:
 			_player.position = from.lerp(to, t) + Vector2(0, -sin(t * PI) * HOP_HEIGHT)
-			_player.shadow.scale = Vector2.ONE * (0.9 - sin(t * PI) * 0.3),
+			_player.shadow.scale = Vector2.ONE * (1.3 - sin(t * PI) * 0.45),
 		0.0, 1.0, HOP_TIME)
 	tween.tween_callback(_on_hop_landed)
 
 
 func _on_hop_landed() -> void:
 	_hopping = false
-	_player.shadow.scale = Vector2(0.9, 0.9)
-	_consume_buffer()
+	_hop_cooldown = HOP_COOLDOWN
+	_player.shadow.scale = Vector2(1.3, 1.3)
 	_check_footing()
 
 
@@ -227,8 +246,17 @@ func _fall_in() -> void:
 	_in_water = true
 	_splashes += 1
 	_recovery_timer = RECOVERY_TIME
+	# Anything queued is void the moment you are in the water.
+	_buffered_direction = 0
+	_buffer_timer = 0.0
 	Audio.sfx(&"splash")
-	_hud.toast("SPLASH", Color(0.62, 0.85, 1.0), 0.7)
+	var lost := _chain
+	_chain = 0
+	_refresh_score()
+	if lost >= CHIME_CHAIN_STEP:
+		_hud.toast("SPLASH!  chain lost", Color(1, 0.5, 0.45), 0.9)
+	else:
+		_hud.toast("SPLASH  %d" % SCORE_SPLASH, Color(0.62, 0.85, 1.0), 0.8)
 	_player.anim.modulate = Color(0.7, 0.85, 1.0, 0.85)
 	_player.anim.play(&"idle_down")
 
@@ -337,6 +365,8 @@ func _tick_chimes(delta: float) -> void:
 			_spawn_chime()
 
 	for chime: Sprite2D in _chimes_root.get_children():
+		if chime.has_meta(&"collected"):
+			continue
 		chime.position.y += CHIME_SPEED * delta
 		chime.rotation = sin(chime.position.y / 18.0) * 0.3
 		if chime.position.y > 400.0:
@@ -356,6 +386,38 @@ func _spawn_chime() -> void:
 
 func _collect(chime: Sprite2D) -> void:
 	_chimes += 1
-	Audio.sfx(&"chime", randf_range(1.0, 1.3))
-	_hud.set_score(_chimes * SCORE_CHIME + _splashes * SCORE_SPLASH)
-	chime.queue_free()
+	_chain += 1
+	_best_chain = maxi(_best_chain, _chain)
+	var multiplier := chain_multiplier()
+	_score += SCORE_CHIME * multiplier
+	_refresh_score()
+
+	Audio.sfx(&"chime", 1.0 + 0.08 * multiplier)
+	# The chimes always scored; they just never said so, which is why they felt
+	# like scenery. Now every pickup announces itself.
+	if multiplier > 1:
+		_hud.toast("+%d   x%d" % [SCORE_CHIME * multiplier, multiplier],
+				Color(1, 0.92, 0.55), 0.7)
+	else:
+		_hud.toast("+%d" % SCORE_CHIME, Color(0.8, 1, 0.85), 0.55)
+
+	var pop := create_tween()
+	pop.tween_property(chime, "scale", Vector2(3.2, 3.2), 0.12)
+	pop.parallel().tween_property(chime, "modulate:a", 0.0, 0.12)
+	pop.tween_callback(chime.queue_free)
+	chime.set_meta(&"collected", true)
+
+
+## 1 to CHIME_CHAIN_MAX, stepping up every CHIME_CHAIN_STEP chimes.
+func chain_multiplier() -> int:
+	return clampi(1 + _chain / CHIME_CHAIN_STEP, 1, CHIME_CHAIN_MAX)
+
+
+func _refresh_score() -> void:
+	_score = maxi(_score, 0)
+	_hud.set_score(maxi(_score + _splashes * SCORE_SPLASH, 0))
+	if _chain >= CHIME_CHAIN_STEP:
+		_hud.set_objective("CHAIN x%d  -  keep collecting, do not fall in"
+				% chain_multiplier())
+	else:
+		_hud.set_objective("Cross the river. Shaking leaves are about to sink.")

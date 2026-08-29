@@ -42,17 +42,21 @@ func _drive() -> void:
 
 	# A coin or the start button wakes the cabinet.
 	_tap(&"start")
-	await _expect("Hub", "village hub after pressing start")
+	await _expect("Draw", "card table after pressing start")
 	_check(Game.run_active, "pressing start should open a run")
 
-	for entry in Game.MINIGAMES:
-		await _play_chore(entry)
+	# The draw scene deals during its own reveal, so wait for a hand.
+	await _wait_for_hand()
+	var hand := Game.playlist.duplicate()
+	_check(hand.size() == Game.PLAYLIST_SIZE, "the draw should deal a full hand")
 
-	_check(Game.all_complete(), "all four chores should be recorded")
+	for i in hand.size():
+		await _play_card(hand[i], i)
+
+	_check(Game.all_complete(), "every dealt card should be recorded")
 	_check(Game.total_score() > 0, "a finished run should have scored something")
 
-	await _walk_to_sun()
-	await _expect("Results", "results screen after waking the sun")
+	await _expect("Results", "results screen after the last card")
 
 	# The results screen holds input for a few seconds so it cannot be skipped
 	# before the player has seen their score.
@@ -73,50 +77,39 @@ func _drive() -> void:
 	get_tree().quit(0 if _failures.is_empty() else 1)
 
 
-func _play_chore(entry: Dictionary) -> void:
-	var id: StringName = entry["id"]
-	var hub := _scene()
-	var portal := _find_portal(hub, id)
-	if portal == null:
-		_failures.append("no portal in the hub for %s" % id)
-		return
+## The draw scene deals the hand partway through its reveal animation.
+func _wait_for_hand() -> void:
+	var clock := 0.0
+	while clock < STEP_TIMEOUT:
+		if Game.playlist.size() == Game.PLAYLIST_SIZE:
+			return
+		await _frames(1)
+		clock += get_process_delta_time()
+	_check(false, "the draw never dealt a hand")
 
-	var player: Node2D = hub.get_node("Player")
-	var arrived := await _walk(player, portal.position + Vector2(0, 12), hub)
-	_check(arrived, "could walk to the %s signpost" % id)
-	_tap(&"act")
 
+func _play_card(id: StringName, index: int) -> void:
 	await _expect_minigame(id)
+	_check(Game.playlist_index == index,
+			"card %d should be up, but the session is on %d" % [index, Game.playlist_index])
 	var game := _scene() as MiniGame
 	if game == null:
 		return
 	# What is under test here is the transition, not the minigame -- the soak
 	# test already plays each one properly.
 	game.finish(500, {})
-	await _expect("Hub", "return to the hub after %s" % id)
+	_check(true, "%s finished and handed back" % id)
+	# Last card goes to Results; any other returns to the table.
+	if index < Game.PLAYLIST_SIZE - 1:
+		await _expect("Draw", "back to the card table after %s" % id)
+	await _frames(2)
 	_check(Game.has_played(id), "%s should be recorded on the run" % id)
-
-
-func _walk_to_sun() -> void:
-	var hub := _scene()
-	var player: Node2D = hub.get_node("Player")
-	var sun: Node2D = hub.get_node("World/SunArea")
-	var arrived := await _walk(player, sun.position + Vector2(0, 18), hub)
-	_check(arrived, "could walk up to the sun once every chore was done")
-	_tap(&"act")
 
 
 # --- helpers -----------------------------------------------------------------
 
 func _scene() -> Node:
 	return get_tree().current_scene
-
-
-func _find_portal(hub: Node, id: StringName) -> Node2D:
-	for child in hub.get_node("Portals").get_children():
-		if child.get("minigame_id") == id:
-			return child
-	return null
 
 
 ## Waits until the current scene's root is named `scene_name`.
@@ -139,7 +132,7 @@ func _expect_minigame(id: StringName) -> void:
 	while clock < STEP_TIMEOUT:
 		var scene := _scene()
 		if scene is MiniGame and (scene as MiniGame).id == id and not Router.is_busy():
-			_check(true, "%s minigame opened from the hub" % id)
+			_check(true, "%s minigame opened from the card table" % id)
 			await _frames(3)
 			return
 		await _frames(1)

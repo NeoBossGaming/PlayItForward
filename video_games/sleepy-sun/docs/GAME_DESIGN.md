@@ -14,80 +14,92 @@ The Play It Forward proposal (§2.4.1) describes the whole cabinet experience as
 Idle / Attract  →  Payment Wait  →  Gameplay  →  Results  →  Idle / Attract
 ```
 
-One cabinet hosts one **adventure**, and an adventure is several short minigames
-tied together. *Sleepy Sun* is the first adventure. This document covers the
-adventure and the shell around it; it does **not** cover payment, which is
-Phase 2 work and is deliberately absent from the code (see §11).
+One cabinet hosts one **adventure**. *Sleepy Sun* is the first. This document
+covers the adventure and the shell around it; it does **not** cover payment,
+which is Phase 2 and is deliberately absent from the code (see §11).
 
 What is built today:
 
 ```
-Boot  →  Attract  →  Village hub  ⇄  four minigames  →  Results  →  Attract
-                        (the "Payment Wait" step sits between Attract and Hub)
+Boot → Attract → Card draw → game 1 → game 2 → game 3 → Results → Attract
+                     ↑ the "Payment Wait" step slots in here
 ```
 
-This satisfies the proposal's Phase 1 acceptance criterion — *the full loop plays
-start to finish on ordinary hardware, without needing real money to test it* —
-and `tests/flow_test.gd` asserts exactly that loop on every run.
+`tests/flow_test.gd` asserts that exact loop on every run, which is the
+proposal's Phase 1 acceptance criterion — *the full loop plays start to finish
+on ordinary hardware, without needing real money to test it*.
 
 ---
 
 ## 2. Session shape
 
-**One credit buys the entire adventure, and the player cannot lose it.**
+**One credit deals you three minigames from a pool of eight, and you cannot lose.**
 
 | | |
 |---|---|
-| Length | roughly 5–8 minutes |
-| Structure | village hub, four chores in **any order**, then a short finale |
-| Failure | **none** — mistakes cost points and seconds, never the run |
-| Scoring | one total across all four, plus a rank and a local high-score table |
+| Length | roughly 4 minutes |
+| Structure | slot-machine card draw, then the three dealt games in order |
+| Failure | **none** — mistakes cost score and seconds, never the run |
+| Scoring | one total across the three, a rank, and a local high-score table |
 
-The no-fail rule is not a difficulty setting, it is a venue decision. The cabinet
-sits unattended in a mall or a school event, in front of people who have never
-seen it before and who have already paid. A game-over screen thirty seconds in
-is a machine that took someone's money and gave them nothing. So every minigame
-turns failure into a **setback**: you go back in the water, you get carried to
-the start of the stretch, the pattern replays. The floor is "you finish and score
-modestly"; the ceiling is where the skill lives.
+### Why a card draw and not a hub
 
-Every minigame is still winnable *badly*, which is what keeps a score
-meaningful. `tests/soak_test.gd` proves each one can be completed, every run.
+The first build had a village hub you walked around to pick chores. It was
+calm, it was slow, and it made four minigames feel like errands. A cabinet in a
+mall needs the opposite: a stranger who has just paid should be *playing* within
+eight seconds.
 
-### Scoring at a glance
+So: press start, three cards spin, they stop one at a time, and you are in.
+The staggered stop is the whole trick — three simultaneous stops is a random
+number, a left-to-right stagger is a slot machine, and the pause before the
+last card is where the tension lives.
 
-| Minigame | Par | Where points come from | Where they go |
-|---|---|---|---|
-| Riverleap | 1600 | arrival 1000, chimes +50, pace up to +600 | splash −75 |
-| Hush Meadow | 1700 | petals +300 each, arrival 400, pace up to +400 | spotted −100 |
-| Echo Hollow | 1800 | chamber +250, flawless chamber +150, pace up to +400 | slip −60 |
-| Still Water | 1400 | fish +150, rare fish +300, 3-catch streak +50 | bottle −100 |
+**The pool is eight so the draw means something.** Drawing 3 of 4 barely
+shuffles; 3 of 8 is 56 different hands, and it is why the cabinet is worth a
+second credit.
 
-Par is the score a competent player should land near. The results screen ranks
-the run against the sum of the four pars: **RADIANT** ≥ 1.15×, **BRIGHT** ≥ 0.90×,
-**WARM** ≥ 0.65×, **GENTLE** below that. A scripted bot playing near-perfectly
-scores about 6900 against a par sum of 6500, so RADIANT is genuinely hard and
-GENTLE is not an insult.
+### Why no fail state
 
-Scores floor at zero. Nobody watches a negative number count up.
+The cabinet sits unattended in front of people who have never seen it and have
+already paid. A game over thirty seconds in is a machine that took someone's
+money and gave them nothing. Every minigame turns failure into a **setback**:
+you go back in the water, the pattern replays, you get knocked down for half a
+second. The floor is "you finish and score modestly"; the ceiling is where the
+skill lives.
+
+`tests/soak_test.gd` proves every game can be completed, every run.
+
+### Scoring must stay on one scale
+
+All eight games are tuned so a strong run lands in the **2,500–4,500** band.
+This is not cosmetic. The session total feeds one shared high-score table, so
+if one card paid 90,000 and another paid 3,000 the table would only record
+which cards you were dealt. An early build of Temple Bell did exactly that
+(88,350 against a par of 2,100) and it was caught by measuring the soak test's
+bot scores, not by reading the code.
+
+`par_score` is set on each minigame scene at roughly **60 % of a near-perfect
+scripted run**. The results rank compares the session total against the sum of
+par **for the three cards dealt** (`Game.playlist_par()`) — comparing against
+all eight would rank every run GENTLE.
+
+| Rank | Threshold |
+|---|---|
+| RADIANT | ≥ 1.15 × par |
+| BRIGHT | ≥ 0.90 × par |
+| WARM | ≥ 0.65 × par |
+| GENTLE | below |
 
 ---
 
 ## 3. The fantasy
 
-The sun is nodding off before it has finished setting. Four small evening chores
-around the village gather the light it needs to go down properly and sleep.
+The sun is nodding off before it has finished setting, and the evening's chores
+are dealt to you three at a time.
 
-That is the whole story, and it is deliberately thin. It exists to do three
-things: justify a hub you walk around instead of a menu you scroll, give the four
-unrelated minigames a reason to sit together, and give the cabinet a mascot —
-the sun — whose state doubles as the progress bar. It brightens, grows and wakes
-up as chores get finished. No cutscenes, no text the player has to read.
-
-The tone is quiet and warm rather than frantic. The proposal calls for
-"high-rhythm and fast-paced" minigames, and each individual game does move
-quickly, but the frame around them is calm on purpose: a charity cabinet in a
-public space reads better as inviting than as aggressive.
+Deliberately thin. It exists to give eight unrelated minigames a reason to sit
+together and to give the cabinet a mascot whose state is readable at a glance.
+No cutscenes, no text anyone has to read.
 
 ---
 
@@ -95,47 +107,42 @@ public space reads better as inviting than as aggressive.
 
 | Decision | Value | Why |
 |---|---|---|
-| Base resolution | **640 × 360** | ×3 is exactly 1080p; 32px sprites read well at ~20 tiles across |
-| Stretch | `canvas_items`, `keep`, **integer** scale | pixel-perfect at any window size, no shimmer |
+| Base resolution | **640 × 360** | ×3 is exactly 1080p |
+| Stretch | `canvas_items`, `keep`, **integer** | pixel-perfect at any size |
 | Texture filter | **Nearest** (project-wide) | it is pixel art |
-| Renderer | GL Compatibility | what the Pi 4/5 can actually drive |
-| Engine | Godot 4.6 | matches `config/features` |
+| Renderer | GL Compatibility | what a Pi 4/5 can drive |
+| Player sprite | **1.5×** (≈18 × 43 px) | at 1× the character was 1.9 % of screen width and got lost |
+
+The player scale-up cascaded: Echo Hollow's stone ring tightened from radius 70
+to 56, and Hush Meadow's grass clumps grew from 60×44 to 72×52, so the world
+does not feel emptier around a bigger character.
 
 ### Art pipeline
 
-Every sprite Neo drew is **32 × 32 pixel art exported at a huge
-nearest-neighbour upscale** — up to 4128 × 4128 for the idle frame, which alone
-would be ~68 MB of VRAM per frame on a Pi.
+Every hand-drawn sprite is **32 × 32 pixel art exported at a huge
+nearest-neighbour upscale** — up to 4128 × 4128, roughly 68 MB of VRAM for one
+frame on a Pi. `tools/normalize_assets.py` recovers the real grid (the upscale
+factor is the GCD of the run lengths of identical rows and columns) and writes
+true-resolution copies to `assets/game/`. Originals are never touched; each
+source folder carries a `.gdignore` so Godot skips the huge versions.
 
-`tools/normalize_assets.py` recovers the original grid (the upscale factor is the
-GCD of the run lengths of identical rows and columns) and writes true-resolution
-copies into `assets/game/`. The originals in `assets/player_sprite/`,
-`assets/fishing_game/` and so on are **never touched**; each of those folders
-gets a `.gdignore` so Godot does not import the huge versions. Deleting those
-five files restores them to the editor.
-
-`tools/make_placeholders.py` fills every remaining gap with flat-colour stand-ins
-in the same dusk palette. Both scripts' outputs are committed, so opening the
-project needs no build step and no Python.
-
-**Swapping in real art is a file replacement.** Same path, same dimensions, no
-code change. `docs/ASSET_REQUESTS.md` lists what to draw, with sizes.
+`tools/make_placeholders.py` fills every remaining gap in one dusk palette.
+Both scripts' outputs are committed, so opening the project needs no build step
+and no Python. **Swapping in real art is a file replacement** — same path, same
+dimensions, no code change. See `docs/ASSET_REQUESTS.md`.
 
 ### Input
 
-Bound for keyboard now and a USB arcade encoder later — an encoder enumerates as
-either a keyboard or a gamepad, so both are wired from the start.
-
 | Action | Keyboard | Joypad | Used for |
 |---|---|---|---|
-| `move_*` | arrows + WASD | D-pad, left stick | walking, hopping, stepping on stones |
-| `act` | Space, Enter | A | jump, interact, confirm, cast, strike, sprint |
+| `move_*` | arrows + WASD | D-pad, stick | walking, hopping, aiming |
+| `act` | Space, Enter | A | jump, sprint, fire, strike, confirm |
 | `back` | Esc | B | cancel |
 | `start` | Enter, `1` | Start | begin a run |
-| `insert_credit` | `5` | — | MAME-standard coin key; **the payment hook** |
+| `insert_credit` | `5` | — | MAME coin key; **the payment hook** |
 
-One button plus a stick runs the entire adventure. That is the control panel
-worth building: fewer holes to drill, fewer parts to fail unattended.
+One stick and one button run all eight games. That is the control panel worth
+building: fewer holes to drill, fewer parts to fail unattended.
 
 ---
 
@@ -143,144 +150,102 @@ worth building: fewer holes to drill, fewer parts to fail unattended.
 
 ```
 src/
-├── autoload/
-│   ├── game_state.gd    Game    run state, scores, the minigame registry
-│   ├── router.gd        Router  scene changes, fades, result collection
-│   ├── audio.gd         Audio   procedurally synthesised sound effects
-│   └── save_data.gd     Save    local high scores in user://
-├── core/
-│   ├── minigame.gd            the contract every minigame implements
-│   ├── minigame_result.gd     what a minigame hands back
-│   ├── player_controller.gd   the one player controller, used by all five scenes
-│   ├── scrolling_texture.gd   tiling/animated backdrops without a TileSet
-│   └── wait.gd                node-owned timers
-├── shell/     boot, attract, results
-├── hub/       Sunset Village
-├── minigames/ wind_leaf, tall_grass, cave, fishing
-└── ui/        the shared HUD
+├── autoload/   Game (run + playlist), Router (scenes), Audio (synth), Save
+├── core/       minigame contract, player controller, scrolling backdrops, timers
+├── shell/      boot, attract, draw (the card table), results
+├── minigames/  wind_leaf, tall_grass, cave, harpoon,
+│               acorn_storm, firefly, temple_bell, crow_watch
+└── ui/         the shared HUD
 ```
 
 ### The minigame contract
 
-The entire interface between a minigame and the rest of the game is:
-
 ```gdscript
 class_name MiniGame extends Node2D
-
 signal finished(result: MiniGameResult)
-
 @export var id: StringName
 @export var par_score: int
-
 func begin() -> void          # Router calls this once the fade-in is done
 func finish(score, stats)     # emits `finished`, exactly once, ever
 ```
 
-A minigame never changes scenes, never writes to `Game`, and never knows the hub
-exists. Router loads it, waits for `finished`, records the result and goes back
-to the village. Consequences worth having:
+A minigame never changes scenes, never writes to `Game`, and does not know the
+card table exists. Consequences worth having: every game runs standalone with
+**F6**, the tests can instance one in isolation, and `finish()` is idempotent so
+a race between "the timer ran out" and "the player reached the goal" cannot
+double-report a score.
 
-- Any minigame runs standalone in the editor with **F6**.
-- The test suite can instance one in isolation and play it.
-- `finish()` is idempotent, so a race between "the timer ran out" and "the player
-  reached the goal" cannot double-report a score.
+### Adding a ninth minigame
 
-### Adding a fifth minigame
-
-1. Make a scene whose root script `extends MiniGame`; set `id` and `par_score`.
-2. Instance `src/ui/hud.tscn` and `src/core/player.tscn` into it.
+1. Scene whose root script `extends MiniGame`; set `id` and `par_score`.
+2. Instance `src/ui/hud.tscn` and `src/core/player.tscn`.
 3. Call `finish(score, stats)` when it ends.
-4. Add one entry to `Game.MINIGAMES` and one `HubPortal` to `hub.tscn`.
-5. Add a `_detail_for()` case in `results.gd` so its stats get a one-line summary.
+4. One entry in `Game.MINIGAMES`; one `card_icon_<id>.png` in `assets/game/ui/`.
+5. A `_detail_for()` case in `results.gd`, and a driver in `soak_test.gd`.
 
-Nothing else. The hub star, the attract how-to card, the results row and all
-three test suites pick it up from the registry automatically.
+The draw, the attract cards, the results row and all three suites pick it up
+from the registry automatically.
 
 ### Audio
 
 No `.wav` files ship. `Audio` synthesises every cue at startup — sine, square,
-triangle and noise with a fast attack and an exponential decay, which reads as a
-"blip" rather than a beep. Fifteen named cues plus five pitched notes for the
-cave stones. It costs about 40 ms at boot and nothing at runtime, and it means
-the game has audio feedback without waiting on an audio pass. Replacing it with
-real samples means changing the body of `sfx()`; every caller stays the same.
+triangle and noise with a fast attack and exponential decay, which reads as a
+blip rather than a beep. Fifteen named cues plus five pitched notes for the cave
+stones. ~40 ms at boot, nothing at runtime. Replacing it with real samples means
+changing the body of `sfx()`; callers stay the same.
 
 ---
 
 ## 6. The shell
 
-### 6.1 Attract / idle
+### 6.1 Attract
+Dusk village, the mascot dozing, an NPC wandering. Cycles **title → three
+random game cards → local high scores**. Eight cards would take 40 seconds to
+loop past, which is longer than anyone stands and reads.
 
-Dusk village, the sun mascot dozing, an NPC wandering the path. Panels cycle
-every five seconds: **title → one how-to card per minigame → local high scores →
-repeat**, under a pulsing `PRESS START`.
+**The idle screen is interactive**: the stick makes the sun look that way and
+rings the wind chimes, the button rings them and flips the panel. None of it
+starts a game. On a public cabinet the first touch is what turns a passer-by
+into a player, and a machine that visibly responds before you have paid is a
+machine worth paying.
 
-**The idle screen is interactive.** Moving the stick makes the sun look that way
-and rings the wind chimes; the button rings them and flips to the next panel.
-None of it starts a game. It exists because on a public cabinet the first touch
-is what turns a passer-by into a player, and a machine that visibly responds
-before you have paid is a machine worth paying.
+### 6.2 The card table (`src/shell/draw/`)
+One scene, two modes:
 
-The how-to cards matter more than they look. Nobody reads instructions at an
-arcade cabinet, but they will absorb one sentence per game while deciding whether
-to play, and every minigame's rules are then reinforced by its own HUD line.
+- **DEAL** — three cards spin through the eight faces and stop left to right.
+  A player should catch glimpses of games they want and hope it lands there.
+- **ADVANCE** — between games: finished cards stamped with their score, the
+  next card flipped up and pulsing, running total. Skippable with the button,
+  because a repeat player should never sit through a reveal they understand.
 
-### 6.2 Sunset Village (the hub / minigame selection)
-
-A place you walk around, not a menu you scroll. Four signposted chores plus the
-sun on its hill. Walk up to a signpost, the prompt floats up, press the button.
-
-- Chores can be done **in any order**.
-- A finished chore lights its star, shows its score, and its signpost dims so it
-  stops competing for attention.
-- A finished chore can be **replayed**; the better score is the one kept.
-- Coming back from a chore puts you at that signpost rather than the village
-  entrance, so the walk reads as continuous.
-- The sun brightens, grows and wakes across three frames as chores get done — it
-  is the progress bar.
-- All four done → walk to the sun to end the run.
-- 45 seconds of no input anywhere returns the cabinet to attract.
-
-Costing a few seconds per selection is the point: it is what makes four unrelated
-minigames feel like one adventure.
+45 seconds of no input anywhere returns the cabinet to attract.
 
 ### 6.3 Results
-
-Rows count up one at a time, then the total, then a rank stamp. Each row says
-what actually happened in that game's own terms ("4 chimes, 0 splashes"), a new
-personal best is called out, and the bottles pulled out of the river are tallied
-separately — a small good deed rather than only a penalty.
-
-The last line is the point of the whole machine: *your credit becomes a donation*.
-Those few seconds while the numbers roll are when someone decides whether to pay
-again, and they are the only moment the cabinet gets to say what the money is for.
-30-second timeout back to attract.
+Rows count up, then the total, then a rank stamp. Each row says what happened in
+that game's own terms ("4 chimes, 1 splash"). Bottles pulled from the river are
+tallied separately, and the last line is the point of the whole machine: *your
+credit becomes a donation*. Those few seconds are when someone decides whether
+to pay again.
 
 ---
 
 ## 7. The minigames
 
-All four are top-down and share one player controller and one sprite set.
+All eight are top-down and share one player controller and one sprite set.
+Tuning constants live at the top of each script.
 
-### 7.1 Riverleap (`wind_leaf`)
+### 7.1 Riverleap (`wind_leaf`) — *hop*
+Five drifting leaves; cross the river. A leaf's life is
+`STABLE → SHAKING → SINKING → GONE → RISING`, and leaves always come back, so
+the row can never be wiped out.
 
-**Hop between five drifting leaves and reach the far bank.**
+**The shake is the game**, so it is telegraphed three redundant ways at once —
+an accelerating wobble, a shift toward red, and a widening ripple. Redundant
+because it has to read on a scuffed screen, from a few feet back, to someone who
+may not separate red from green.
 
-The leaves carry you downstream, so the camera rides with them: the leaf row
-holds a fixed screen position while the banks scroll past and the far shore
-slides in at the end. Left/Right hops between the five lanes — a 0.26 s arc with
-a scale pop and a shrinking shadow, with a 0.16 s input buffer so a press during
-a hop still lands.
-
-A leaf's life is `STABLE → SHAKING → SINKING → GONE → RISING → STABLE`. Leaves
-always come back after 2.2 s, so the row can never be wiped out.
-
-**The shake is the whole game**, so it is telegraphed three redundant ways at
-once — a rotation wobble that accelerates, a colour shift toward red, and a
-widening ripple. Redundant because it has to read on a scuffed cabinet screen,
-from a few feet back, to someone who may not separate red from green.
-
-Difficulty ramps with distance:
+**The director never corners you**: before a leaf is chosen to shake it checks
+that a lane reachable in one hop will still be safe.
 
 | Progress | Shake interval | Telegraph | At once |
 |---|---|---|---|
@@ -288,67 +253,42 @@ Difficulty ramps with distance:
 | 33–66 % | 1.60 s | 0.80 s | 1–2 |
 | 66–100 % | 0.90 s | 0.55 s | 2 |
 
-**The director never corners you.** Before a leaf is chosen to shake, it checks
-that at least one lane reachable in a single hop will still be safe. Without that
-rule the game is losable to luck alone, which in a no-fail game just means an
-unearned splash.
+Hops take 0.26 s plus a 0.10 s cooldown — enough weight that the river cannot be
+crossed by drumming the stick, small enough not to feel sticky.
 
-*Splash (no-fail):* standing on a sinking leaf, or hopping into a gone lane,
-floats you for 1.25 s before a leaf lifts you back up. Costs time and 75 points.
-The river never stops moving, so a splash is expensive but never fatal.
+**Chimes chain.** Each is +80 × a multiplier that steps up every two chimes to
+×5. Splashing costs 150 points **and** the chain, so going in the water hurts
+twice. Chimes always scored; in the first build they had no pickup feedback at
+all, which is why they felt like scenery.
 
-Wind chimes drift down the lanes as +50 pickups — the reason to take risks, and
-where the game's name comes from.
+### 7.2 Hush Meadow (`tall_grass`) — *sneak*
+Five sections, five sunpetals, birds with **visible cones of sight**. Detection
+is a fill, not a trip-wire: white → amber (`?`) → red (`!`), about two thirds of
+a second, which is the time you need to duck into cover.
 
-*Tuning lives in the constants at the top of `wind_leaf.gd`.*
+Grass hides you completely and is drawn over you. Cover has to be visible from
+across the room, so clumps carry a solid dark base, dense blades and a soft
+shaded footprint — an early build drew thin blades on green ground and the
+hiding places effectively vanished.
 
-### 7.2 Hush Meadow (`tall_grass`)
+**Holding the button sprints** at 1.75×, but it rustles and any bird within
+96 px breaks patrol to investigate. Fast, safe, cheap: pick two.
 
-**Cross three meadow sections gathering sunpetals without being seen.**
+Two score mechanics, and they pull against each other, which is the skill:
 
-Birds patrol overhead with a **visible cone of sight**. The cone is drawn, not
-implied — a stealth game where you have to guess what the guard can see is a
-frustrating one, and nobody at a cabinet will learn it by dying. Detection is a
-fill, not a trip-wire: white → amber (`?`) → red (`!`), roughly two thirds of a
-second of exposure, which is the half-second you need to duck into cover.
+- **Daylight multiplier** — a dusk bar drains over 110 s and the final score is
+  multiplied by the daylight left (×1.0–×2.0). Rewards speed directly.
+- **Nerve bonus** — a petal grabbed near a bird's cone pays ×2 or ×3. Rewards
+  daring. Without it the optimal play is to crawl through grass forever.
 
-Tall grass hides you completely and is drawn over you while you are in it.
-So the safe route is obvious — and slow (56 px/s in grass vs 78 in the open).
+Spotted: the bird swoops, you restart the section, −100. **Petals already taken
+stay taken.**
 
-**Cover has to be visible from across the room.** The first pass drew thin blades
-on green ground and the hiding places effectively vanished; a stealth game whose
-safe route you cannot see is not a stealth game. Clumps now carry a solid dark
-base, dense blades and a soft shaded footprint on the ground, soft-edged so
-overlapping clumps merge into one patch instead of showing seams.
-
-**Holding the button sprints**, at 1.75×. That is how you cross open ground in
-time, but it rustles, and any bird within 96 px breaks patrol to come and look.
-Fast, safe, cheap: pick two. That trade is the minigame.
-
-Line of sight is blocked by rocks and hedges, sampled along the line rather than
-raycast — precise enough at this scale and it keeps the Pi budget free.
-
-Sections are generated fresh each run under fixed rules, so the meadow is never
-memorised: the petal always sits in the far half (every petal is worth a detour),
-and no bird patrols across a section entrance (re-entry is never a trap).
-One bird in the first stretch, two after — the difficulty curve is density.
-
-*Spotted (no-fail):* the bird swoops, you wake at the start of the current
-section, −100. **Petals you already picked up stay picked up**, so progress is
-never lost — only time.
-
-### 7.3 Echo Hollow (`cave`)
-
-**Five chambers, each guarded by a pattern of lit stones you have to walk back.**
-
-You do not press five buttons; you walk the path with your body. That turns a
-memory test into a route you can *feel*, and it is why this works top-down with
-the same stick-and-button as everything else.
-
+### 7.3 Echo Hollow (`cave`) — *memorise*
+Five chambers of lit stones you walk back with your body, not with buttons.
 Each stone has its own colour **and its own note**, so the pattern can be
-memorised by ear as well as by eye — players who hum it back do noticeably
-better, and it keeps the puzzle solvable for someone who cannot separate the
-colours.
+memorised by ear — players who hum it back do better, and it stays solvable for
+someone who cannot separate the colours.
 
 | Chamber | Steps | Lit | Gap |
 |---|---|---|---|
@@ -358,129 +298,138 @@ colours.
 | 4 | 6 | 0.38 s | 0.15 s |
 | 5 | 7 | 0.32 s | 0.12 s |
 
-Never the same stone twice running: at these speeds a repeat is unreadable and
-feels like a trick rather than a test.
-
 **The stones sit in a ring, not a row.** In a row, walking from the far right
-stone to the far left one drags you across every stone in between and each one
-registers as a wrong answer — the game is unplayable for any sequence that is not
-left-to-right. This was caught by `tests/soak_test.gd` during the build, not by
-inspection. Arranged in a ring around a central standing spot, the path between
-any two stones runs through the middle instead; the tightest chord still clears
-every other stone by 48 px, well outside their 20 px reach.
+stone to the far left drags you across every stone between and each registers
+as wrong — unplayable for any sequence that is not left-to-right. This was
+caught by `soak_test.gd`, not by inspection. In a ring the path between any two
+stones runs through the middle; the tightest chord clears every other stone by
+38 px against a 20 px trigger reach.
 
-Clearing a chamber opens the door — Neo's eight hand-drawn `stage_door` frames,
-a stone slab retracting upward: frame 1 is the full slab, frame 8 is four pixels.
-So the sequence runs closed → open as drawn and `reversed` stays off. Because the
-slab shrinks from the bottom within a fixed 192×160 canvas, a plain centred
-sprite already reads as retracting; no anchoring work was needed. Walk through
-and the next chamber starts.
+**Per-step streak scoring**: +12 × a multiplier stepping up every 3 correct
+stones to ×5, carried **across chambers** so a clean run compounds. A wrong
+stone zeroes the streak and costs 60. Chamber clear +250, flawless +150. Paying
+per stone means the score moves while the player is doing something, rather than
+every twenty seconds.
 
-*Mistake (no-fail):* the stones flash red, −60, the pattern replays. **A second
-mistake in the same chamber replays it at chamber-1 speed.** Nobody gets stuck
-on a public cabinet.
+Mercy: a second mistake in a chamber replays it at chamber-1 speed.
 
-### 7.4 Still Water (`fishing`)
+### 7.4 Riverstrike (`harpoon`) — *shoot*
+Rewritten from the original angling game, which asked the player to wait for a
+bite. Waiting is the wrong verb for a cabinet.
 
-**Cast into the river and strike when something nudges the float.** 75 seconds.
+The harpoon **fires straight up**, so *standing in the right place is aiming* —
+one button, no aim stick fighting the movement stick, readable instantly. The
+skill is that the bolt takes time to travel (620 px/s), so a moving fish must be
+**led**.
 
-Hold the button to cast — the power meter runs up *and back down*, so a long cast
-is a timed press rather than a hold, and the long water is where the rare fish
-are. Release to arc the float out.
+- **Multi-kill**: one bolt spears everything in its path — 2 fish ×2, 3 ×3.
+  The reason to hold fire and wait for a line to form.
+- **Bottles block.** A bolt that hits plastic stops dead and costs 100, which
+  turns bottles into moving cover to shoot around rather than a flat penalty.
+- Fish 100, rare fish 200, reload 0.45 s, round 60 s.
 
-Fish and bottles drift past in five lanes. When something comes within reach the
-float dips and a `!` appears; you have 0.45 s to strike.
+### 7.5 Acorn Storm (`acorn_storm`) — *dodge*
+The simplest game in the pool on purpose: things fall, one kind hurts, one kind
+is good. No rules to read, which makes it the best card to be dealt first.
 
-**A bite tells you something is there, not what.** The silhouette in the water is
-the only way to tell a fish from a bottle, and it is visible *before* the bite —
-so a player who looks before they strike scores, and a player who mashes the
-button feeds on plastic. Everything about a swimmer is a tell: bottles run dead
-straight at a steady 24–34 px/s, fish weave and vary. Both are tinted as if seen
-through water, so it has to be read as a shape, not a colour.
+Everything about to land is telegraphed by a ring tightening onto the spot —
+the same warning grammar as the shaking leaf, so the cabinet teaches one visual
+language rather than eight. Player speed is raised to 108 here; it should feel
+frantic. A hit is a 0.6 s stun and −80, never an ending. Fruit combo ×1–×5.
 
-| Catch | Value |
-|---|---|
-| Common fish | +150 |
-| Rare fish (faster, further out) | +300 |
-| Plastic bottle | −100 |
-| Three clean catches in a row | +50 |
+The warning is 1.5 s: an early build used 1.05 s and fruit landed faster than
+anyone could cross the field, so the good half of the game was decoration.
 
-The streak bonus exists so that reading the water beats casting blind by more
-than the plastic penalty alone.
+### 7.6 Firefly Lantern (`firefly`) — *greed*
+Your lantern shrinks constantly; fireflies refill it. **The multiplier is tied
+to how small your light has got** (×1–×4), so playing safe means topping up
+early and scoring nothing. The high score demands running on a sliver of lantern
+in near-total darkness. Safe play and good play pull in opposite directions.
 
-*No fail:* the score floors at zero and the round ends on its own clock. Bottles
-you pull out are counted separately and shown on the results screen — the
-cabinet's whole point is turning play into something useful, and this is the one
-minigame where that lands inside the fiction.
+A guttered lantern relights at minimum and costs 120 — no death.
+
+*Implementation note:* the night is a `CanvasModulate`, and fireflies live on
+their **own CanvasLayer** because `CanvasModulate` tints only its own canvas.
+Without that the one thing you are meant to see glowing in the dark rendered as
+a grey dot; additive blending did not save it, because the tint applies after
+the blend.
+
+### 7.7 Temple Bell (`temple_bell`) — *timing*
+The only non-movement verb in the pool, which is exactly why it earns its slot:
+after two movement games a card that asks for something else makes the draw feel
+worth spinning.
+
+Markers close on a ring around the bell; hit `act` as they land.
+Perfect +12, Good +6, chain multiplier to ×3. Tempo ramps 1.1 → 2.4 beats/s over
+55 s. Striking into empty air breaks the chain, so mashing costs.
+
+*Driven by a game clock, not an audio stream* — there is no music track, so
+there is no sync to drift; each beat plays a synthesised tone.
+
+### 7.8 Crow Watch (`crow_watch`) — *defend*
+Crows dive at a 5 × 3 rice field, telegraphed by a descending crow and a growing
+shadow. Sprint into one before it lands to scare it off; a landed crow eats for
+1.1 s before taking a bite, so there is always a second chance.
+
+**The crop tally is both the objective and the clock, and it only goes down.**
+A player can watch themselves losing, which is a far stronger pull than a number
+that only climbs. Scare +50 with a chain multiplier; every surviving crop is
+worth 70 at the end.
+
+An early build had dives arriving faster than anyone could cross the field —
+the bot finished with **zero** crop saved, so the headline mechanic paid nothing.
 
 ---
 
 ## 8. Art & audio direction
 
-Dusk palette throughout — deep blue-violet shadows, warm amber light — so four
-different environments read as one evening. The placeholder generator uses the
-same palette, which is why the game looks coherent before any of the real art
-exists.
+Dusk palette throughout, so eight environments read as one evening. Everything
+on a 32 px grid; sprite origins at the feet.
 
-Everything is on a 32 px grid. Sprite origins are at the character's feet, so
-positioning against ground features and Y-sorting both work without per-scene
-fudging.
+Legibility rules that came out of the build:
 
-Legibility rules that came out of the build and are worth keeping:
-
-- **Never encode a rule in colour alone.** The shaking leaf wobbles *and* reddens
-  *and* ripples; the cave stones have notes as well as colours; the bird cone
-  shows `?` and `!` as well as changing hue.
-- **Telegraph before consequence, always.** Every hazard has a visible warning
-  with enough time to react at walking speed.
-- **The HUD says the rule, once.** One objective line per minigame, in plain
-  words, always on screen.
-
-Audio is synthesised (§5). A real pass would want: a soft ambient bed per
-minigame, water and wind loops, and a short jingle on the results screen. None of
-it is required for the game to work.
+- **Never encode a rule in colour alone.** The shaking leaf wobbles *and*
+  reddens *and* ripples; the cave stones have notes; the bird cone shows `?`
+  and `!` as well as changing hue.
+- **Telegraph before consequence, always** — and use the *same* telegraph. The
+  growing ring means "this lands here" in three different games.
+- **The HUD states the rule once**, in plain words, always on screen.
 
 ---
 
 ## 9. Testing
 
-Three headless suites, all runnable over SSH or in CI:
-
 ```
-tools/run_tests.sh            # or GODOT=/path/to/godot tools/run_tests.sh
+tools/run_tests.sh          # or GODOT=/path/to/godot tools/run_tests.sh
 ```
 
 | Suite | What it proves |
 |---|---|
-| `tests/smoke_test.gd` | every scene loads and runs under synthetic input; each minigame emits exactly one result; `finish()` cannot fire twice; scores never go negative |
-| `tests/soak_test.gd` | each minigame can actually be **completed**, by playing it properly to its own ending — not by forcing `finish()` |
-| `tests/flow_test.gd` | the full cabinet loop through real scene changes: attract → start → hub → all four chores → sun → results → attract |
+| `smoke_test.gd` | every scene loads and runs; all 8 emit exactly one result; `finish()` cannot fire twice; 40 draws deal 3 distinct, valid cards |
+| `soak_test.gd` | each of the 8 driven to its **own natural ending**, and drowning in Riverleap cannot be escaped by holding a direction |
+| `flow_test.gd` | the real loop through real scene changes: attract → draw → 3 dealt games → results → attract |
 
-The soak test is the one that matters most. A minigame that cannot be completed
-still looks fine in the editor and still passes a short smoke run. Two real bugs
-came out of these suites during the build and are documented where they were
-fixed: the cave's row-versus-ring layout (§7.3), and Router silently dropping a
-`START` pressed during a fade, which left the attract screen permanently dead
-until it timed out.
+The soak suite is the one that matters. A minigame that cannot be completed
+still looks fine in the editor and still passes a short smoke run. It has now
+caught: the unplayable cave row layout, a `set_meta(key, null)` crash in Crow
+Watch (Godot *deletes* the key), Crow Watch saving zero crop, Acorn Storm's
+unreachable fruit, and the Temple Bell scoring blowout.
 
-One note when reading test output: synthetic input must be sent as a parsed
-`InputEventAction`, not `Input.action_press()`. The latter only sets the polled
-action state and never reaches `_unhandled_input`, so the hop, cast and strike
-paths go silently untested.
+**A visual pass is not optional.** Render every screen under `xvfb-run` and look
+at it. Assertions caught none of these: the draw heading printing over the
+middle card, Temple Bell's target ring rendering invisible because `_process`
+overwrote the scene's scale, and the fireflies above.
 
-Godot may print `ObjectDB instances leaked at exit` naming `AudioStreamWAV` /
-`AudioStreamPlaybackWAV`. That is the audio mixer's shutdown ordering, not a leak
-— the voice pool is a fixed eight players and nothing accumulates during play.
+Two notes for reading test output:
 
-Feel and layout were checked by rendering each screen under `xvfb-run` and
-looking at it. That pass caught what no assertion would have: portal labels
-floating over the village houses, the results total printed on top of its own
-rows, `1 splashes`, a bare strip above the fishing water, and the grass problem
-in §7.2. Worth repeating after any layout change.
+- Synthetic input must be a parsed `InputEventAction`. `Input.action_press()`
+  only sets the polled state and never reaches `_unhandled_input`, so the hop,
+  fire and strike paths go silently untested.
+- `ObjectDB instances leaked at exit` naming `AudioStreamWAV` is the mixer's
+  shutdown ordering, not a leak — the voice pool is a fixed eight.
 
-**What the tests cannot judge is feel.** Hop timing, bird speed, cast arc,
-sequence tempo: those need a human at the keyboard. Every one of them is a named
-constant at the top of its minigame's script.
+**What the tests cannot judge is feel.** Every knob is a named constant at the
+top of its script.
 
 ---
 
@@ -492,55 +441,44 @@ godot --path video_games/sleepy-sun --editor   # edit
 tools/run_tests.sh                             # test
 ```
 
-`F6` in the editor runs whichever minigame scene is open, standalone.
+`F6` runs whichever minigame scene is open, standalone.
 
 ---
 
 ## 11. Deferred work, with the hook points named
 
-Out of scope for this session, listed so nothing gets rediscovered later.
-
-**Payment / QRIS (proposal §2.4.2, Phase 2).** Not written — no HTTP, no stubs,
-no dead code. Two seams are in place:
-- `Game.REQUIRE_CREDIT` (currently `false`) is the gate.
-- `attract.gd::_begin_run()` carries the marked comment where a dynamic QRIS
-  charge gets created and polled before `Game.start_run()` is allowed.
-- The `insert_credit` action (coin key `5`) already exists as the input path.
-
-The state machine already has the shape for it: Attract → *(Payment Wait)* → Hub.
-Inserting the step means adding one scene between them and flipping the constant.
+**Payment / QRIS (Phase 2).** Not written — no HTTP, no stubs, no dead code.
+`Game.REQUIRE_CREDIT` is the gate; `attract.gd::_begin_run()` carries the marked
+comment where a dynamic QRIS charge is created and polled; the `insert_credit`
+action (coin key `5`) is the input path. The step slots between Attract and the
+card draw.
 
 **Session logging & the public donation report (Phase 6).** Nothing is written
-outside `user://` today. `Save` is the natural place for a per-session record —
-timestamp, duration, total score — to be reconciled against the gateway ledger.
+outside `user://`. `Save` is the natural home for a per-session record to
+reconcile against the gateway ledger.
 
-**Online leaderboard.** `Save` is deliberately local-only. A shared board needs a
-backend and a moderation story for names; not worth it before the pilot.
+**Online leaderboard.** `Save` is local-only by choice; a shared board needs a
+backend and a moderation story for names.
 
-**Attract-mode demo.** A recorded or bot-played loop of a minigame behind the
-attract panels would sell the game better than a description. The soak test's
-drivers are most of the work already done.
+**Attract-mode demo.** A bot-played loop behind the attract panels would sell
+the game better than a description — the soak drivers are most of that work.
 
-**Pi performance pass.** Everything is single-draw-call backdrops and a handful
-of sprites, and the biggest textures are now 192×160, but it has not been run on
-real hardware. Measure before optimising.
+**Pi performance pass.** Single-draw-call backdrops and a handful of sprites,
+biggest texture 192×160, but it has not run on real hardware. Measure first.
 
-**A second adventure.** The `MiniGame` contract and the hub are adventure-agnostic;
-a second one is a new hub scene plus a new registry, not an engine change.
+**A ninth minigame / a second adventure.** The contract is adventure-agnostic.
 
-**Audio pass.** See §8.
+**Audio pass.** See §5.
 
 ---
 
 ## 12. Open questions
 
-1. **Cabinet orientation.** Built for landscape 16:9. A portrait (tate) monitor
-   would suit Riverleap but hurt Hush Meadow and Still Water.
-2. **Session length.** A full run is roughly 5–8 minutes. If the pilot venue
-   wants higher throughput, the honest lever is cutting Still Water's 75-second
-   round and Riverleap's 62-second crossing, not adding a fail state.
-3. **Price per credit**, which determines whether "one credit = four minigames"
-   is generous or wrong. A per-minigame credit is a registry change, not a
-   rewrite, if it turns out to matter.
-4. **Language.** English throughout. An Indonesian pass is a strings file away —
-   there is very little text, and it is all in one place per screen.
+1. **Are the pars right?** They are set from a scripted bot, which is superhuman
+   at Temple Bell and Echo Hollow and underplays Riverleap's chimes and Firefly's
+   greed loop. A human pass will move them.
+2. **Cabinet orientation.** Built for landscape 16:9.
+3. **Is three cards the right hand?** `Game.PLAYLIST_SIZE` is one constant.
+   Four cards is ~5 minutes and a fuller session; two is higher throughput.
+4. **Price per credit**, which decides whether three games is generous.
+5. **Language.** English throughout; very little text, all in one place per screen.
