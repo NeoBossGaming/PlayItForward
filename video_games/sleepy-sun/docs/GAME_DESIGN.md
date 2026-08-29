@@ -23,7 +23,7 @@ What is built today:
 
 ```
 Boot  →  Attract  →  Village hub  ⇄  four minigames  →  Results  →  Attract
-                        (the "Payment Wait" step sits between Attract and Hub)
+						(the "Payment Wait" step sits between Attract and Hub)
 ```
 
 This satisfies the proposal's Phase 1 acceptance criterion — *the full loop plays
