@@ -1,0 +1,132 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://src/shell/results/results.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/game/village/sun_0.png" id="2"]
+[ext_resource type="Texture2D" path="res://assets/game/village/glow.png" id="3"]
+
+[sub_resource type="Gradient" id="grad"]
+offsets = PackedFloat32Array(0, 0.5, 1)
+colors = PackedColorArray(0.07, 0.07, 0.16, 1, 0.2, 0.15, 0.3, 1, 0.42, 0.24, 0.3, 1)
+
+[sub_resource type="GradientTexture2D" id="sky"]
+gradient = SubResource("grad")
+width = 640
+height = 360
+fill_to = Vector2(0, 1)
+
+[sub_resource type="StyleBoxFlat" id="panel"]
+bg_color = Color(0.08, 0.07, 0.14, 0.72)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+
+[node name="Results" type="Node2D"]
+script = ExtResource("1")
+
+[node name="World" type="Node2D" parent="."]
+
+[node name="Sky" type="Sprite2D" parent="World"]
+centered = false
+texture = SubResource("sky")
+
+[node name="Glow" type="Sprite2D" parent="World"]
+modulate = Color(1, 1, 1, 0.35)
+position = Vector2(72, 84)
+scale = Vector2(3, 3)
+texture = ExtResource("3")
+
+[node name="Sun" type="Sprite2D" parent="World"]
+position = Vector2(72, 84)
+scale = Vector2(1.6, 1.6)
+texture = ExtResource("2")
+
+[node name="UI" type="CanvasLayer" parent="."]
+
+[node name="Heading" type="Label" parent="UI"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 140.0
+offset_top = 26.0
+offset_bottom = 54.0
+theme_override_colors/font_color = Color(1, 0.9, 0.62, 1)
+theme_override_colors/font_outline_color = Color(0.07, 0.05, 0.11, 1)
+theme_override_constants/outline_size = 7
+theme_override_font_sizes/font_size = 24
+text = "GOOD NIGHT, SUN"
+
+[node name="Rank" type="Label" parent="UI"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 140.0
+offset_top = 54.0
+offset_bottom = 74.0
+theme_override_colors/font_outline_color = Color(0.07, 0.05, 0.11, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 15
+text = ""
+
+[node name="Panel" type="Panel" parent="UI"]
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -215.0
+offset_top = -48.0
+offset_right = 215.0
+offset_bottom = 82.0
+theme_override_styles/panel = SubResource("panel")
+
+[node name="Rows" type="VBoxContainer" parent="UI/Panel"]
+anchors_preset = 10
+anchor_right = 1.0
+offset_left = 8.0
+offset_top = 6.0
+offset_right = -8.0
+offset_bottom = 90.0
+theme_override_constants/separation = 3
+
+[node name="Total" type="Label" parent="UI/Panel"]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 8.0
+offset_top = -28.0
+offset_right = -8.0
+offset_bottom = -4.0
+theme_override_colors/font_color = Color(1, 0.87, 0.55, 1)
+theme_override_colors/font_outline_color = Color(0.07, 0.05, 0.11, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 18
+text = ""
+horizontal_alignment = 2
+
+[node name="Flavour" type="Label" parent="UI"]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -76.0
+offset_bottom = -30.0
+theme_override_colors/font_color = Color(0.88, 0.86, 0.96, 1)
+theme_override_colors/font_outline_color = Color(0.07, 0.05, 0.11, 1)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 10
+text = ""
+horizontal_alignment = 1
+
+[node name="Hint" type="Label" parent="UI"]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = -24.0
+offset_bottom = -8.0
+theme_override_colors/font_color = Color(1, 0.95, 0.8, 1)
+theme_override_colors/font_outline_color = Color(0.07, 0.05, 0.11, 1)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 11
+text = "PRESS START to play again"
+horizontal_alignment = 1

@@ -1,0 +1,57 @@
+[gd_scene load_steps=9 format=3]
+
+[ext_resource type="Script" path="res://src/minigames/cave/cave.gd" id="1"]
+[ext_resource type="PackedScene" path="res://src/core/player.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://src/ui/hud.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://src/minigames/cave/stage_door.tscn" id="4"]
+[ext_resource type="Script" path="res://src/core/scrolling_texture.gd" id="5"]
+[ext_resource type="Texture2D" path="res://assets/game/cave/floor.png" id="6"]
+[ext_resource type="Texture2D" path="res://assets/game/cave/wall.png" id="7"]
+[ext_resource type="Texture2D" path="res://assets/game/cave/torch_0.png" id="8"]
+
+[sub_resource type="RectangleShape2D" id="exit_shape"]
+size = Vector2(46, 22)
+
+[node name="Cave" type="Node2D"]
+script = ExtResource("1")
+id = &"cave"
+par_score = 1800
+
+[node name="Wall" type="Sprite2D" parent="."]
+position = Vector2(320, 180)
+texture = ExtResource("7")
+script = ExtResource("5")
+area = Vector2i(672, 424)
+
+[node name="Floor" type="Sprite2D" parent="."]
+position = Vector2(320, 272)
+texture = ExtResource("6")
+script = ExtResource("5")
+area = Vector2i(512, 160)
+
+[node name="Door" parent="." instance=ExtResource("4")]
+position = Vector2(320, 108)
+
+[node name="ExitArea" type="Area2D" parent="."]
+position = Vector2(320, 172)
+collision_layer = 8
+collision_mask = 1
+
+[node name="Shape" type="CollisionShape2D" parent="ExitArea"]
+shape = SubResource("exit_shape")
+
+[node name="TorchLeft" type="Sprite2D" parent="."]
+position = Vector2(216, 132)
+texture = ExtResource("8")
+
+[node name="TorchRight" type="Sprite2D" parent="."]
+position = Vector2(424, 132)
+texture = ExtResource("8")
+
+[node name="Plates" type="Node2D" parent="."]
+
+[node name="Player" parent="." instance=ExtResource("2")]
+position = Vector2(320, 316)
+z_index = 5
+
+[node name="HUD" parent="." instance=ExtResource("3")]

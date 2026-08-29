@@ -1,0 +1,12 @@
+# Godot's import and editor cache. Machine-specific, regenerated on open, and a
+# constant source of merge conflicts if committed.
+/.godot/
+
+# Export output
+/build/
+/export/
+*.tmp
+
+# Python venv, if the asset tools are run from one
+/.venv/
+__pycache__/

@@ -1,0 +1,73 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://src/minigames/wind_leaf/wind_leaf.gd" id="1"]
+[ext_resource type="PackedScene" path="res://src/core/player.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://src/ui/hud.tscn" id="3"]
+[ext_resource type="Script" path="res://src/core/scrolling_texture.gd" id="4"]
+[ext_resource type="Texture2D" path="res://assets/game/shared/water_0.png" id="5"]
+[ext_resource type="Texture2D" path="res://assets/game/shared/water_1.png" id="6"]
+[ext_resource type="Texture2D" path="res://assets/game/shared/water_2.png" id="7"]
+[ext_resource type="Texture2D" path="res://assets/game/village/ground_0.png" id="8"]
+[ext_resource type="Texture2D" path="res://assets/game/village/tree.png" id="9"]
+
+[sub_resource type="Gradient" id="shore_grad"]
+offsets = PackedFloat32Array(0, 0.55, 0.75, 1)
+colors = PackedColorArray(0.29, 0.42, 0.25, 1, 0.29, 0.42, 0.25, 1, 0.77, 0.66, 0.46, 1, 0.35, 0.5, 0.6, 1)
+
+[sub_resource type="GradientTexture2D" id="shore"]
+gradient = SubResource("shore_grad")
+width = 672
+height = 200
+fill_to = Vector2(0, 1)
+
+[node name="WindLeaf" type="Node2D"]
+script = ExtResource("1")
+id = &"wind_leaf"
+par_score = 1600
+
+[node name="World" type="Node2D" parent="."]
+
+[node name="Water" type="Sprite2D" parent="World"]
+position = Vector2(320, 180)
+texture = ExtResource("5")
+script = ExtResource("4")
+frames = Array[Texture2D]([ExtResource("5"), ExtResource("6"), ExtResource("7")])
+frames_per_second = 4.0
+scroll = Vector2(0, 14)
+area = Vector2i(672, 424)
+
+[node name="BankLeft" type="Sprite2D" parent="World"]
+position = Vector2(48, 180)
+texture = ExtResource("8")
+script = ExtResource("4")
+scroll = Vector2(0, 52)
+area = Vector2i(96, 424)
+
+[node name="BankRight" type="Sprite2D" parent="World"]
+position = Vector2(592, 180)
+texture = ExtResource("8")
+script = ExtResource("4")
+scroll = Vector2(0, 52)
+area = Vector2i(96, 424)
+
+[node name="TreeA" type="Sprite2D" parent="World/BankLeft"]
+position = Vector2(-14, -60)
+texture = ExtResource("9")
+
+[node name="TreeB" type="Sprite2D" parent="World/BankRight"]
+position = Vector2(12, 40)
+texture = ExtResource("9")
+
+[node name="FarBank" type="Sprite2D" parent="World"]
+position = Vector2(320, -80)
+texture = SubResource("shore")
+visible = false
+
+[node name="Chimes" type="Node2D" parent="."]
+
+[node name="Leaves" type="Node2D" parent="."]
+
+[node name="Player" parent="." instance=ExtResource("2")]
+position = Vector2(320, 232)
+
+[node name="HUD" parent="." instance=ExtResource("3")]
