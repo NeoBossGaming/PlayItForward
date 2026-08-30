@@ -10,12 +10,19 @@ const RESULTS := "res://src/shell/results/results.tscn"
 
 const FADE_TIME := 0.35
 
+## A score at or above this fraction of par gets the confident telling of what
+## just happened rather than the gentle one. Slightly under par still counts:
+## the split is between "that went well" and "that went quietly", never between
+## passing and failing.
+const MET_PAR := 0.9
+
 signal scene_ready(scene: Node)
 
 var _fade: ColorRect
 var _busy: bool = false
 var _pending: String = ""
 var _draw_deals: bool = false
+var _cutscene_scene: PackedScene = preload("res://src/ui/cutscene.tscn")
 
 
 func _ready() -> void:
@@ -66,9 +73,10 @@ func change_scene(path: String) -> void:
 	_busy = false
 	scene_ready.emit(scene)
 
-	# Hand control over only once the screen is actually visible.
+	# Hand control over only once the screen is actually visible. enter() plays
+	# the intro card first and calls begin() when it is done.
 	if scene is MiniGame:
-		(scene as MiniGame).begin()
+		(scene as MiniGame).enter()
 
 	_flush_pending()
 
@@ -128,13 +136,39 @@ func _on_minigame_finished(result: MiniGameResult, _game: MiniGame) -> void:
 	Game.record(result)
 	Game.advance()
 	Audio.sfx(&"complete")
-	# A beat on the finished game's own screen before the scene changes, so the
-	# last thing that happened is still readable when the score lands.
+	# A beat on the finished game's own screen before anything else happens, so
+	# the last thing that happened is still readable when the score lands.
 	await Wait.on(self, 1.4)
+
+	var met_par := result.score >= int(Game.par_for(result.id) * MET_PAR)
+	await play_cutscene(Lore.after(result.id, met_par))
+
 	if Game.all_complete():
+		await play_cutscene(Lore.finale(run_tier(), Game.playlist.duplicate()))
 		await go_to_results()
 	else:
 		await go_to_draw(false)
+
+
+## How the run went, as an index into Lore.TIERS. The results screen reads the
+## same number for its rank stamp, so the sun the player sees and the word they
+## are given can never disagree.
+func run_tier() -> int:
+	var par := maxf(float(Game.playlist_par()), 1.0)
+	return Lore.tier_for(float(Game.total_score()) / par)
+
+
+## Plays a cutscene over whatever is currently on screen and returns when it is
+## gone. It hangs off Router rather than off the scene so it survives the scene
+## being freed underneath it, and sits below the fade layer so a transition
+## started mid-cutscene still covers it.
+func play_cutscene(shots: Array) -> void:
+	if shots.is_empty():
+		return
+	var scene: Cutscene = _cutscene_scene.instantiate()
+	add_child(scene)
+	scene.play(shots)
+	await scene.done
 
 
 func _fade_to(alpha: float) -> void:

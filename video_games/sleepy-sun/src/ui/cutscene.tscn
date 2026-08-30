@@ -1,0 +1,65 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/ui/cutscene.gd" id="1"]
+
+[node name="Cutscene" type="CanvasLayer"]
+layer = 95
+script = ExtResource("1")
+
+[node name="Root" type="Control" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+mouse_filter = 2
+
+[node name="Sky" type="TextureRect" parent="Root"]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+expand_mode = 1
+stretch_mode = 1
+mouse_filter = 2
+
+[node name="Stage" type="Node2D" parent="Root"]
+
+[node name="BarTop" type="ColorRect" parent="Root"]
+anchors_preset = 10
+anchor_right = 1.0
+color = Color(0.03, 0.03, 0.06, 1)
+mouse_filter = 2
+
+[node name="BarBottom" type="ColorRect" parent="Root"]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+color = Color(0.03, 0.03, 0.06, 1)
+mouse_filter = 2
+
+[node name="Caption" type="Label" parent="Root"]
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = -24.0
+offset_right = -10.0
+offset_bottom = -3.0
+theme_type_variation = &"Body"
+horizontal_alignment = 1
+vertical_alignment = 1
+mouse_filter = 2
+
+[node name="Skip" type="Label" parent="Root"]
+anchors_preset = 11
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -120.0
+offset_top = 5.0
+offset_right = -8.0
+offset_bottom = 21.0
+theme_type_variation = &"Small"
+text = "any button  skip"
+horizontal_alignment = 2
+vertical_alignment = 1
+mouse_filter = 2

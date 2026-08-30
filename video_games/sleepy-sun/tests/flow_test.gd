@@ -12,7 +12,9 @@ extends Node
 ## The driver reparents itself to the scene tree root, because Router replaces
 ## `current_scene` and anything living there gets freed mid-test.
 
-const STEP_TIMEOUT := 25.0
+## Generous, because a step is now a scene change plus up to five seconds of
+## lore plus an intro card, and the finale is longer still.
+const STEP_TIMEOUT := 45.0
 const ARRIVE_RADIUS := 12.0
 
 var is_driver: bool = false
@@ -95,6 +97,13 @@ func _play_card(id: StringName, index: int) -> void:
 	var game := _scene() as MiniGame
 	if game == null:
 		return
+
+	# Get past the lore beat and the intro card the way a repeat player does.
+	# This is also the only place the skip path is exercised against the real
+	# flow, so a cutscene that cannot be dismissed fails the suite here.
+	await _skip_to_play(game)
+	_check(game.running, "%s never started playing after its intro" % id)
+
 	# What is under test here is the transition, not the minigame -- the soak
 	# test already plays each one properly.
 	game.finish(500, {})
@@ -104,6 +113,20 @@ func _play_card(id: StringName, index: int) -> void:
 		await _expect("Draw", "back to the card table after %s" % id)
 	await _frames(2)
 	_check(Game.has_played(id), "%s should be recorded on the run" % id)
+
+
+## Taps through the cutscene and the intro card until the game is actually
+## running. Deliberately impatient: it starts pressing immediately, so the
+## first presses land inside the cutscene's dead zone and are ignored.
+func _skip_to_play(game: MiniGame) -> void:
+	var clock := 0.0
+	while clock < STEP_TIMEOUT:
+		if not is_instance_valid(game) or game.running or game.is_finished():
+			return
+		await _tap(&"act")
+		await _wait(0.25)
+		clock += 0.3
+	_check(false, "timed out getting past the intro for %s" % game.id)
 
 
 # --- helpers -----------------------------------------------------------------

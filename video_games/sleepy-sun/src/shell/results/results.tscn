@@ -1,8 +1,11 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=10 format=3]
 
 [ext_resource type="Script" path="res://src/shell/results/results.gd" id="1"]
 [ext_resource type="Texture2D" path="res://assets/game/village/sun_0.png" id="2"]
 [ext_resource type="Texture2D" path="res://assets/game/village/glow.png" id="3"]
+[ext_resource type="Script" path="res://src/core/decor.gd" id="d_decor"]
+[ext_resource type="Texture2D" path="res://assets/game/decor/sparkle.png" id="d_spark"]
+[ext_resource type="Texture2D" path="res://assets/game/ui/vignette.png" id="d_vig"]
 
 [sub_resource type="Gradient" id="grad"]
 offsets = PackedFloat32Array(0, 0.5, 1)
@@ -10,8 +13,8 @@ colors = PackedColorArray(0.07, 0.07, 0.16, 1, 0.2, 0.15, 0.3, 1, 0.42, 0.24, 0.
 
 [sub_resource type="GradientTexture2D" id="sky"]
 gradient = SubResource("grad")
-width = 640
-height = 360
+width = 480
+height = 270
 fill_to = Vector2(0, 1)
 
 [sub_resource type="StyleBoxFlat" id="panel"]
@@ -32,39 +35,50 @@ texture = SubResource("sky")
 
 [node name="Glow" type="Sprite2D" parent="World"]
 modulate = Color(1, 1, 1, 0.35)
-position = Vector2(72, 84)
+position = Vector2(54, 63)
 scale = Vector2(3, 3)
 texture = ExtResource("3")
 
 [node name="Sun" type="Sprite2D" parent="World"]
-position = Vector2(72, 84)
+position = Vector2(54, 63)
 scale = Vector2(1.6, 1.6)
 texture = ExtResource("2")
+
+[node name="Sparkles" type="Node2D" parent="World"]
+z_index = 3
+script = ExtResource("d_decor")
+texture = ExtResource("d_spark")
+count = 16
+drift = Vector2(3, -9)
+area = Rect2(0, 0, 480, 270)
+tint = Color(1, 0.92, 0.6, 0.55)
+sway = 8.0
+twinkle = true
+
+[node name="Vignette" type="Sprite2D" parent="World"]
+z_index = 20
+centered = false
+texture = ExtResource("d_vig")
 
 [node name="UI" type="CanvasLayer" parent="."]
 
 [node name="Heading" type="Label" parent="UI"]
 anchors_preset = 10
 anchor_right = 1.0
-offset_left = 140.0
-offset_top = 26.0
-offset_bottom = 54.0
-theme_override_colors/font_color = Color(1, 0.9, 0.62, 1)
-theme_override_colors/font_outline_color = Color(0.07, 0.05, 0.11, 1)
-theme_override_constants/outline_size = 7
-theme_override_font_sizes/font_size = 24
+offset_left = 105
+offset_top = 20
+offset_bottom = 40
 text = "GOOD NIGHT, SUN"
+theme_type_variation = &"Title"
 
 [node name="Rank" type="Label" parent="UI"]
 anchors_preset = 10
 anchor_right = 1.0
-offset_left = 140.0
-offset_top = 54.0
-offset_bottom = 74.0
-theme_override_colors/font_outline_color = Color(0.07, 0.05, 0.11, 1)
-theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 15
+offset_left = 105
+offset_top = 40
+offset_bottom = 56
 text = ""
+theme_type_variation = &"Heading"
 
 [node name="Panel" type="Panel" parent="UI"]
 anchors_preset = 8
@@ -72,19 +86,19 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -215.0
-offset_top = -48.0
-offset_right = 215.0
-offset_bottom = 82.0
+offset_left = -161
+offset_top = -36
+offset_right = 161
+offset_bottom = 62
 theme_override_styles/panel = SubResource("panel")
 
 [node name="Rows" type="VBoxContainer" parent="UI/Panel"]
 anchors_preset = 10
 anchor_right = 1.0
-offset_left = 8.0
-offset_top = 6.0
-offset_right = -8.0
-offset_bottom = 90.0
+offset_left = 6
+offset_top = 4
+offset_right = -6
+offset_bottom = 68
 theme_override_constants/separation = 3
 
 [node name="Total" type="Label" parent="UI/Panel"]
@@ -92,28 +106,22 @@ anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 8.0
-offset_top = -28.0
-offset_right = -8.0
-offset_bottom = -4.0
-theme_override_colors/font_color = Color(1, 0.87, 0.55, 1)
-theme_override_colors/font_outline_color = Color(0.07, 0.05, 0.11, 1)
-theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 18
+offset_left = 6
+offset_top = -21
+offset_right = -6
+offset_bottom = -3
 text = ""
 horizontal_alignment = 2
+theme_type_variation = &"Score"
 
 [node name="Flavour" type="Label" parent="UI"]
 anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = -76.0
-offset_bottom = -30.0
-theme_override_colors/font_color = Color(0.88, 0.86, 0.96, 1)
-theme_override_colors/font_outline_color = Color(0.07, 0.05, 0.11, 1)
-theme_override_constants/outline_size = 5
-theme_override_font_sizes/font_size = 10
+offset_top = -74
+offset_bottom = -26
+theme_type_variation = &"Small"
 text = ""
 horizontal_alignment = 1
 
@@ -122,11 +130,8 @@ anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = -24.0
-offset_bottom = -8.0
-theme_override_colors/font_color = Color(1, 0.95, 0.8, 1)
-theme_override_colors/font_outline_color = Color(0.07, 0.05, 0.11, 1)
-theme_override_constants/outline_size = 5
-theme_override_font_sizes/font_size = 11
+offset_top = -20
+offset_bottom = -4
+theme_type_variation = &"Small"
 text = "PRESS START to play again"
 horizontal_alignment = 1

@@ -10,22 +10,36 @@ godot --path . --editor     # edit
 tools/run_tests.sh          # headless test suite
 ```
 
-**Controls** — stick or arrows/WASD to move, `Space` to act, `Enter`/`1` to start,
-`5` to insert a credit. One stick and one button run the whole adventure.
+**Controls** — stick or arrows/WASD to move, `Space` to act (and to sprint, where
+there is a stamina bar), `Enter`/`1` to start, `5` to insert a credit. One stick
+and one button run the whole adventure.
 
-**The adventure** — one credit deals you **three games from a pool of eight**,
-and you cannot lose it. Press start, the cards spin, and you are playing.
+**`F3` opens the debug menu** — jump into any game, force the next hand, watch
+any cutscene without playing for it, slow motion, clear scores. It only exists in
+debug builds, never on the cabinet.
 
-| | |
-|---|---|
-| **Riverleap** | Hop between drifting leaves. The ones that shake are about to sink. |
-| **Hush Meadow** | Gather sunpetals before dusk. Closer to a bird pays more. |
-| **Echo Hollow** | Watch the stones light up, then walk the same path back. |
-| **Riverstrike** | Fire harpoons straight up. Lead the fish; bottles stop the bolt. |
-| **Acorn Storm** | Dodge the falling acorns, catch the sunfruit between them. |
-| **Firefly Lantern** | Your light is dying. The darker it gets, the more they pay. |
-| **Temple Bell** | Strike on the beat. It only gets faster. |
-| **Crow Watch** | Crows are diving on the rice. Scare them off before they land. |
+**The adventure** — the sun slept straight through the dawn, and the valley is
+doing the waking by hand. One credit deals you **three games from a pool of
+eight**, and you cannot lose it. Press start, the cards spin, and you are
+playing. Each game brings the sun one thing that might wake it, a short cutscene
+either side says what and why, and the ending changes with how the run went.
+
+| | What you do | What it brings the sun |
+|---|---|---|
+| **Riverleap** | Hop between drifting leaves. The ones that shake are about to sink. | the river chimes |
+| **Hush Meadow** | Forage before dusk, then get into cover. Closer to a bird pays more. | a handful of yesterday |
+| **Echo Hollow** | Watch the stones light up, then walk the same path back. | the sun's own name |
+| **Riverstrike** | Fire harpoons straight up. Lead the fish; bottles stop the bolt. | a river clear enough to look in |
+| **Acorn Storm** | Dodge the falling acorns, catch the sunfruit between them. | breakfast |
+| **Firefly Lantern** | Your light is dying. The darker it gets, the more they pay. | a borrowed light |
+| **Temple Bell** | Strike on the beat, then do it while running for pickups. | the dawn bell |
+| **Crow Watch** | Crows are diving on the rice. Scare them off before they land. | the harvest offering |
+
+Cutscenes are skippable with any button after a second, so a repeat player is
+never held up by a story they have already seen.
+
+**Fonts** — Press Start 2P and Pixelify Sans, both under the SIL Open Font
+License; the licence files ship beside them in `assets/game/fonts/`.
 
 **Documentation**
 

@@ -25,11 +25,13 @@ var _checks_run: int = 0
 var _held: Array[StringName] = []
 var _taps_to_release: Array[StringName] = []
 var _reacted_to_lane: int = -1
+var _bell_errand: Node2D = null
 
 
 func _ready() -> void:
 	await _play(&"wind_leaf", _drive_wind_leaf)
 	await _test_drowning_is_not_escapable()
+	await _test_bird_does_not_twitch()
 	await _play(&"tall_grass", _drive_tall_grass)
 	await _play(&"cave", _drive_cave)
 	await _play(&"harpoon", _drive_harpoon)
@@ -37,6 +39,7 @@ func _ready() -> void:
 	await _play(&"firefly", _drive_firefly)
 	await _play(&"temple_bell", _drive_temple_bell)
 	await _play(&"crow_watch", _drive_crow_watch)
+	await _test_stamina()
 
 	print("\n================= SOAK TEST =================")
 	if _failures.is_empty():
@@ -59,6 +62,7 @@ func _play(id: StringName, driver: Callable) -> void:
 	await _frames(3)
 	game.begin()
 
+	_bell_errand = null
 	var clock := 0.0
 	while received.is_empty() and clock < MAX_SECONDS_PER_GAME:
 		for action in _taps_to_release:
@@ -158,21 +162,34 @@ func _drive_wind_leaf(game: MiniGame) -> void:
 			return
 
 
-## Walk to each petal in turn, then to the tree. Makes no attempt to dodge the
-## birds -- being caught is a setback, not an ending, so a clumsy player still
-## has to be able to finish.
+## Forage toward the nearest visible pickup. Makes no attempt to dodge the birds
+## -- being caught is a setback, not an ending, so a clumsy player still has to
+## be able to finish the round.
 func _drive_tall_grass(game: MiniGame) -> void:
 	var player: Node2D = game.get_node("Player")
-	var petals: Array = game.get_node("Petals").get_children()
-	var target: Vector2 = game.get_node("Goal").position
-	if not petals.is_empty():
-		var nearest: Node2D = petals[0]
-		for petal: Node2D in petals:
-			if petal.position.distance_to(player.position) \
-					< nearest.position.distance_to(player.position):
-				nearest = petal
-		target = nearest.position
-	_steer(player.position, target)
+	var nearest: Node2D = null
+	for child in game.get_node("Pickups").get_children():
+		if not child.get("revealed"):
+			continue
+		if nearest == null or child.position.distance_to(player.position) \
+				< nearest.position.distance_to(player.position):
+			nearest = child
+	# At dusk, cover beats one more pickup -- and this exercises the scramble.
+	if game.get("_scrambling"):
+		var patches: Array = game.get("_grass_areas")
+		if not patches.is_empty():
+			var best: Rect2 = patches[0]
+			for patch: Rect2 in patches:
+				if patch.get_center().distance_to(player.position) \
+						< best.get_center().distance_to(player.position):
+					best = patch
+			_steer(player.position, best.get_center())
+			return
+
+	if nearest == null:
+		_release_all()
+		return
+	_steer(player.position, nearest.position)
 
 
 ## Watch the sequence, then walk it back. Reads the generated pattern directly,
@@ -183,7 +200,8 @@ func _drive_cave(game: MiniGame) -> void:
 	var plates: Array = game.get_node("Plates").get_children()
 
 	if phase == CAVE_WALKING:
-		_steer(player.position, Vector2(320, 168))
+		# The cave doorway, in 480x270 coordinates.
+		_steer(player.position, Vector2(240, 129))
 		return
 	if phase != CAVE_INPUT:
 		_release_all()
@@ -216,7 +234,7 @@ func _drive_harpoon(game: MiniGame) -> void:
 		_release_all()
 		return
 	# Lead the target: aim where it will be by the time the bolt arrives.
-	var flight: float = (player.position.y - best.position.y) / 620.0
+	var flight: float = (player.position.y - best.position.y) / 465.0
 	var lead: float = best.position.x + best.get("direction") * best.get("speed") * flight
 	if _steer(Vector2(player.position.x, 0.0), Vector2(lead, 0.0)):
 		_tap(&"act")
@@ -259,16 +277,52 @@ func _drive_firefly(game: MiniGame) -> void:
 	_steer(player.position, nearest.position)
 
 
-## Strike whenever a marker is inside the hit window.
+## Strike whenever a marker is inside the hit window. In phase 2 the bot also
+## has to stay near the bell, since a strike out of range does not register --
+## which is exactly the constraint that makes phase 2 a multitask.
 func _drive_temple_bell(game: MiniGame) -> void:
 	const APPROACH := 1.6
 	const WINDOW := 0.20
+	const BELL := Vector2(240, 140)
+	var player: Node2D = game.get_node("Player")
+
+	# Strike first: a mark on the ring beats anything else on the field.
 	for marker in game.get_node("Markers").get_children():
 		if marker.has_meta(&"spent"):
 			continue
 		if absf(float(marker.get_meta(&"life")) - APPROACH) <= WINDOW * 0.5:
 			_tap(&"act")
 			return
+
+	if not game.get("_phase_two"):
+		return
+
+	# Phase 2: dash for a pickup only when the next mark is far enough out to
+	# get back, which is the trade the phase is built around.
+	var soonest := 99.0
+	for marker in game.get_node("Markers").get_children():
+		if not marker.has_meta(&"spent"):
+			soonest = minf(soonest, APPROACH - float(marker.get_meta(&"life")))
+	# Commit to an errand once started, rather than re-deciding every frame and
+	# oscillating on the ring edge forever.
+	if _bell_errand != null and not is_instance_valid(_bell_errand):
+		_bell_errand = null
+	if _bell_errand == null and soonest > 0.5:
+		var nearest: Node2D = null
+		for pickup in game.get_node("Pickups").get_children():
+			if nearest == null or pickup.position.distance_to(player.position) \
+					< nearest.position.distance_to(player.position):
+				nearest = pickup
+		_bell_errand = nearest
+
+	if _bell_errand != null:
+		if _steer(player.position, _bell_errand.position):
+			_bell_errand = null
+		return
+	if player.position.distance_to(BELL) > 24.0:
+		_steer(player.position, BELL)
+	else:
+		_release_all()
 
 
 ## Run at whichever crow is closest to landing.
@@ -322,6 +376,82 @@ func _test_drowning_is_not_escapable() -> void:
 	else:
 		print("  %-11s drowning holds under a held direction" % "wind_leaf")
 	game.free()
+	await _frames(2)
+
+
+## Regression test for the vision-cone twitch: an investigating bird that had
+## arrived at its target kept falling through to the movement code, where
+## direction_to() over a near-zero distance returned a unit vector built from
+## floating-point residue -- so `facing` flipped every frame and the cone
+## strobed. Sitting still must mean sitting still.
+func _test_bird_does_not_twitch() -> void:
+	var bird: PatrolBird = (load("res://src/minigames/tall_grass/bird.tscn")
+			as PackedScene).instantiate()
+	bird.waypoints = PackedVector2Array([Vector2(100, 100), Vector2(160, 100)])
+	bird.speed = 40.0
+	add_child(bird)
+	await _frames(2)
+
+	# Send it somewhere, let it arrive, then watch it hover.
+	bird.global_position = Vector2(100, 100)
+	bird.investigate(Vector2(100, 100))
+	await _frames(20)
+
+	var previous := bird.facing
+	var flips := 0
+	for i in 90:                              # ~1.5 seconds of hovering
+		await _frames(1)
+		if bird.facing.dot(previous) < 0.0:   # reversed direction
+			flips += 1
+		previous = bird.facing
+
+	_checks_run += 1
+	if flips > 3:
+		_failures.append("bird vision cone twitches: facing reversed %d times "
+				% flips + "in 90 frames while investigating")
+	else:
+		print("  %-11s cone holds steady while investigating (%d flips)"
+				% ["tall_grass", flips])
+	bird.free()
+	await _frames(2)
+
+
+## Stamina has to actually run out under a sustained sprint, and has to refuse a
+## fresh sprint until it has recovered past the floor -- otherwise tapping the
+## button gives an unlimited sprint one frame at a time.
+func _test_stamina() -> void:
+	var player: TopDownPlayer = (load("res://src/core/player.tscn")
+			as PackedScene).instantiate()
+	player.can_sprint = true
+	add_child(player)
+	await _frames(2)
+
+	_hold(&"move_right")
+	_hold(&"act")
+	var ever_exhausted := false
+	var sprinted_while_exhausted := false
+	var lowest := 1.0
+	for i in 300:
+		await _frames(1)
+		lowest = minf(lowest, player.stamina)
+		if player.exhausted:
+			ever_exhausted = true
+			if player.sprinting:
+				sprinted_while_exhausted = true
+
+	_checks_run += 1
+	if not ever_exhausted:
+		_failures.append("stamina never ran out under a 5-second held sprint "
+				+ "(lowest %.2f)" % lowest)
+	else:
+		print("  %-11s stamina drains to empty and gates the next sprint" % "player")
+
+	_checks_run += 1
+	if sprinted_while_exhausted:
+		_failures.append("player sprinted while exhausted")
+
+	_release_all()
+	player.free()
 	await _frames(2)
 
 

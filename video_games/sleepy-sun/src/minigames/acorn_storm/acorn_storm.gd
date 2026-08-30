@@ -14,21 +14,21 @@ extends MiniGame
 ## No fail state: a hit is a stun and some points, never an ending.
 
 const ROUND_SECONDS := 60.0
-const FIELD := Rect2(48, 96, 544, 232)
+const FIELD := Rect2(36, 72, 408, 174)
 
 ## Warning time from spawn to impact. Has to be long enough to actually cross
 ## the field for a fruit, or the good half of the game is decoration.
 const FALL_SECONDS := 1.5
 const STUN_SECONDS := 0.6
 
-const SCORE_FRUIT := 90
+const SCORE_FRUIT := 65
 const SCORE_HIT := -80
 const COMBO_PER_LEVEL := 3
-const COMBO_MAX := 5
+const COMBO_MAX := 4
 
 ## Spawn interval eases from the first value to the second across the round.
 const ACORN_INTERVAL := Vector2(0.85, 0.30)
-const FRUIT_INTERVAL := Vector2(1.40, 0.95)
+const FRUIT_INTERVAL := Vector2(1.90, 1.30)
 
 @onready var _player: TopDownPlayer = $Player
 @onready var _hud: HUD = $HUD
@@ -54,11 +54,18 @@ func _ready() -> void:
 	_player.position = FIELD.get_center()
 	# Faster than the walking games: this one is pure dodging and it should feel
 	# frantic rather than deliberate.
-	_player.speed = 108.0
+	_player.speed = 92.0
+	_player.can_sprint = true
+	_player.stamina_changed.connect(_hud.set_stamina)
+	# stamina_changed only fires when the meter moves, so the bar would be
+	# invisible until the first sprint without this.
+	_hud.set_stamina(1.0, false)
 	_player.freeze()
-	_hud.set_title("Acorn Storm")
 	_hud.reset_score(0)
-	_hud.set_objective("Catch the sunfruit. Do not stand where the ring grows.")
+
+
+func control_hint() -> String:
+	return "STICK  move      BUTTON  sprint"
 
 
 func begin() -> void:
@@ -73,7 +80,7 @@ func _process(delta: float) -> void:
 		return
 
 	_time_left = maxf(_time_left - delta, 0.0)
-	_hud.set_meter(_time_left / ROUND_SECONDS, "%ds left" % ceili(_time_left))
+	_hud.set_meter(_time_left / ROUND_SECONDS, &"time")
 	if _time_left <= 0.0:
 		_finish()
 		return
@@ -126,14 +133,14 @@ func _spawn(is_acorn: bool) -> void:
 	marker.position = landing
 	marker.modulate = Color(1, 0.55, 0.4, 0.85) if is_acorn \
 			else Color(1, 0.88, 0.45, 0.85)
-	marker.scale = Vector2(0.3, 0.3)
+	marker.scale = Vector2(0.25, 0.25)
 	marker.z_index = 1
 
 	var falling := Sprite2D.new()
 	falling.texture = _acorn_texture if is_acorn else _fruit_texture
-	falling.position = landing + Vector2(0, -170.0)
+	falling.position = landing + Vector2(0, -128.0)
 	falling.z_index = 12
-	falling.scale = Vector2(1.6, 1.6)
+	falling.scale = Vector2(1.4, 1.4)
 
 	var holder := Node2D.new()
 	holder.set_meta(&"acorn", is_acorn)
@@ -158,17 +165,17 @@ func _tick_falling(delta: float) -> void:
 		var falling := holder.get_child(1) as Sprite2D
 
 		# The ring tightening onto the spot is the countdown.
-		marker.scale = Vector2.ONE * lerpf(0.3, 1.0, t)
+		marker.scale = Vector2.ONE * lerpf(0.25, 0.8, t)
 		marker.modulate.a = 0.4 + 0.5 * t
-		falling.position = landing + Vector2(0, -170.0 * (1.0 - t * t))
-		falling.scale = Vector2.ONE * lerpf(1.6, 1.0, t)
+		falling.position = landing + Vector2(0, -128.0 * (1.0 - t * t))
+		falling.scale = Vector2.ONE * lerpf(1.4, 0.85, t)
 
 		if t >= 1.0:
 			_land(holder, landing, bool(holder.get_meta(&"acorn")))
 
 
 func _land(holder: Node2D, landing: Vector2, is_acorn: bool) -> void:
-	var caught := _player.position.distance_to(landing) < 20.0
+	var caught := _player.position.distance_to(landing) < 16.0
 	if is_acorn:
 		if caught and _stun <= 0.0:
 			_take_hit()
@@ -191,12 +198,9 @@ func _catch(at: Vector2) -> void:
 	_score += SCORE_FRUIT * multiplier
 	_hud.set_score(_score)
 	Audio.sfx(&"pickup", 1.0 + 0.08 * multiplier)
-	if multiplier > 1:
-		_hud.toast("+%d   x%d" % [SCORE_FRUIT * multiplier, multiplier],
-				Color(1, 0.9, 0.5), 0.6)
-	else:
-		_hud.toast("+%d" % SCORE_FRUIT, Color(0.85, 1, 0.7), 0.45)
-	_pop(at, Color(1, 0.9, 0.5))
+	_hud.set_multiplier(multiplier)
+	pop(at, SCORE_FRUIT * multiplier, multiplier)
+	_flash(at, Color(1, 0.9, 0.5))
 
 
 func _take_hit() -> void:
@@ -206,15 +210,17 @@ func _take_hit() -> void:
 	_stun = STUN_SECONDS
 	_player.freeze()
 	_hud.set_score(_score)
+	_hud.set_multiplier(1)
 	Audio.sfx(&"deny", 0.8)
-	_hud.toast("BONK!", Color(1, 0.5, 0.4), 0.6)
+	Juice.shake(self, 3.5)
+	pop_on_player(SCORE_HIT, "BONK")
 
 
 func combo_multiplier() -> int:
 	return clampi(1 + _combo / COMBO_PER_LEVEL, 1, COMBO_MAX)
 
 
-func _pop(at: Vector2, colour: Color) -> void:
+func _flash(at: Vector2, colour: Color) -> void:
 	var flash := Sprite2D.new()
 	flash.texture = _impact_texture
 	flash.position = at
@@ -222,7 +228,7 @@ func _pop(at: Vector2, colour: Color) -> void:
 	flash.z_index = 13
 	_falling_root.add_child(flash)
 	var tween := create_tween()
-	tween.tween_property(flash, "scale", Vector2(2.0, 2.0), 0.22)
+	tween.tween_property(flash, "scale", Vector2(1.6, 1.6), 0.22)
 	tween.parallel().tween_property(flash, "modulate:a", 0.0, 0.22)
 	tween.tween_callback(flash.queue_free)
 

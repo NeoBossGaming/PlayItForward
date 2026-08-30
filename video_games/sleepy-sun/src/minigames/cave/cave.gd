@@ -23,19 +23,19 @@ const PLATE_COUNT := 5
 ## read as too spread out around the character. Verified: the tightest chord
 ## between two stones still clears every other stone by 38px against a 20px
 ## trigger reach (13px plate + 7px player).
-const RING_CENTRE := Vector2(320, 250)
-const RING_RADIUS := 56.0
+const RING_CENTRE := Vector2(240, 188)
+const RING_RADIUS := 42.0
 const PLATE_POSITIONS: Array[Vector2] = [
-	Vector2(353, 205), Vector2(373, 267), Vector2(320, 306),
-	Vector2(267, 267), Vector2(287, 205),
+	Vector2(265, 154), Vector2(280, 201), Vector2(240, 230),
+	Vector2(200, 201), Vector2(215, 154),
 ]
 const PLAYER_START := RING_CENTRE
-const ROOM_MIN_X := 100.0
-const ROOM_MAX_X := 540.0
-const ROOM_MIN_Y := 188.0
-const ROOM_MAX_Y := 344.0
-const DOORWAY_HALF_WIDTH := 26.0
-const DOORWAY_MIN_Y := 150.0
+const ROOM_MIN_X := 75.0
+const ROOM_MAX_X := 405.0
+const ROOM_MIN_Y := 141.0
+const ROOM_MAX_Y := 258.0
+const DOORWAY_HALF_WIDTH := 20.0
+const DOORWAY_MIN_Y := 112.0
 
 ## [steps, seconds lit, gap between]
 const STAGES: Array[Array] = [
@@ -67,6 +67,7 @@ const PAR_SECONDS := 100.0
 @onready var _door: StageDoor = $Door
 @onready var _exit_area: Area2D = $ExitArea
 @onready var _plates_root: Node2D = $Plates
+@onready var _torch_glows: Array[Node] = [$TorchGlowL, $TorchGlowR]
 
 var _plates: Array[PressurePlate] = []
 var _sequence: Array[int] = []
@@ -81,6 +82,7 @@ var _stage_mistakes: int = 0
 var _streak: int = 0
 var _best_streak: int = 0
 var _step_score: int = 0
+var _flicker: float = 0.0
 var _phase: Phase = Phase.INTRO
 
 var _plate_scene := preload("res://src/minigames/cave/pressure_plate.tscn")
@@ -99,10 +101,12 @@ func _ready() -> void:
 	_player.freeze()
 	_exit_area.body_entered.connect(_on_exit_entered)
 
-	_hud.set_title("Echo Hollow")
 	_hud.reset_score(0)
-	_hud.set_objective("Watch the stones, then walk the same path.")
-	_hud.set_meter(0.0, "chamber 1 of %d" % STAGES.size())
+	_hud.set_meter(0.0, &"chamber")
+
+
+func control_hint() -> String:
+	return "STICK  walk onto the stones"
 
 
 func begin() -> void:
@@ -113,14 +117,12 @@ func begin() -> void:
 func _process(delta: float) -> void:
 	super._process(delta)
 	_clamp_player()
+	_flicker_torches(delta)
 	if _phase != Phase.INPUT:
 		return
-	if _streak >= STREAK_PER_LEVEL:
-		_hud.set_objective("Repeat the pattern:  %d of %d      STREAK x%d"
-				% [_input_index, _sequence.size(), streak_multiplier()])
-	else:
-		_hud.set_objective("Repeat the pattern:  %d of %d"
-				% [_input_index, _sequence.size()])
+	# Five pips under the ring fill as you step: no reading, and it works from
+	# across a room in a way "stone 2 of 5" never did.
+	_hud.set_pips(_input_index, _sequence.size(), Color(0.72, 1.0, 0.78))
 	# A stone the player was already standing on when input opened arms itself
 	# the moment they step off, so they can always re-enter it deliberately.
 	for plate in _plates:
@@ -130,6 +132,15 @@ func _process(delta: float) -> void:
 
 ## The chamber is a box with one gap in the far wall. Clamping is enough here --
 ## a room this simple does not need collision geometry to feel solid.
+## Torchlight that sits perfectly still reads as a texture, not a flame.
+func _flicker_torches(delta: float) -> void:
+	_flicker += delta * 9.0
+	for glow: Sprite2D in _torch_glows:
+		var wobble := 0.32 + 0.09 * sin(_flicker + glow.position.x)
+		glow.modulate.a = wobble
+		glow.scale = Vector2.ONE * (2.2 + 0.12 * sin(_flicker * 1.3 + glow.position.x))
+
+
 func _clamp_player() -> void:
 	var position := _player.position
 	position.x = clampf(position.x, ROOM_MIN_X, ROOM_MAX_X)
@@ -158,8 +169,7 @@ func _start_stage() -> void:
 		last = next
 
 	_door.close()
-	_hud.set_meter(float(_stage) / float(STAGES.size()),
-			"chamber %d of %d" % [_stage + 1, STAGES.size()])
+	_hud.set_meter(float(_stage) / float(STAGES.size()), &"chamber")
 	_hud.toast("CHAMBER %d" % (_stage + 1), Color(0.8, 0.66, 1.0), 0.8)
 	_play_sequence()
 
@@ -178,7 +188,7 @@ func _play_sequence(mercy: bool = false) -> void:
 	if not running:
 		return
 
-	_hud.set_objective("Watch...")
+	_hud.set_pips(0, _sequence.size(), Color(1, 0.85, 0.45))
 	for index in _sequence:
 		if not running:
 			return
@@ -212,8 +222,8 @@ func _on_plate_stepped(index: int) -> void:
 		var multiplier := streak_multiplier()
 		_step_score += SCORE_STEP * multiplier
 		_hud.set_score(maxi(_running_score(), 0))
-		if multiplier > 1:
-			_hud.toast("x%d" % multiplier, Color(1, 0.9, 0.5), 0.35)
+		_hud.set_multiplier(multiplier)
+		pop(_plates[index].position, SCORE_STEP * multiplier, multiplier)
 		if _input_index >= _sequence.size():
 			_clear_stage()
 		return
@@ -233,10 +243,8 @@ func _wrong() -> void:
 	Audio.sfx(&"deny")
 	var lost := _streak
 	_streak = 0
-	if lost >= STREAK_PER_LEVEL:
-		_hud.toast("BROKEN!  streak %d lost" % lost, Color(1, 0.45, 0.4), 0.9)
-	else:
-		_hud.toast("NOT THAT ONE", Color(1, 0.45, 0.4), 0.8)
+	_hud.set_multiplier(1)
+	pop_on_player(SCORE_MISTAKE, "STREAK LOST" if lost >= STREAK_PER_LEVEL else "WRONG")
 	_hud.set_score(maxi(_running_score(), 0))
 	for plate in _plates:
 		plate.accepts_input = false
@@ -244,7 +252,9 @@ func _wrong() -> void:
 
 	var mercy := _stage_mistakes >= MERCY_AFTER_MISTAKES
 	if mercy:
-		_hud.set_objective("Once more, slower.")
+		# The slower replay announces itself, so a struggling player can see the
+		# game easing off rather than wondering why it changed.
+		_hud.toast("SLOWER", Color(0.8, 0.9, 1.0), 0.7)
 	await Wait.on(self, 0.8)
 	if running:
 		_play_sequence(mercy)
@@ -267,7 +277,7 @@ func _clear_stage() -> void:
 	if not running:
 		return
 	_phase = Phase.WALKING
-	_hud.set_objective("Through the door.")
+	_hud.set_pips(0, 0)
 
 
 func _on_exit_entered(body: Node2D) -> void:

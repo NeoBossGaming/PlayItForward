@@ -10,8 +10,8 @@ extends MiniGame
 ## points, then the river puts you back on a leaf. See docs/GAME_DESIGN.md #7.1.
 
 const LANES := 5
-const LANE_X: Array[float] = [141.0, 230.0, 320.0, 410.0, 499.0]
-const ROW_Y := 232.0
+const LANE_X: Array[float] = [106.0, 173.0, 240.0, 307.0, 374.0]
+const ROW_Y := 174.0
 
 const CROSSING_SECONDS := 62.0
 const HOP_TIME := 0.26
@@ -19,7 +19,7 @@ const HOP_TIME := 0.26
 ## be crossed by drumming the stick. Small on purpose -- it should read as
 ## weight, not as the controls being sticky.
 const HOP_COOLDOWN := 0.10
-const HOP_HEIGHT := 15.0
+const HOP_HEIGHT := 11.0
 const INPUT_BUFFER := 0.16
 const RECOVERY_TIME := 1.4
 const RESPAWN_DELAY := 2.2
@@ -33,14 +33,14 @@ const BANDS: Array[Array] = [
 ]
 
 const CHIME_INTERVAL := 2.5
-const CHIME_SPEED := 62.0
+const CHIME_SPEED := 47.0
 const SCORE_ARRIVAL := 1500
 const SCORE_CHIME := 80
 const SCORE_SPLASH := -150
 const SCORE_TIME_BONUS := 600
 ## Chimes collected back to back without a splash multiply. Going in the water
 ## therefore costs twice: the points, and the chain you were building.
-const CHIME_CHAIN_STEP := 2
+const CHIME_CHAIN_STEP := 3
 const CHIME_CHAIN_MAX := 5
 
 @onready var _player: TopDownPlayer = $Player
@@ -90,15 +90,16 @@ func _ready() -> void:
 	_player.set_facing(&"up")
 
 	_far_bank.visible = false
-	_hud.set_title("Riverleap")
-	_hud.set_objective("Cross the river. Shaking leaves are about to sink.")
 	_hud.reset_score(0)
-	_hud.set_meter(0.0, "far bank")
+	_hud.set_meter(0.0, &"far bank")
+
+
+func control_hint() -> String:
+	return "STICK  hop between leaves"
 
 
 func begin() -> void:
 	super.begin()
-	_hud.toast("HOP!", Color(0.7, 1, 0.75), 0.7)
 
 
 func _process(delta: float) -> void:
@@ -129,10 +130,10 @@ func _advance_river(delta: float) -> void:
 	if _arriving:
 		return
 	_progress = minf(_progress + delta / CROSSING_SECONDS, 1.0)
-	_hud.set_meter(_progress, "far bank")
+	_hud.set_meter(_progress, &"far bank")
 
 	# The banks scrolling past are what sells the leaves as moving at all.
-	var speed := lerpf(52.0, 78.0, _progress)
+	var speed := lerpf(39.0, 59.0, _progress)
 	for bank: ScrollingTexture in [_bank_left, _bank_right]:
 		bank.scroll = Vector2(0.0, speed)
 
@@ -147,9 +148,9 @@ func _begin_arrival() -> void:
 	_hud.toast("THE FAR BANK!", Color(1, 0.9, 0.5), 1.2)
 
 	_far_bank.visible = true
-	_far_bank.position = Vector2(320, -80)
+	_far_bank.position = Vector2(240, -60)
 	var tween := create_tween()
-	tween.tween_property(_far_bank, "position:y", 96.0, 2.0) \
+	tween.tween_property(_far_bank, "position:y", 72.0, 2.0) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	tween.tween_callback(_land_ashore)
 
@@ -157,7 +158,7 @@ func _begin_arrival() -> void:
 func _land_ashore() -> void:
 	var tween := create_tween()
 	tween.tween_property(_player, "position",
-			Vector2(LANE_X[_lane], 122.0), 0.45).set_trans(Tween.TRANS_SINE)
+			Vector2(LANE_X[_lane], 92.0), 0.45).set_trans(Tween.TRANS_SINE)
 	tween.tween_callback(_score_run)
 
 
@@ -250,13 +251,11 @@ func _fall_in() -> void:
 	_buffered_direction = 0
 	_buffer_timer = 0.0
 	Audio.sfx(&"splash")
+	Juice.shake(self, 2.5)
 	var lost := _chain
 	_chain = 0
 	_refresh_score()
-	if lost >= CHIME_CHAIN_STEP:
-		_hud.toast("SPLASH!  chain lost", Color(1, 0.5, 0.45), 0.9)
-	else:
-		_hud.toast("SPLASH  %d" % SCORE_SPLASH, Color(0.62, 0.85, 1.0), 0.8)
+	pop_on_player(SCORE_SPLASH, "CHAIN LOST" if lost >= CHIME_CHAIN_STEP else "SPLASH")
 	_player.anim.modulate = Color(0.7, 0.85, 1.0, 0.85)
 	_player.anim.play(&"idle_down")
 
@@ -369,9 +368,9 @@ func _tick_chimes(delta: float) -> void:
 			continue
 		chime.position.y += CHIME_SPEED * delta
 		chime.rotation = sin(chime.position.y / 18.0) * 0.3
-		if chime.position.y > 400.0:
+		if chime.position.y > 300.0:
 			chime.queue_free()
-		elif not _in_water and chime.position.distance_to(_player.position) < 22.0:
+		elif not _in_water and chime.position.distance_to(_player.position) < 18.0:
 			_collect(chime)
 
 
@@ -380,7 +379,7 @@ func _spawn_chime() -> void:
 	chime.texture = _chime_texture
 	# The 16px art is nearly invisible against moving water at this resolution.
 	chime.scale = Vector2(2.0, 2.0)
-	chime.position = Vector2(LANE_X[randi() % LANES], -20.0)
+	chime.position = Vector2(LANE_X[randi() % LANES], -16.0)
 	_chimes_root.add_child(chime)
 
 
@@ -393,13 +392,8 @@ func _collect(chime: Sprite2D) -> void:
 	_refresh_score()
 
 	Audio.sfx(&"chime", 1.0 + 0.08 * multiplier)
-	# The chimes always scored; they just never said so, which is why they felt
-	# like scenery. Now every pickup announces itself.
-	if multiplier > 1:
-		_hud.toast("+%d   x%d" % [SCORE_CHIME * multiplier, multiplier],
-				Color(1, 0.92, 0.55), 0.7)
-	else:
-		_hud.toast("+%d" % SCORE_CHIME, Color(0.8, 1, 0.85), 0.55)
+	# The number rises off the chime itself, so it is obvious what scored.
+	pop(chime.position, SCORE_CHIME * multiplier, multiplier)
 
 	var pop := create_tween()
 	pop.tween_property(chime, "scale", Vector2(3.2, 3.2), 0.12)
@@ -416,8 +410,4 @@ func chain_multiplier() -> int:
 func _refresh_score() -> void:
 	_score = maxi(_score, 0)
 	_hud.set_score(maxi(_score + _splashes * SCORE_SPLASH, 0))
-	if _chain >= CHIME_CHAIN_STEP:
-		_hud.set_objective("CHAIN x%d  -  keep collecting, do not fall in"
-				% chain_multiplier())
-	else:
-		_hud.set_objective("Cross the river. Shaking leaves are about to sink.")
+	_hud.set_multiplier(chain_multiplier())

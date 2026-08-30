@@ -10,12 +10,11 @@ extends Node2D
 signal landed
 
 const SPIN_FACE_SECONDS := 0.055
-const LAND_KICK := 14.0
+const LAND_KICK := 11.0
 
 @onready var _frame: Sprite2D = $Frame
 @onready var _icon: Sprite2D = $Icon
 @onready var _title: Label = $Title
-@onready var _blurb: Label = $Blurb
 @onready var _score: Label = $Score
 @onready var _number: Label = $Number
 
@@ -51,7 +50,6 @@ func set_index(index: int) -> void:
 func set_face_down() -> void:
 	_icon.texture = load("res://assets/game/ui/card_icon_cave.png")
 	_title.text = "?"
-	_blurb.text = ""
 	_icon.modulate = Color(0.4, 0.38, 0.5)
 	_frame.modulate = Color(0.34, 0.32, 0.44)
 
@@ -103,7 +101,8 @@ func _show(entry: Dictionary) -> void:
 	if glyph != null:
 		_icon.texture = glyph
 	_title.text = String(entry["title"]).to_upper()
-	_blurb.text = entry["blurb"]
+	# The rule lives on the intro card now, so the table stays uncluttered:
+	# name and icon only, which is all you need to read a hand at a glance.
 	var colour: Color = entry["color"]
 	_icon.modulate = colour
 	_frame.modulate = colour.lerp(Color(0.16, 0.14, 0.22), 0.55)

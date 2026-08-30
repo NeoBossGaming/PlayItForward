@@ -16,11 +16,16 @@ const IDLE_TIMEOUT := 45.0
 ## card draw and the reason the pool is worth keeping deep.
 const PLAYLIST_SIZE := 3
 
+## `blurb` is the rule line the intro card teaches the game with. `gift` is what
+## that game brings back to the sleeping sun -- lore, used by the cutscenes and
+## by the results screen, and deliberately kept separate so neither can crowd
+## the other out. See docs/GAME_DESIGN.md #10.
 const MINIGAMES: Array[Dictionary] = [
 	{
 		"id": &"wind_leaf",
 		"title": "Riverleap",
 		"blurb": "Hop between drifting leaves. Shaking ones are about to sink.",
+		"gift": "the river chimes",
 		"scene": "res://src/minigames/wind_leaf/wind_leaf.tscn",
 		"color": Color(0.42, 0.72, 0.45),
 	},
@@ -28,6 +33,7 @@ const MINIGAMES: Array[Dictionary] = [
 		"id": &"tall_grass",
 		"title": "Hush Meadow",
 		"blurb": "Gather sunpetals before dusk. Stay out of the birds' sight.",
+		"gift": "a handful of yesterday",
 		"scene": "res://src/minigames/tall_grass/tall_grass.tscn",
 		"color": Color(0.55, 0.78, 0.36),
 	},
@@ -35,6 +41,7 @@ const MINIGAMES: Array[Dictionary] = [
 		"id": &"cave",
 		"title": "Echo Hollow",
 		"blurb": "Watch the stones light up, then walk the same path back.",
+		"gift": "the sun's own name",
 		"scene": "res://src/minigames/cave/cave.tscn",
 		"color": Color(0.66, 0.45, 0.82),
 	},
@@ -42,6 +49,7 @@ const MINIGAMES: Array[Dictionary] = [
 		"id": &"harpoon",
 		"title": "Riverstrike",
 		"blurb": "Line up and fire. Lead the fish, spear the line, dodge the bottles.",
+		"gift": "a river clear enough to look in",
 		"scene": "res://src/minigames/harpoon/harpoon.tscn",
 		"color": Color(0.36, 0.64, 0.84),
 	},
@@ -49,6 +57,7 @@ const MINIGAMES: Array[Dictionary] = [
 		"id": &"acorn_storm",
 		"title": "Acorn Storm",
 		"blurb": "Dodge the falling acorns. Catch the sunfruit between them.",
+		"gift": "breakfast",
 		"scene": "res://src/minigames/acorn_storm/acorn_storm.tscn",
 		"color": Color(0.86, 0.56, 0.30),
 	},
@@ -56,6 +65,7 @@ const MINIGAMES: Array[Dictionary] = [
 		"id": &"firefly",
 		"title": "Firefly Lantern",
 		"blurb": "Your light is dying. The darker it gets, the more they are worth.",
+		"gift": "a borrowed light",
 		"scene": "res://src/minigames/firefly/firefly.tscn",
 		"color": Color(0.95, 0.85, 0.42),
 	},
@@ -63,6 +73,7 @@ const MINIGAMES: Array[Dictionary] = [
 		"id": &"temple_bell",
 		"title": "Temple Bell",
 		"blurb": "Strike on the beat. It only gets faster.",
+		"gift": "the dawn bell",
 		"scene": "res://src/minigames/temple_bell/temple_bell.tscn",
 		"color": Color(0.90, 0.42, 0.44),
 	},
@@ -70,6 +81,7 @@ const MINIGAMES: Array[Dictionary] = [
 		"id": &"crow_watch",
 		"title": "Crow Watch",
 		"blurb": "Crows are diving on the rice. Scare them off before they land.",
+		"gift": "the harvest offering",
 		"scene": "res://src/minigames/crow_watch/crow_watch.tscn",
 		"color": Color(0.52, 0.56, 0.72),
 	},
@@ -86,6 +98,9 @@ var run_started_at: float = 0.0
 ## The three minigames dealt for this credit, in the order they will be played.
 var playlist: Array[StringName] = []
 var playlist_index: int = 0
+## Set by the debug menu to pin the next draw. Empty in a normal session, and
+## never set at all in a release build -- the debug menu is inert there.
+var forced_hand: Array[StringName] = []
 
 var _last_input_msec: int = 0
 
@@ -121,6 +136,11 @@ func start_run() -> void:
 ## Deals the session. Sampling without replacement, so a draw can never show the
 ## same game on two cards.
 func draw_playlist(count: int = PLAYLIST_SIZE) -> Array[StringName]:
+	if not forced_hand.is_empty():
+		playlist = forced_hand.duplicate()
+		playlist_index = 0
+		return playlist
+
 	var pool: Array[StringName] = []
 	for entry in MINIGAMES:
 		pool.append(entry["id"])

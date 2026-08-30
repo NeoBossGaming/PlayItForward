@@ -15,7 +15,7 @@ extends MiniGame
 ## No fail state: a guttered lantern relights at minimum and costs points.
 
 const ROUND_SECONDS := 60.0
-const FIELD := Rect2(40, 72, 560, 264)
+const FIELD := Rect2(30, 54, 420, 198)
 
 const LIGHT_MAX := 1.0
 const LIGHT_MIN := 0.16
@@ -24,7 +24,7 @@ const LIGHT_PER_FLY := 0.17
 const LIGHT_START := 0.85
 
 ## Lantern scale at full and at empty. Also the radius fireflies are visible in.
-const GLOW_SCALE := Vector2(4.6, 1.5)
+const GLOW_SCALE := Vector2(3.5, 1.2)
 
 const SCORE_FLY := 40
 const SCORE_GUTTER := -120
@@ -58,9 +58,11 @@ func _ready() -> void:
 	for i in FLY_TARGET:
 		_spawn_fly()
 
-	_hud.set_title("Firefly Lantern")
 	_hud.reset_score(0)
-	_hud.set_objective("Catch fireflies. The dimmer your lantern, the more they pay.")
+
+
+func control_hint() -> String:
+	return "STICK  move"
 
 
 func begin() -> void:
@@ -103,7 +105,8 @@ func _update_light() -> void:
 
 	var multiplier := light_multiplier()
 	_best_multiplier = maxi(_best_multiplier, multiplier)
-	_hud.set_meter(t, "lantern   x%d" % multiplier)
+	_hud.set_meter(t, &"lantern")
+	_hud.set_multiplier(multiplier)
 
 
 func _tick_flies(delta: float) -> void:
@@ -127,7 +130,7 @@ func _tick_flies(delta: float) -> void:
 		fly.modulate.a = 0.45 + 0.55 * absf(sin(phase))
 		fly.scale = Vector2.ONE * (1.0 + 0.25 * sin(phase))
 
-		if fly.position.distance_to(_player.position) < 18.0:
+		if fly.position.distance_to(_player.position) < 15.0:
 			_catch(fly)
 
 	while _flies_root.get_child_count() < FLY_TARGET:
@@ -142,7 +145,7 @@ func _spawn_fly() -> void:
 	fly.position = Vector2(
 		randf_range(FIELD.position.x, FIELD.end.x),
 		randf_range(FIELD.position.y, FIELD.end.y))
-	fly.set_meta(&"drift", Vector2(randf_range(-26.0, 26.0), randf_range(-20.0, 20.0)))
+	fly.set_meta(&"drift", Vector2(randf_range(-20.0, 20.0), randf_range(-15.0, 15.0)))
 	fly.set_meta(&"phase", randf() * TAU)
 	fly.z_index = 8
 	_flies_root.add_child(fly)
@@ -155,9 +158,8 @@ func _catch(fly: Sprite2D) -> void:
 	_light = minf(_light + LIGHT_PER_FLY, LIGHT_MAX)
 	_hud.set_score(_score)
 	Audio.sfx(&"pickup", 1.0 + 0.1 * multiplier)
-	if multiplier > 1:
-		_hud.toast("+%d   x%d" % [SCORE_FLY * multiplier, multiplier],
-				Color(1, 0.96, 0.6), 0.5)
+	_hud.set_multiplier(multiplier)
+	pop(fly.position, SCORE_FLY * multiplier, multiplier)
 	fly.queue_free()
 
 
@@ -167,7 +169,7 @@ func _gutter() -> void:
 	_score = maxi(_score + SCORE_GUTTER, 0)
 	_hud.set_score(_score)
 	Audio.sfx(&"deny", 0.7)
-	_hud.toast("THE LANTERN GUTTERS", Color(0.8, 0.7, 0.5), 0.9)
+	pop_on_player(SCORE_GUTTER, "GUTTERED")
 
 
 func _finish() -> void:

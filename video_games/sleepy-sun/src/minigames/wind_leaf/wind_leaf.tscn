@@ -1,4 +1,4 @@
-[gd_scene load_steps=12 format=3]
+[gd_scene load_steps=17 format=3]
 
 [ext_resource type="Script" path="res://src/minigames/wind_leaf/wind_leaf.gd" id="1"]
 [ext_resource type="PackedScene" path="res://src/core/player.tscn" id="2"]
@@ -9,6 +9,11 @@
 [ext_resource type="Texture2D" path="res://assets/game/shared/water_2.png" id="7"]
 [ext_resource type="Texture2D" path="res://assets/game/village/ground_0.png" id="8"]
 [ext_resource type="Texture2D" path="res://assets/game/village/tree.png" id="9"]
+[ext_resource type="Script" path="res://src/core/decor.gd" id="d_decor"]
+[ext_resource type="Texture2D" path="res://assets/game/decor/sparkle.png" id="d_spark"]
+[ext_resource type="Texture2D" path="res://assets/game/decor/reed.png" id="d_reed"]
+[ext_resource type="Texture2D" path="res://assets/game/decor/lilypad.png" id="d_lily"]
+[ext_resource type="Texture2D" path="res://assets/game/decor/dragonfly.png" id="d_fly"]
 
 [sub_resource type="Gradient" id="shore_grad"]
 offsets = PackedFloat32Array(0, 0.55, 0.75, 1)
@@ -16,8 +21,8 @@ colors = PackedColorArray(0.29, 0.42, 0.25, 1, 0.29, 0.42, 0.25, 1, 0.77, 0.66, 
 
 [sub_resource type="GradientTexture2D" id="shore"]
 gradient = SubResource("shore_grad")
-width = 672
-height = 200
+width = 504
+height = 150
 fill_to = Vector2(0, 1)
 
 [node name="WindLeaf" type="Node2D"]
@@ -28,46 +33,94 @@ par_score = 1800
 [node name="World" type="Node2D" parent="."]
 
 [node name="Water" type="Sprite2D" parent="World"]
-position = Vector2(320, 180)
+position = Vector2(240, 135)
 texture = ExtResource("5")
 script = ExtResource("4")
 frames = Array[Texture2D]([ExtResource("5"), ExtResource("6"), ExtResource("7")])
 frames_per_second = 4.0
 scroll = Vector2(0, 14)
-area = Vector2i(672, 424)
+area = Vector2i(504, 318)
 
 [node name="BankLeft" type="Sprite2D" parent="World"]
-position = Vector2(48, 180)
+position = Vector2(36, 135)
 texture = ExtResource("8")
 script = ExtResource("4")
 scroll = Vector2(0, 52)
-area = Vector2i(96, 424)
+area = Vector2i(72, 318)
 
 [node name="BankRight" type="Sprite2D" parent="World"]
-position = Vector2(592, 180)
+position = Vector2(444, 135)
 texture = ExtResource("8")
 script = ExtResource("4")
 scroll = Vector2(0, 52)
-area = Vector2i(96, 424)
+area = Vector2i(72, 318)
 
 [node name="TreeA" type="Sprite2D" parent="World/BankLeft"]
-position = Vector2(-14, -60)
+position = Vector2(-10, -45)
 texture = ExtResource("9")
 
 [node name="TreeB" type="Sprite2D" parent="World/BankRight"]
-position = Vector2(12, 40)
+position = Vector2(9, 30)
 texture = ExtResource("9")
 
 [node name="FarBank" type="Sprite2D" parent="World"]
-position = Vector2(320, -80)
+position = Vector2(240, -60)
 texture = SubResource("shore")
 visible = false
+
+[node name="ReedA" type="Sprite2D" parent="World"]
+position = Vector2(26, 60)
+texture = ExtResource("d_reed")
+
+[node name="ReedB" type="Sprite2D" parent="World"]
+position = Vector2(58, 190)
+texture = ExtResource("d_reed")
+
+[node name="ReedC" type="Sprite2D" parent="World"]
+position = Vector2(424, 110)
+texture = ExtResource("d_reed")
+
+[node name="ReedD" type="Sprite2D" parent="World"]
+position = Vector2(452, 232)
+texture = ExtResource("d_reed")
+
+[node name="LilyA" type="Sprite2D" parent="World"]
+modulate = Color(0.8, 0.9, 0.82, 1)
+position = Vector2(96, 66)
+texture = ExtResource("d_lily")
+
+[node name="LilyB" type="Sprite2D" parent="World"]
+modulate = Color(0.8, 0.9, 0.82, 1)
+position = Vector2(392, 214)
+texture = ExtResource("d_lily")
+
+[node name="Shimmer" type="Node2D" parent="World"]
+z_index = 1
+script = ExtResource("d_decor")
+texture = ExtResource("d_spark")
+count = 20
+drift = Vector2(0, 26)
+area = Rect2(80, 0, 320, 270)
+tint = Color(0.85, 0.96, 1, 0.4)
+scale_range = Vector2(0.5, 0.9)
+sway = 4.0
+twinkle = true
+
+[node name="Dragonflies" type="Node2D" parent="World"]
+z_index = 30
+script = ExtResource("d_decor")
+texture = ExtResource("d_fly")
+count = 3
+drift = Vector2(-16, 5)
+area = Rect2(60, 40, 360, 200)
+tint = Color(1, 1, 1, 0.85)
+sway = 20.0
 
 [node name="Chimes" type="Node2D" parent="."]
 
 [node name="Leaves" type="Node2D" parent="."]
 
 [node name="Player" parent="." instance=ExtResource("2")]
-position = Vector2(320, 232)
+position = Vector2(240, 174)
 
 [node name="HUD" parent="." instance=ExtResource("3")]

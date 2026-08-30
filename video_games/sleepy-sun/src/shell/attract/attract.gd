@@ -9,8 +9,10 @@ extends Node2D
 
 const PANEL_SECONDS := 5.0
 
-## Frames of the mascot's doze, held for these durations. He never fully wakes:
-## that is the player's job.
+## Frames of the mascot's doze, held for these durations. It never fully wakes:
+## it slept through the dawn and it is going to keep sleeping through it until
+## somebody pays a credit and goes and gets it. That is the whole premise, and
+## the attract screen is where it is stated.
 const SUN_CYCLE: Array[float] = [1.6, 0.9, 2.4]
 
 @onready var _sun: Sprite2D = $World/Sun
@@ -95,8 +97,8 @@ func _look(direction: float) -> void:
 	_sun_look = direction
 	Audio.sfx(&"chime", randf_range(0.9, 1.15))
 	var tween := create_tween()
-	tween.tween_property(_sun, "position:x", 528.0 + direction * 5.0, 0.12)
-	tween.tween_property(_sun, "position:x", 528.0, 0.5) \
+	tween.tween_property(_sun, "position:x", 396.0 + direction * 4.0, 0.12)
+	tween.tween_property(_sun, "position:x", 396.0, 0.5) \
 			.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 
 
@@ -115,15 +117,15 @@ func _animate_sun(delta: float) -> void:
 		_sun_timer = 0.0
 		_sun_frame = (_sun_frame + 1) % _sun_textures.size()
 		_sun.texture = _sun_textures[_sun_frame]
-	_sun.position.y = 78.0 + sin(Time.get_ticks_msec() / 700.0) * 3.0
+	_sun.position.y = 58.0 + sin(Time.get_ticks_msec() / 700.0) * 2.0
 
 
 func _animate_wanderer(delta: float) -> void:
-	_wanderer.position.x += _wander_dir * 22.0 * delta
-	if _wanderer.position.x > 560.0:
+	_wanderer.position.x += _wander_dir * 17.0 * delta
+	if _wanderer.position.x > 420.0:
 		_wander_dir = -1.0
 		_wanderer.play(&"walk_left")
-	elif _wanderer.position.x < 80.0:
+	elif _wanderer.position.x < 60.0:
 		_wander_dir = 1.0
 		_wanderer.play(&"walk_right")
 
@@ -131,9 +133,9 @@ func _animate_wanderer(delta: float) -> void:
 func _build_panels() -> void:
 	_panels.append({
 		"title": "A PLAY IT FORWARD ADVENTURE",
-		"body": "The sun is nodding off before it can set.\n"
-			+ "One credit deals you three games from eight.",
-		"hint": "You cannot lose -- only shine brighter.",
+		"body": "The sun slept straight through the dawn.\n"
+			+ "One credit deals you three ways to wake it.",
+		"hint": "You cannot lose. Only shine brighter.",
 	})
 	# Three of the eight per cycle, chosen fresh. Showing all eight would take
 	# forty seconds to loop past, which is longer than anyone stands and reads.

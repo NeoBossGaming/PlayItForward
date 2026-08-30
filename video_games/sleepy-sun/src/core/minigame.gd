@@ -20,6 +20,10 @@ var elapsed: float = 0.0
 var running: bool = false
 
 var _finished: bool = false
+var _popup_scene: PackedScene = preload("res://src/ui/score_popup.tscn")
+var _intro_scene: PackedScene = preload("res://src/ui/intro_card.tscn")
+var _cutscene_scene: PackedScene = preload("res://src/ui/cutscene.tscn")
+var _popup_root: Node2D
 
 
 func _process(delta: float) -> void:
@@ -27,9 +31,84 @@ func _process(delta: float) -> void:
 		elapsed += delta
 
 
-## Called by Router after the screen has faded in. Override this, not _ready().
+## Router's entry point: lore, then rules, then play.
+##
+## The cutscene runs ahead of the intro card on purpose -- why you are here
+## first, what the buttons do second. Both live here rather than in the eight
+## minigames, so every game gets them for free and none of them has to know
+## either exists. Tests call begin() directly and skip straight to play.
+func enter() -> void:
+	await play_cutscene(Lore.before(id))
+	if not is_inside_tree() or _finished:
+		return
+
+	var card: IntroCard = _intro_scene.instantiate()
+	add_child(card)
+	card.play(id, control_hint())
+	await card.dismissed
+	if is_inside_tree() and not _finished:
+		begin()
+
+
+## Plays a shot list from Lore and returns when it is off the screen. Returns
+## immediately for an empty list, so a game with no lore written yet still runs.
+func play_cutscene(shots: Array) -> void:
+	if shots.is_empty():
+		return
+	var scene: Cutscene = _cutscene_scene.instantiate()
+	add_child(scene)
+	scene.play(shots)
+	await scene.done
+
+
+## What the controls do in *this* game, shown on the intro card. Overridden by
+## the games whose button does something other than nothing.
+func control_hint() -> String:
+	return "STICK  move"
+
+
+## Called once the intro is gone. Override this, not _ready().
 func begin() -> void:
 	running = true
+
+
+# --- score feedback ----------------------------------------------------------
+#
+# Every minigame reports scoring the same way, and it always appears where the
+# thing that caused it happened. Gains rise off the object; penalties pop on the
+# player, shaking rather than drifting, so a loss can never be mistaken for a win.
+
+## A gain, at the object that produced it.
+func pop(at: Vector2, amount: int, multiplier: int = 1, caption: String = "") -> void:
+	_spawn_popup(at, amount, multiplier, false, caption)
+
+
+## A loss, on the player -- they are who it happened to.
+func pop_on_player(amount: int, caption: String = "") -> void:
+	var player := _find_player()
+	var at := player.position if player != null else Vector2(240, 135)
+	_spawn_popup(at + Vector2(0, -26), amount, 1, true, caption)
+
+
+func _spawn_popup(at: Vector2, amount: int, multiplier: int, penalty: bool,
+		caption: String) -> void:
+	if _popup_root == null or not is_instance_valid(_popup_root):
+		_popup_root = Node2D.new()
+		_popup_root.name = "Popups"
+		_popup_root.z_index = 60
+		add_child(_popup_root)
+	var popup: ScorePopup = _popup_scene.instantiate()
+	popup.amount = amount
+	popup.multiplier = multiplier
+	popup.is_penalty = penalty
+	popup.caption = caption
+	popup.position = at
+	_popup_root.add_child(popup)
+
+
+func _find_player() -> Node2D:
+	var node := get_node_or_null(^"Player")
+	return node as Node2D
 
 
 ## Ends the minigame exactly once. Later calls are ignored, so a race between

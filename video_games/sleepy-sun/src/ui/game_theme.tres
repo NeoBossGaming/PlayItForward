@@ -1,0 +1,65 @@
+[gd_resource type="Theme" load_steps=3 format=3]
+
+[ext_resource type="FontFile" path="res://assets/game/fonts/PressStart2P-Regular.ttf" id="arcade"]
+[ext_resource type="FontFile" path="res://assets/game/fonts/PixelifySans-Regular.ttf" id="body"]
+
+; Size choices are not free. Press Start 2P is clean at any size but very wide.
+; Pixelify Sans falls apart below 11px -- glyphs collapse into mush -- so 11 is
+; a hard floor for body text, verified by rendering a size ladder.
+[resource]
+default_font = ExtResource("body")
+default_font_size = 12
+Label/colors/font_color = Color(0.96, 0.95, 1, 1)
+Label/colors/font_outline_color = Color(0.06, 0.05, 0.1, 1)
+Label/constants/outline_size = 3
+Label/font_sizes/font_size = 12
+Label/fonts/font = ExtResource("body")
+
+Display/base_type = &"Label"
+Display/colors/font_color = Color(1, 0.89, 0.58, 1)
+Display/colors/font_outline_color = Color(0.08, 0.05, 0.12, 1)
+Display/constants/outline_size = 6
+Display/font_sizes/font_size = 20
+Display/fonts/font = ExtResource("arcade")
+
+Title/base_type = &"Label"
+Title/colors/font_color = Color(1, 0.89, 0.58, 1)
+Title/colors/font_outline_color = Color(0.08, 0.05, 0.12, 1)
+Title/constants/outline_size = 5
+Title/font_sizes/font_size = 12
+Title/fonts/font = ExtResource("arcade")
+
+Heading/base_type = &"Label"
+Heading/colors/font_color = Color(1, 0.89, 0.58, 1)
+Heading/colors/font_outline_color = Color(0.07, 0.05, 0.11, 1)
+Heading/constants/outline_size = 4
+Heading/font_sizes/font_size = 8
+Heading/fonts/font = ExtResource("arcade")
+
+Score/base_type = &"Label"
+Score/colors/font_color = Color(1, 0.87, 0.55, 1)
+Score/colors/font_outline_color = Color(0.06, 0.05, 0.1, 1)
+Score/constants/outline_size = 4
+Score/font_sizes/font_size = 16
+Score/fonts/font = ExtResource("arcade")
+
+Body/base_type = &"Label"
+Body/colors/font_color = Color(0.94, 0.93, 1, 1)
+Body/colors/font_outline_color = Color(0.06, 0.05, 0.1, 1)
+Body/constants/outline_size = 3
+Body/font_sizes/font_size = 12
+Body/fonts/font = ExtResource("body")
+
+Small/base_type = &"Label"
+Small/colors/font_color = Color(0.78, 0.76, 0.88, 1)
+Small/colors/font_outline_color = Color(0.06, 0.05, 0.1, 1)
+Small/constants/outline_size = 3
+Small/font_sizes/font_size = 11
+Small/fonts/font = ExtResource("body")
+
+ScorePop/base_type = &"Label"
+ScorePop/colors/font_color = Color(1, 0.92, 0.6, 1)
+ScorePop/colors/font_outline_color = Color(0.06, 0.05, 0.1, 1)
+ScorePop/constants/outline_size = 4
+ScorePop/font_sizes/font_size = 8
+ScorePop/fonts/font = ExtResource("arcade")

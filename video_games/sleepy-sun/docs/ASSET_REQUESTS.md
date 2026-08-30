@@ -52,8 +52,8 @@ rest before it is all replaced:
 
 | Path | Size | Frames | Notes |
 |---|---|---|---|
-| `assets/game/ui/card_frame.png` | 132×176 | 1 | The card border. Tinted per game in code, so draw it **neutral/white** — colour comes from the game, shape carries the identity. |
-| `assets/game/ui/card_icon_<id>.png` | 40×40 | 8 | One glyph per game (`wind_leaf`, `tall_grass`, `cave`, `harpoon`, `acorn_storm`, `firefly`, `temple_bell`, `crow_watch`). Draw them **white**; the card tints them. These are the front door of the whole cabinet — they need to be tellable apart at a glance from across a room. The current crow and harpoon glyphs are both arrow-ish and are the weakest pair. |
+| `assets/game/ui/card_frame.png` | 100×136 | 1 | The card border. Tinted per game in code, so draw it **neutral/white** — colour comes from the game, shape carries the identity. |
+| `assets/game/ui/card_icon_<id>.png` | 32×32 | 8 | One glyph per game (`wind_leaf`, `tall_grass`, `cave`, `harpoon`, `acorn_storm`, `firefly`, `temple_bell`, `crow_watch`). Draw them **white**; the card tints them. These are the front door of the whole cabinet — they need to be tellable apart at a glance from across a room. The current crow and harpoon glyphs are both arrow-ish and are the weakest pair. |
 | `assets/game/acorn_storm/acorn.png` | 16×16 | 1 | The thing that hurts. Should read as dangerous at a glance. |
 | `assets/game/acorn_storm/sunfruit.png` | 16×16 | 1 | The thing that pays. Should read as *good* — warm, bright, opposite of the acorn. |
 | `assets/game/acorn_storm/impact.png` | 32×32 | 1 | The ring that tightens onto a landing spot. **Reused as the telegraph in several games**, so it is worth getting right once. |
@@ -85,18 +85,77 @@ rest before it is all replaced:
 
 ---
 
+## Priority 2c — decoration
+
+None of these affect play. They exist so each scene reads as a place rather than
+a play area with mechanics sitting on it. All in `assets/game/decor/`.
+
+| Path | Size | Notes |
+|---|---|---|
+| `dust.png` | 4×4 | one mote. Used for dust, fireflies and pollen, tinted per scene. |
+| `sparkle.png` | 8×8 | four-point twinkle: water shimmer and the results screen. |
+| `star.png` | 3×3 | attract sky. |
+| `petal.png` · `leaf.png` | 8×8 | falling, and they spin. Temple Bell and Acorn Storm. |
+| `reed.png` | 16×40 | riverbank reeds, both river games. |
+| `lilypad.png` | 24×16 | floating, decorative only — not a leaf you can stand on. |
+| `dragonfly.png` | 16×10 | drifts over the river. |
+| `crystal.png` · `rubble.png` | 12×16 · 16×8 | cave walls and floor. |
+| `squirrel.png` | 16×16 | **silhouette**, sits in the Acorn Storm canopy. Whoever is throwing the acorns. |
+| `moon.png` · `mist.png` | 24×24 · 64×16 | Firefly Lantern night. |
+| `lantern_hang.png` | 12×20 | hangs beside the temple bell. |
+| `scarecrow.png` · `fence.png` | 16×28 · 32×16 | Crow Watch. The scarecrow is doing a bad job; that is the joke. |
+| `cloud.png` | 48×24 | soft shadow drifting across the field. |
+
+## Priority 2e — the cutscenes
+
+The seventeen lore cutscenes are composed almost entirely from sprites that
+already exist — the player, the sun, chimes, the bell, the crows, the water.
+These four are the only art they needed, and they are the only art that would
+improve them.
+
+| Path | Size | Notes |
+|---|---|---|
+| `assets/game/village/sun_beaming.png` | 48×48 | The RADIANT ending, and the single most-looked-at frame in the game — it is what a player gets for a great run. `sun_0..2` cover awake, drowsy and asleep; none of them is *delighted*. Wide grin, eyes screwed shut with happiness, brighter than the others. |
+| `assets/game/decor/hill.png` | 256×64 | The horizon in every ending. A **seamlessly tiling** land silhouette, near-black, with a soft irregular crest. Two copies cover the screen, so the left and right edges must match. |
+| `assets/game/decor/ray.png` | 8×40 | One light ray, **base at the bottom, pointing up**, fading out toward the tip. The finale rotates twelve copies around the sun rather than baking a burst, so one ray is all that is needed. |
+| `assets/game/decor/note.png` | 8×8 | A music note. It is the only way to draw a sound, and it is drawn for the chimes and the dawn bell. |
+
+Composition notes if you redraw anything the cutscenes use: the stage is
+**480×270 with 26px letterbox bars top and bottom**, so nothing may sit above
+y=34 or below y=236, and the caption lives in the bottom bar. Ground and water
+are tiled in 32px bands from y≈206 downward.
+
+## Priority 2d — HUD icons and overlays
+
+`assets/game/ui/`. These carry meaning that used to be words, so they have to be
+readable at 9×9.
+
+| Path | Size | Notes |
+|---|---|---|
+| `icon_sun.png` · `icon_clock.png` · `icon_wheat.png` · `icon_lantern.png` · `icon_flag.png` · `icon_door.png` | 9×9 | says what the meter bar is measuring |
+| `pip.png` | 7×7 | one dot in a sequence row |
+| `vignette.png` · `alarm_frame.png` | 480×270 | **full-screen overlays, not pixel art** — drawn at native size because a small texture stretched to full screen bands visibly |
+| `scrim.png` | 480×120 | soft dark band so text can sit over a busy scene |
+
 ## Not art, but worth knowing
 
-- **A pixel font.** Everything currently uses Godot's default font, which is a
-  smooth vector face and slightly at odds with 32px pixel art at 640×360. A
-  bitmap font (m5x7, Pixellari or similar) dropped in as a project-wide theme
-  would lift the whole game more than any single sprite here.
+- **Fonts are done.** Press Start 2P (titles, numbers) and Pixelify Sans (body),
+  both OFL, in `assets/game/fonts/` with their licences. Two constraints if you
+  ever restyle: Press Start 2P is about twice the width of a normal face, so
+  column widths are tight everywhere; and **Pixelify Sans is unreadable below
+  11px**, which is why nothing uses it smaller. All text goes through
+  `src/ui/game_theme.tres` — change it there, not per label.
 - **`player_idle_front.png` and `player_idle_down.png` are near-duplicates.**
   Only `idle_down` is used. No action needed unless one was meant to be something
   else.
+- **The game now runs at 480×270**, not 640×360. Anything sized against the
+  screen (the card frame, backdrops) changed with it; 32×32 world sprites did not.
 - **The player is drawn at 1.5× in game** (≈18 × 43 px on screen) because at 1:1
-  the character was lost on a 640×360 field. If you redraw the player, keep the
+  the character was lost. If you redraw the player, keep the
   32 × 32 canvas and the feet on the bottom edge — the scale is applied in
   `src/core/player.tscn`, not baked into the art.
 - **The village houses and the eight `stage_door` frames are already at native
   resolution** and are used as drawn — they needed no normalisation.
+- **`ui/card_icon_*.png` are white glyphs on transparency, and they are tinted at
+  every use site** — on the draw table, on the intro card, and now rising as the
+  gift in each game's closing cutscene. Keep them white; do not colour them in.

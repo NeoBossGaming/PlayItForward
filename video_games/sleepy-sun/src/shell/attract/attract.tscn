@@ -1,4 +1,4 @@
-[gd_scene load_steps=13 format=3]
+[gd_scene load_steps=18 format=3]
 
 [ext_resource type="Script" path="res://src/shell/attract/attract.gd" id="1"]
 [ext_resource type="SpriteFrames" path="res://src/core/player_frames.tres" id="2"]
@@ -10,6 +10,11 @@
 [ext_resource type="Texture2D" path="res://assets/game/village/tree.png" id="8"]
 [ext_resource type="Texture2D" path="res://assets/game/wind_leaf/chime.png" id="9"]
 [ext_resource type="Script" path="res://src/core/scrolling_texture.gd" id="10"]
+[ext_resource type="Script" path="res://src/core/decor.gd" id="d_decor"]
+[ext_resource type="Texture2D" path="res://assets/game/decor/star.png" id="d_star"]
+[ext_resource type="Texture2D" path="res://assets/game/decor/dust.png" id="d_dust"]
+[ext_resource type="Texture2D" path="res://assets/game/ui/vignette.png" id="d_vig"]
+[ext_resource type="Texture2D" path="res://assets/game/ui/scrim.png" id="d_scrim"]
 
 [sub_resource type="Gradient" id="grad"]
 offsets = PackedFloat32Array(0, 0.42, 0.72, 1)
@@ -17,8 +22,8 @@ colors = PackedColorArray(0.09, 0.1, 0.24, 1, 0.32, 0.22, 0.4, 1, 0.72, 0.38, 0.
 
 [sub_resource type="GradientTexture2D" id="sky"]
 gradient = SubResource("grad")
-width = 640
-height = 360
+width = 480
+height = 270
 fill_to = Vector2(0, 1)
 
 [node name="Attract" type="Node2D"]
@@ -31,93 +36,121 @@ centered = false
 texture = SubResource("sky")
 
 [node name="Ground" type="Sprite2D" parent="World"]
-position = Vector2(320, 330)
+position = Vector2(240, 248)
 texture = ExtResource("4")
 script = ExtResource("10")
-area = Vector2i(672, 90)
+area = Vector2i(504, 68)
 
 [node name="House3" type="Sprite2D" parent="World"]
 modulate = Color(0.72, 0.66, 0.78, 1)
-position = Vector2(108, 286)
+position = Vector2(81, 214)
 texture = ExtResource("5")
 
 [node name="House5" type="Sprite2D" parent="World"]
 modulate = Color(0.78, 0.7, 0.8, 1)
-position = Vector2(268, 288)
+position = Vector2(201, 216)
 texture = ExtResource("6")
 
 [node name="House4" type="Sprite2D" parent="World"]
 modulate = Color(0.7, 0.64, 0.76, 1)
-position = Vector2(432, 286)
+position = Vector2(324, 214)
 texture = ExtResource("7")
 
 [node name="TreeLeft" type="Sprite2D" parent="World"]
 modulate = Color(0.58, 0.56, 0.7, 1)
-position = Vector2(36, 282)
+position = Vector2(27, 212)
 texture = ExtResource("8")
 
 [node name="TreeRight" type="Sprite2D" parent="World"]
 modulate = Color(0.58, 0.56, 0.7, 1)
-position = Vector2(596, 282)
+position = Vector2(447, 212)
 texture = ExtResource("8")
 
 [node name="Sun" type="Sprite2D" parent="World"]
-position = Vector2(528, 78)
+position = Vector2(396, 58)
 scale = Vector2(1.6, 1.6)
 texture = ExtResource("3")
 
 [node name="Chimes" type="Node2D" parent="World"]
 
 [node name="Chime0" type="Sprite2D" parent="World/Chimes"]
-position = Vector2(58, 44)
+position = Vector2(44, 33)
 scale = Vector2(2, 2)
-offset = Vector2(0, 7)
+offset = Vector2(0, 5)
 texture = ExtResource("9")
 
 [node name="Chime1" type="Sprite2D" parent="World/Chimes"]
-position = Vector2(96, 36)
+position = Vector2(72, 27)
 scale = Vector2(2, 2)
-offset = Vector2(0, 7)
+offset = Vector2(0, 5)
 texture = ExtResource("9")
 
 [node name="Chime2" type="Sprite2D" parent="World/Chimes"]
-position = Vector2(134, 48)
+position = Vector2(100, 36)
 scale = Vector2(2, 2)
-offset = Vector2(0, 7)
+offset = Vector2(0, 5)
 texture = ExtResource("9")
 
 [node name="Wanderer" type="AnimatedSprite2D" parent="World"]
-position = Vector2(200, 330)
+position = Vector2(150, 248)
 sprite_frames = ExtResource("2")
 animation = &"walk_right"
 autoplay = "walk_right"
-offset = Vector2(0, -14)
+offset = Vector2(0, -10)
+
+[node name="Stars" type="Node2D" parent="World"]
+z_index = -5
+script = ExtResource("d_decor")
+texture = ExtResource("d_star")
+count = 34
+drift = Vector2(-1, 0)
+area = Rect2(0, 0, 480, 130)
+tint = Color(1, 1, 1, 0.75)
+scale_range = Vector2(1, 1)
+sway = 0.0
+twinkle = true
+
+[node name="Fireflies" type="Node2D" parent="World"]
+z_index = 6
+script = ExtResource("d_decor")
+texture = ExtResource("d_dust")
+count = 12
+drift = Vector2(6, -4)
+area = Rect2(0, 150, 480, 110)
+tint = Color(1, 0.95, 0.6, 0.8)
+sway = 14.0
+twinkle = true
+
+[node name="Scrim" type="Sprite2D" parent="World"]
+z_index = 15
+centered = false
+position = Vector2(0, 150)
+texture = ExtResource("d_scrim")
+
+[node name="Vignette" type="Sprite2D" parent="World"]
+z_index = 20
+centered = false
+texture = ExtResource("d_vig")
 
 [node name="UI" type="CanvasLayer" parent="."]
 
 [node name="Title" type="Label" parent="UI"]
 anchors_preset = 10
 anchor_right = 1.0
-offset_top = 22.0
-offset_bottom = 62.0
-theme_override_colors/font_color = Color(1, 0.89, 0.58, 1)
-theme_override_colors/font_outline_color = Color(0.1, 0.06, 0.14, 1)
-theme_override_constants/outline_size = 8
-theme_override_font_sizes/font_size = 34
+offset_top = 16
+offset_bottom = 46
 text = "SLEEPY SUN"
 horizontal_alignment = 1
+theme_type_variation = &"Display"
 
 [node name="Subtitle" type="Label" parent="UI"]
 anchors_preset = 10
 anchor_right = 1.0
-offset_top = 62.0
-offset_bottom = 76.0
-theme_override_colors/font_color = Color(0.86, 0.8, 0.92, 1)
-theme_override_colors/font_outline_color = Color(0.1, 0.06, 0.14, 1)
-theme_override_constants/outline_size = 5
-theme_override_font_sizes/font_size = 10
+offset_top = 46
+offset_bottom = 57
 text = "PLAY IT FORWARD  -  every credit becomes a donation"
 horizontal_alignment = 1
+theme_type_variation = &"Small"
 
 [node name="Panel" type="Control" parent="UI"]
 anchors_preset = 8
@@ -125,70 +158,56 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -220.0
-offset_top = -40.0
-offset_right = 220.0
-offset_bottom = 60.0
+offset_left = -165
+offset_top = -30
+offset_right = 165
+offset_bottom = 45
 mouse_filter = 2
 
 [node name="Title" type="Label" parent="UI/Panel"]
 anchors_preset = 10
 anchor_right = 1.0
-offset_bottom = 20.0
-theme_override_colors/font_outline_color = Color(0.1, 0.06, 0.14, 1)
-theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 16
+offset_bottom = 15
 text = "TITLE"
 horizontal_alignment = 1
+theme_type_variation = &"Heading"
 
 [node name="Body" type="Label" parent="UI/Panel"]
 anchors_preset = 10
 anchor_right = 1.0
-offset_top = 24.0
-offset_bottom = 74.0
-theme_override_colors/font_color = Color(0.95, 0.95, 1, 1)
-theme_override_colors/font_outline_color = Color(0.1, 0.06, 0.14, 1)
-theme_override_constants/outline_size = 5
-theme_override_font_sizes/font_size = 11
+offset_top = 18
+offset_bottom = 56
 text = "Body"
 horizontal_alignment = 1
+theme_type_variation = &"Body"
 
 [node name="Hint" type="Label" parent="UI/Panel"]
 anchors_preset = 10
 anchor_right = 1.0
-offset_top = 76.0
-offset_bottom = 90.0
-theme_override_colors/font_color = Color(0.74, 0.72, 0.86, 1)
-theme_override_colors/font_outline_color = Color(0.1, 0.06, 0.14, 1)
-theme_override_constants/outline_size = 5
-theme_override_font_sizes/font_size = 9
+offset_top = 57
+offset_bottom = 68
 text = ""
 horizontal_alignment = 1
+theme_type_variation = &"Small"
 
 [node name="PressStart" type="Label" parent="UI"]
 anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = -56.0
-offset_bottom = -34.0
-theme_override_colors/font_color = Color(1, 0.95, 0.8, 1)
-theme_override_colors/font_outline_color = Color(0.1, 0.06, 0.14, 1)
-theme_override_constants/outline_size = 7
-theme_override_font_sizes/font_size = 18
+offset_top = -42
+offset_bottom = -26
 text = "PRESS START"
 horizontal_alignment = 1
+theme_type_variation = &"Title"
 
 [node name="Controls" type="Label" parent="UI"]
 anchors_preset = 12
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_top = -22.0
-offset_bottom = -6.0
-theme_override_colors/font_color = Color(0.8, 0.78, 0.9, 1)
-theme_override_colors/font_outline_color = Color(0.1, 0.06, 0.14, 1)
-theme_override_constants/outline_size = 5
-theme_override_font_sizes/font_size = 9
+offset_top = -16
+offset_bottom = -4
 text = "STICK  move     BUTTON  act"
 horizontal_alignment = 1
+theme_type_variation = &"Small"
