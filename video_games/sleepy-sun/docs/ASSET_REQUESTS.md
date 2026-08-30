@@ -48,21 +48,38 @@ rest before it is all replaced:
 | `assets/game/tall_grass/hedge.png`<br>`assets/game/tall_grass/rock.png` | 32×32 | 2 | Cover that blocks line of sight. Should look solid, not passable. |
 | `assets/game/cave/torch_0..1.png` | 16×32 | 2 | Wall torch, two flame frames. |
 
+## Priority 2b — the card table and the four newer games
+
+| Path | Size | Frames | Notes |
+|---|---|---|---|
+| `assets/game/ui/card_frame.png` | 132×176 | 1 | The card border. Tinted per game in code, so draw it **neutral/white** — colour comes from the game, shape carries the identity. |
+| `assets/game/ui/card_icon_<id>.png` | 40×40 | 8 | One glyph per game (`wind_leaf`, `tall_grass`, `cave`, `harpoon`, `acorn_storm`, `firefly`, `temple_bell`, `crow_watch`). Draw them **white**; the card tints them. These are the front door of the whole cabinet — they need to be tellable apart at a glance from across a room. The current crow and harpoon glyphs are both arrow-ish and are the weakest pair. |
+| `assets/game/acorn_storm/acorn.png` | 16×16 | 1 | The thing that hurts. Should read as dangerous at a glance. |
+| `assets/game/acorn_storm/sunfruit.png` | 16×16 | 1 | The thing that pays. Should read as *good* — warm, bright, opposite of the acorn. |
+| `assets/game/acorn_storm/impact.png` | 32×32 | 1 | The ring that tightens onto a landing spot. **Reused as the telegraph in several games**, so it is worth getting right once. |
+| `assets/game/firefly/mote.png` | 16×16 | 1 | A firefly. Rendered on its own bright layer over the night filter, so draw it as glowing. |
+| `assets/game/firefly/lantern.png` | 16×24 | 1 | Carried at the player's side. Dims in code as the light runs down. |
+| `assets/game/temple_bell/bell.png` | 48×48 | 1 | Struck bell, hung from a beam. Swings on every hit. |
+| `assets/game/temple_bell/ring.png` | 48×48 | 1 | The timing ring around the bell. Scaled ×2.83 in code, so a 1px outline becomes ~3px — draw the outline thin. |
+| `assets/game/temple_bell/marker.png` | 16×16 | 1 | The mark closing on the ring. Must stay legible while moving fast. |
+| `assets/game/crow_watch/rice_0..2.png` | 32×32 | 3 | One crop tile in three states: full, half eaten, bare. The difference between them has to be obvious from across the field — it is the score. |
+
 ## Priority 3 — objects and UI
 
 | Path | Size | Frames | Notes |
 |---|---|---|---|
 | `assets/game/wind_leaf/chime.png` | 16×16 | 1 | Wind chime pickup, seen from above. |
 | `assets/game/tall_grass/petal.png` | 16×16 | 1 | Sunpetal collectible. Should read as "a piece of the sun". |
-| `assets/game/fishing/bobber_0.png`<br>`assets/game/fishing/bobber_1.png` | 16×16 | 2 | Float sitting on the water, then dipped under. The dip is the bite cue. |
-| `assets/game/fishing/rod.png` | 32×32 | 1 | Currently unused in-scene; wanted for the attract card. |
-| `assets/game/fishing/alert.png` | 16×16 | 1 | The `!` above the float. |
+| `assets/game/harpoon/bolt.png` | 12×32 | 1 | The harpoon in flight. **Drawn pointing up** — it only ever flies straight up. |
+| `assets/game/harpoon/launcher.png` | 16×16 | 1 | The launcher held above the player's head. Kicks on fire. |
+| `assets/game/harpoon/aim.png` | 3×32 | 1 | Dotted firing lane, tiled vertically. Positioning *is* aiming, so this must read clearly. |
 | `assets/game/shared/ripple.png` | 32×32 | 1 | Ring of water disturbance. Scaled up as a leaf shakes. |
 | `assets/game/shared/splash_0..1.png` | 32×32 | 2 | Water splash, small then large. |
 | `assets/game/shared/shadow.png` | 32×16 | 1 | Soft blob shadow under a leaf. |
 | `assets/game/ui/shadow_small.png` | 16×8 | 1 | Blob shadow under the player. |
 | `assets/game/ui/star_on.png`<br>`assets/game/ui/star_off.png` | 16×16 | 2 | Chore-complete markers. |
 | `assets/game/ui/panel.png` | 24×24 | 1 | Currently unused; wanted if the UI moves to nine-patch panels. |
+| `assets/game/village/sun_0..2.png` | 48×48 | 3 | Also used on the card table, not just the attract screen. |
 | `assets/game/village/glow.png` | 64×64 | 1 | Soft radial falloff, tinted in code. A real one only helps if it is smoother. |
 | `assets/game/ui/key_prompt.png` | 16×16 | 1 | Button glyph for prompts. Worth redrawing to match the **actual arcade button** once the panel is built. |
 
@@ -77,5 +94,9 @@ rest before it is all replaced:
 - **`player_idle_front.png` and `player_idle_down.png` are near-duplicates.**
   Only `idle_down` is used. No action needed unless one was meant to be something
   else.
+- **The player is drawn at 1.5× in game** (≈18 × 43 px on screen) because at 1:1
+  the character was lost on a 640×360 field. If you redraw the player, keep the
+  32 × 32 canvas and the feet on the bottom edge — the scale is applied in
+  `src/core/player.tscn`, not baked into the art.
 - **The village houses and the eight `stage_door` frames are already at native
   resolution** and are used as drawn — they needed no normalisation.

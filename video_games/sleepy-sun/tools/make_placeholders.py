@@ -288,28 +288,32 @@ def torch():
 
 # ------------------------------------------------------------------------- fishing
 
-def bobber():
-    for frame, dip in enumerate((0, 3)):
-        img, d = canvas(16, 16)
-        d.ellipse([4, 4 + dip, 11, 11 + dip], fill=(228, 76, 76, 255))
-        d.pieslice([4, 4 + dip, 11, 11 + dip], 180, 360, fill=P["line"])
-        d.point((7, 3 + dip), P["ink"])
-        save(img, f"fishing/bobber_{frame}.png")
+def harpoon_bolt():
+    """Drawn pointing up, which is the only way it ever flies."""
+    img, d = canvas(12, 32)
+    d.line([(6, 31), (6, 8)], fill=(196, 186, 200, 255))
+    d.line([(5, 31), (5, 10)], fill=(140, 132, 150, 255))
+    d.polygon([(6, 0), (10, 9), (6, 7), (2, 9)], fill=(232, 228, 240, 255))
+    d.line([(3, 26), (6, 22)], fill=(150, 120, 80, 255))
+    d.line([(9, 26), (6, 22)], fill=(150, 120, 80, 255))
+    save(img, "harpoon/bolt.png")
 
 
-def rod():
-    img, d = canvas(32, 32)
-    d.line([(4, 28), (26, 5)], fill=P["wood"])
-    d.line([(4, 28), (8, 24)], fill=P["wood_dark"])
-    d.point((26, 5), P["line"])
-    save(img, "fishing/rod.png")
-
-
-def catch_marker():
+def harpoon_launcher():
     img, d = canvas(16, 16)
-    d.rectangle([6, 2, 9, 10], fill=(255, 240, 120, 255))
-    d.rectangle([6, 12, 9, 15], fill=(255, 240, 120, 255))
-    save(img, "fishing/alert.png")
+    d.rectangle([6, 4, 9, 15], fill=P["wood_dark"])
+    d.rectangle([3, 6, 12, 9], fill=(150, 142, 160, 255))
+    d.rectangle([5, 0, 10, 6], fill=(196, 186, 200, 255))
+    save(img, "harpoon/launcher.png")
+
+
+def aim_guide():
+    """A dotted line up the firing lane, so where the shot goes is never a
+    guess -- the skill is meant to be leading a moving fish, not aiming."""
+    img, d = canvas(3, 32)
+    for y in range(0, 32, 6):
+        d.line([(1, y), (1, y + 2)], fill=(255, 255, 255, 110))
+    save(img, "harpoon/aim.png")
 
 
 # ------------------------------------------------------------------- village / hub
@@ -412,14 +416,175 @@ def ui_bits():
     save(img, "ui/shadow_small.png")
 
 
+# ------------------------------------------------------------------ card draw
+
+def card_art():
+    """Frame and icon for the draw table. Tinted per game in code, so these are
+    drawn neutral -- shape carries the identity, colour carries the game."""
+    img, d = canvas(132, 176)
+    d.rounded_rectangle([0, 0, 131, 175], radius=7, fill=(255, 255, 255, 255))
+    d.rounded_rectangle([3, 3, 128, 172], radius=5, fill=(28, 26, 40, 235))
+    d.rounded_rectangle([8, 8, 123, 167], radius=4, outline=(255, 255, 255, 90))
+    save(img, "ui/card_frame.png")
+
+    # One glyph per game, drawn white so the card tints it. A shared generic
+    # icon made every card look the same from across a room, which defeats the
+    # point of a draw you are supposed to read at a glance.
+    W = (255, 255, 255, 255)
+
+    img, d = canvas(40, 40)                                    # wind_leaf: a leaf
+    d.ellipse([3, 13, 36, 27], fill=W)
+    d.line([(3, 20), (36, 20)], fill=(28, 26, 40, 255))
+    save(img, "ui/card_icon_wind_leaf.png")
+
+    img, d = canvas(40, 40)                                    # tall_grass: blades
+    for x, top in ((11, 8), (20, 4), (29, 10)):
+        d.line([(x, 34), (x - 2, top)], fill=W, width=3)
+    save(img, "ui/card_icon_tall_grass.png")
+
+    img, d = canvas(40, 40)                                    # cave: ring of stones
+    import math as _m
+    for i in range(5):
+        a = _m.tau * i / 5 - _m.pi / 2
+        cx, cy = 20 + _m.cos(a) * 13, 20 + _m.sin(a) * 13
+        d.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], fill=W)
+    save(img, "ui/card_icon_cave.png")
+
+    img, d = canvas(40, 40)                                    # harpoon: bolt
+    d.polygon([(20, 3), (28, 16), (20, 12), (12, 16)], fill=W)
+    d.rectangle([18, 12, 21, 36], fill=W)
+    save(img, "ui/card_icon_harpoon.png")
+
+    img, d = canvas(40, 40)                                    # acorn_storm: acorn
+    d.ellipse([10, 14, 29, 36], fill=W)
+    d.rectangle([8, 6, 31, 16], fill=W)
+    d.rectangle([18, 1, 21, 7], fill=W)
+    save(img, "ui/card_icon_acorn_storm.png")
+
+    img, d = canvas(40, 40)                                    # firefly: glowing mote
+    d.ellipse([14, 14, 25, 25], fill=W)
+    for dx, dy in ((0, -13), (0, 13), (-13, 0), (13, 0),
+                   (-9, -9), (9, -9), (-9, 9), (9, 9)):
+        d.ellipse([20 + dx - 2, 20 + dy - 2, 20 + dx + 2, 20 + dy + 2], fill=W)
+    save(img, "ui/card_icon_firefly.png")
+
+    img, d = canvas(40, 40)                                    # temple_bell: bell
+    d.rectangle([18, 3, 21, 8], fill=W)
+    d.pieslice([7, 7, 32, 32], 180, 360, fill=W)
+    d.rectangle([7, 19, 32, 30], fill=W)
+    d.rectangle([4, 29, 35, 34], fill=W)
+    save(img, "ui/card_icon_temple_bell.png")
+
+    img, d = canvas(40, 40)                                    # crow_watch: bird
+    d.polygon([(20, 10), (36, 24), (20, 19), (4, 24)], fill=W)
+    d.polygon([(18, 18), (22, 18), (20, 32)], fill=W)
+    save(img, "ui/card_icon_crow_watch.png")
+
+
+# --------------------------------------------------------------- acorn storm
+
+def acorn():
+    img, d = canvas(16, 16)
+    d.ellipse([3, 5, 12, 15], fill=(176, 122, 62, 255))
+    d.rectangle([2, 2, 13, 7], fill=(96, 66, 40, 255))
+    d.rectangle([7, 0, 8, 3], fill=(72, 50, 30, 255))
+    d.line([(5, 9), (5, 13)], fill=(206, 156, 92, 255))
+    save(img, "acorn_storm/acorn.png")
+
+
+def sunfruit():
+    img, d = canvas(16, 16)
+    d.ellipse([2, 3, 13, 14], fill=P["sun_dark"])
+    d.ellipse([3, 4, 11, 12], fill=P["sun"])
+    d.ellipse([5, 6, 8, 9], fill=(255, 245, 210, 255))
+    d.line([(8, 3), (10, 0)], fill=P["hedge"])
+    save(img, "acorn_storm/sunfruit.png")
+
+
+def impact_marker():
+    """The growing ring that says an acorn is about to land here. Same warning
+    language as the shaking leaf: telegraph, then consequence."""
+    img, d = canvas(32, 32)
+    d.ellipse([2, 8, 29, 23], outline=(255, 120, 90, 255))
+    d.ellipse([6, 11, 25, 20], outline=(255, 180, 140, 160))
+    save(img, "acorn_storm/impact.png")
+
+
+# ------------------------------------------------------------------- firefly
+
+def firefly_mote():
+    img, d = canvas(16, 16)
+    d.ellipse([4, 4, 11, 11], fill=(255, 246, 170, 255))
+    d.ellipse([6, 6, 9, 9], fill=(255, 255, 240, 255))
+    save(img, "firefly/mote.png")
+
+
+def lantern():
+    img, d = canvas(16, 24)
+    d.rectangle([5, 0, 10, 3], fill=P["wood_dark"])
+    d.rectangle([3, 4, 12, 19], fill=(196, 150, 70, 255))
+    d.rectangle([5, 6, 10, 17], fill=(255, 232, 150, 255))
+    d.rectangle([3, 19, 12, 22], fill=P["wood_dark"])
+    save(img, "firefly/lantern.png")
+
+
+# ---------------------------------------------------------------- temple bell
+
+def bell():
+    img, d = canvas(48, 48)
+    d.rectangle([22, 2, 25, 8], fill=P["wood_dark"])
+    d.pieslice([6, 6, 41, 42], 180, 360, fill=(184, 146, 74, 255))
+    d.rectangle([6, 24, 41, 38], fill=(184, 146, 74, 255))
+    d.rectangle([4, 36, 43, 41], fill=(150, 116, 56, 255))
+    d.pieslice([12, 12, 35, 34], 180, 360, fill=(214, 178, 98, 255))
+    save(img, "temple_bell/bell.png")
+
+
+def beat_ring():
+    img, d = canvas(48, 48)
+    d.ellipse([1, 1, 46, 46], outline=(255, 240, 190, 255))
+    d.ellipse([3, 3, 44, 44], outline=(255, 240, 190, 120))
+    save(img, "temple_bell/ring.png")
+
+
+def beat_marker():
+    img, d = canvas(16, 16)
+    d.ellipse([1, 1, 14, 14], fill=(255, 255, 255, 255))
+    d.ellipse([4, 4, 11, 11], fill=(240, 120, 110, 255))
+    save(img, "temple_bell/marker.png")
+
+
+# ----------------------------------------------------------------- crow watch
+
+def rice_tile():
+    """Three states of one crop tile: full, half eaten, bare."""
+    stalks = ((10, 3), (6, 2), (0, 0))
+    for state, (count, height_bonus) in enumerate(stalks):
+        img, d = canvas(32, 32)
+        rng = random.Random(200 + state)
+        d.ellipse([1, 20, 30, 31], fill=(120, 96, 58, 255))
+        for _ in range(count):
+            x = rng.randrange(4, 28)
+            base = 27 - rng.randrange(0, 3)
+            top = base - rng.randrange(10, 14 + height_bonus * 3)
+            d.line([(x, base), (x + rng.choice((-1, 0, 1)), top)],
+                   fill=(206, 186, 88, 255) if rng.random() < 0.6 else (168, 150, 66, 255))
+            d.point((x, top - 1), (240, 226, 140, 255))
+        save(img, f"crow_watch/rice_{state}.png")
+
+
 def main() -> None:
     water_tiles(); ripple(); splash(); bank_tiles(); leaf_shadow()
     chime()
     meadow_tiles(); grass_tufts(); hedge(); rock(); bird(); petal()
     cave_tiles(); pressure_plates(); torch()
-    bobber(); rod(); catch_marker()
+    harpoon_bolt(); harpoon_launcher(); aim_guide()
     village_tiles(); signpost(); tree(); sun_mascot(); glow()
-    ui_bits()
+    ui_bits(); card_art()
+    acorn(); sunfruit(); impact_marker()
+    firefly_mote(); lantern()
+    bell(); beat_ring(); beat_marker()
+    rice_tile()
     made = sorted(p.relative_to(OUT).as_posix() for p in OUT.rglob("*.png"))
     print(f"assets/game now holds {len(made)} sprites")
 

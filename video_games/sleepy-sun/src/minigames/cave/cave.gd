@@ -19,11 +19,15 @@ const PLATE_COUNT := 5
 ## path between any two stones runs through the middle instead: the tightest
 ## chord still clears every other stone by 48px, well outside their 20px reach.
 ## Rotated so no stone sits in the corridor leading up to the door.
-const RING_CENTRE := Vector2(320, 262)
-const RING_RADIUS := 70.0
+## Tightened from radius 70 once the player was scaled up 1.5x -- the chamber
+## read as too spread out around the character. Verified: the tightest chord
+## between two stones still clears every other stone by 38px against a 20px
+## trigger reach (13px plate + 7px player).
+const RING_CENTRE := Vector2(320, 250)
+const RING_RADIUS := 56.0
 const PLATE_POSITIONS: Array[Vector2] = [
-	Vector2(361, 205), Vector2(387, 284), Vector2(320, 332),
-	Vector2(253, 284), Vector2(279, 205),
+	Vector2(353, 205), Vector2(373, 267), Vector2(320, 306),
+	Vector2(267, 267), Vector2(287, 205),
 ]
 const PLAYER_START := RING_CENTRE
 const ROOM_MIN_X := 100.0
@@ -45,6 +49,13 @@ const STAGES: Array[Array] = [
 const MERCY: Array = [0.62, 0.28]
 const MERCY_AFTER_MISTAKES := 2
 
+## Scoring is per step, not per chamber. A chamber-sized reward only pays out
+## every twenty seconds or so; paying per stone means the score moves while the
+## player is actually doing something, which is what makes it feel like a game
+## rather than a test.
+const SCORE_STEP := 12
+const STREAK_PER_LEVEL := 3
+const STREAK_MAX := 5
 const SCORE_STAGE := 250
 const SCORE_CLEAN_STAGE := 150
 const SCORE_MISTAKE := -60
@@ -65,6 +76,11 @@ var _cleared: int = 0
 var _clean_stages: int = 0
 var _mistakes: int = 0
 var _stage_mistakes: int = 0
+## Correct steps in a row. Carries across chambers, so a clean run compounds --
+## that is the number a good player is really chasing.
+var _streak: int = 0
+var _best_streak: int = 0
+var _step_score: int = 0
 var _phase: Phase = Phase.INTRO
 
 var _plate_scene := preload("res://src/minigames/cave/pressure_plate.tscn")
@@ -99,8 +115,12 @@ func _process(delta: float) -> void:
 	_clamp_player()
 	if _phase != Phase.INPUT:
 		return
-	_hud.set_objective("Repeat the pattern:  %d of %d"
-			% [_input_index, _sequence.size()])
+	if _streak >= STREAK_PER_LEVEL:
+		_hud.set_objective("Repeat the pattern:  %d of %d      STREAK x%d"
+				% [_input_index, _sequence.size(), streak_multiplier()])
+	else:
+		_hud.set_objective("Repeat the pattern:  %d of %d"
+				% [_input_index, _sequence.size()])
 	# A stone the player was already standing on when input opened arms itself
 	# the moment they step off, so they can always re-enter it deliberately.
 	for plate in _plates:
@@ -187,6 +207,13 @@ func _on_plate_stepped(index: int) -> void:
 
 	if index == _sequence[_input_index]:
 		_input_index += 1
+		_streak += 1
+		_best_streak = maxi(_best_streak, _streak)
+		var multiplier := streak_multiplier()
+		_step_score += SCORE_STEP * multiplier
+		_hud.set_score(maxi(_running_score(), 0))
+		if multiplier > 1:
+			_hud.toast("x%d" % multiplier, Color(1, 0.9, 0.5), 0.35)
 		if _input_index >= _sequence.size():
 			_clear_stage()
 		return
@@ -194,12 +221,22 @@ func _on_plate_stepped(index: int) -> void:
 	_wrong()
 
 
+## 1 to STREAK_MAX, stepping up every STREAK_PER_LEVEL correct stones.
+func streak_multiplier() -> int:
+	return clampi(1 + _streak / STREAK_PER_LEVEL, 1, STREAK_MAX)
+
+
 func _wrong() -> void:
 	_mistakes += 1
 	_stage_mistakes += 1
 	_phase = Phase.SHOWING
 	Audio.sfx(&"deny")
-	_hud.toast("NOT THAT ONE", Color(1, 0.45, 0.4), 0.8)
+	var lost := _streak
+	_streak = 0
+	if lost >= STREAK_PER_LEVEL:
+		_hud.toast("BROKEN!  streak %d lost" % lost, Color(1, 0.45, 0.4), 0.9)
+	else:
+		_hud.toast("NOT THAT ONE", Color(1, 0.45, 0.4), 0.8)
 	_hud.set_score(maxi(_running_score(), 0))
 	for plate in _plates:
 		plate.accepts_input = false
@@ -248,7 +285,8 @@ func _on_exit_entered(body: Node2D) -> void:
 
 
 func _running_score() -> int:
-	return _cleared * SCORE_STAGE \
+	return _step_score \
+			+ _cleared * SCORE_STAGE \
 			+ _clean_stages * SCORE_CLEAN_STAGE \
 			+ _mistakes * SCORE_MISTAKE
 
@@ -260,4 +298,5 @@ func _finish() -> void:
 	var pace := clampf(PAR_SECONDS / maxf(elapsed, 1.0), 0.0, 1.0)
 	var score := _running_score() + int(SCORE_TIME_BONUS * pace)
 	_hud.set_score(maxi(score, 0))
-	finish(score, {"stages": _cleared, "mistakes": _mistakes})
+	finish(score, {"stages": _cleared, "mistakes": _mistakes,
+			"streak": _best_streak})

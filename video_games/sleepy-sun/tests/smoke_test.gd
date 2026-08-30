@@ -12,7 +12,7 @@ extends Node
 const FRAMES_PER_GAME := 420
 const SHELL_SCENES: Array[String] = [
 	"res://src/shell/attract/attract.tscn",
-	"res://src/hub/hub.tscn",
+	"res://src/shell/draw/draw.tscn",
 	"res://src/shell/results/results.tscn",
 ]
 
@@ -52,7 +52,19 @@ func _test_autoloads() -> void:
 	_check(Router != null, "Router autoload missing")
 	_check(Audio != null, "Audio autoload missing")
 	_check(Save != null, "Save autoload missing")
-	_check(Game.MINIGAMES.size() == 4, "expected 4 minigames")
+	_check(Game.MINIGAMES.size() == 8, "expected 8 minigames in the pool")
+
+	# The draw has to deal a legal hand every time or a session can open on a
+	# duplicate card, or on a game that is not in the pool at all.
+	for attempt in 40:
+		var hand := Game.draw_playlist()
+		_check(hand.size() == Game.PLAYLIST_SIZE,
+				"draw dealt %d cards, expected %d" % [hand.size(), Game.PLAYLIST_SIZE])
+		var seen: Array[StringName] = []
+		for id in hand:
+			_check(not (id in seen), "draw dealt %s twice" % id)
+			_check(not Game.definition(id).is_empty(), "draw dealt unknown id %s" % id)
+			seen.append(id)
 
 	Audio.sfx(&"hop")
 	Audio.plate_note(2)
@@ -135,12 +147,23 @@ func _test_minigame(entry: Dictionary) -> void:
 func _test_full_run() -> void:
 	Game.start_run()
 	_check(Game.total_score() == 0, "a fresh run should start at zero")
+	_check(Game.playlist.is_empty(), "a fresh run should have no hand yet")
+
+	# A session is over when the dealt hand is played out, not when every game
+	# in the pool has been.
+	Game.playlist = [&"wind_leaf", &"tall_grass", &"cave"]
+	Game.playlist_index = 0
+	_check(Game.current_id() == &"wind_leaf", "the first card should be up first")
+	Game.advance()
+	Game.advance()
+	_check(not Game.all_complete(), "2 of 3 cards played is not a finished run")
+	Game.advance()
+	_check(Game.all_complete(), "3 of 3 cards played finishes the run")
+	_check(Game.playlist_par() > 0, "the dealt hand should have a par to rank against")
 	Game.record(MiniGameResult.new(&"wind_leaf", 1200, 60.0, {"chimes": 5, "splashes": 1}))
 	Game.record(MiniGameResult.new(&"tall_grass", 900, 50.0, {"petals": 3, "spotted": 2}))
 	Game.record(MiniGameResult.new(&"cave", 1100, 45.0, {"stages": 5, "mistakes": 1}))
-	_check(not Game.all_complete(), "3 of 4 minigames should not complete the run")
-	Game.record(MiniGameResult.new(&"fishing", 800, 75.0, {"fish": 6, "plastic": 2}))
-	_check(Game.all_complete(), "4 of 4 minigames should complete the run")
+	Game.record(MiniGameResult.new(&"harpoon", 800, 75.0, {"fish": 6, "plastic": 2}))
 	_check(Game.total_score() == 4000, "total should be 4000, got %d" % Game.total_score())
 	_check(Game.plastic_removed() == 2, "plastic tally should reach the results screen")
 

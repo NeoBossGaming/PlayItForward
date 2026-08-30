@@ -1,0 +1,56 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://src/minigames/acorn_storm/acorn_storm.gd" id="1"]
+[ext_resource type="PackedScene" path="res://src/core/player.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://src/ui/hud.tscn" id="3"]
+[ext_resource type="Script" path="res://src/core/scrolling_texture.gd" id="4"]
+[ext_resource type="Texture2D" path="res://assets/game/tall_grass/ground_1.png" id="5"]
+[ext_resource type="Texture2D" path="res://assets/game/village/tree.png" id="6"]
+[ext_resource type="Texture2D" path="res://assets/game/tall_grass/rock.png" id="7"]
+
+[node name="AcornStorm" type="Node2D"]
+script = ExtResource("1")
+id = &"acorn_storm"
+par_score = 2400
+
+[node name="Ground" type="Sprite2D" parent="."]
+position = Vector2(320, 180)
+texture = ExtResource("5")
+script = ExtResource("4")
+area = Vector2i(672, 424)
+
+[node name="Canopy" type="Node2D" parent="."]
+
+[node name="TreeA" type="Sprite2D" parent="Canopy"]
+modulate = Color(0.62, 0.6, 0.72, 1)
+position = Vector2(74, 62)
+scale = Vector2(2, 2)
+texture = ExtResource("6")
+
+[node name="TreeB" type="Sprite2D" parent="Canopy"]
+modulate = Color(0.58, 0.56, 0.68, 1)
+position = Vector2(320, 46)
+scale = Vector2(2.2, 2.2)
+texture = ExtResource("6")
+
+[node name="TreeC" type="Sprite2D" parent="Canopy"]
+modulate = Color(0.62, 0.6, 0.72, 1)
+position = Vector2(566, 62)
+scale = Vector2(2, 2)
+texture = ExtResource("6")
+
+[node name="RockA" type="Sprite2D" parent="."]
+position = Vector2(96, 316)
+texture = ExtResource("7")
+
+[node name="RockB" type="Sprite2D" parent="."]
+position = Vector2(556, 324)
+texture = ExtResource("7")
+
+[node name="Falling" type="Node2D" parent="."]
+
+[node name="Player" parent="." instance=ExtResource("2")]
+position = Vector2(320, 212)
+z_index = 10
+
+[node name="HUD" parent="." instance=ExtResource("3")]

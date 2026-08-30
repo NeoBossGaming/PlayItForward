@@ -88,7 +88,7 @@ func _begin_run() -> void:
 
 	Audio.sfx(&"confirm")
 	Game.start_run()
-	Router.go_to_hub()
+	Router.go_to_draw(true)
 
 
 func _look(direction: float) -> void:
@@ -132,10 +132,14 @@ func _build_panels() -> void:
 	_panels.append({
 		"title": "A PLAY IT FORWARD ADVENTURE",
 		"body": "The sun is nodding off before it can set.\n"
-			+ "Four evening chores. Gather the light it needs.",
-		"hint": "Four minigames. You cannot lose -- only shine brighter.",
+			+ "One credit deals you three games from eight.",
+		"hint": "You cannot lose -- only shine brighter.",
 	})
-	for entry in Game.MINIGAMES:
+	# Three of the eight per cycle, chosen fresh. Showing all eight would take
+	# forty seconds to loop past, which is longer than anyone stands and reads.
+	var pool := Game.MINIGAMES.duplicate()
+	pool.shuffle()
+	for entry in pool.slice(0, 3):
 		_panels.append({
 			"title": String(entry["title"]).to_upper(),
 			"body": entry["blurb"],

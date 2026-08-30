@@ -19,12 +19,9 @@ const ARRIVE_RADIUS := 7.0
 ## Ordinals of cave.gd's Phase enum.
 const CAVE_INPUT := 2
 const CAVE_WALKING := 4
-## Ordinals of fishing.gd's State enum.
-const FISH_READY := 0
-const FISH_CHARGING := 1
-const FISH_BITING := 3
 
 var _failures: PackedStringArray = []
+var _checks_run: int = 0
 var _held: Array[StringName] = []
 var _taps_to_release: Array[StringName] = []
 var _reacted_to_lane: int = -1
@@ -32,13 +29,19 @@ var _reacted_to_lane: int = -1
 
 func _ready() -> void:
 	await _play(&"wind_leaf", _drive_wind_leaf)
+	await _test_drowning_is_not_escapable()
 	await _play(&"tall_grass", _drive_tall_grass)
 	await _play(&"cave", _drive_cave)
-	await _play(&"fishing", _drive_fishing)
+	await _play(&"harpoon", _drive_harpoon)
+	await _play(&"acorn_storm", _drive_acorn_storm)
+	await _play(&"firefly", _drive_firefly)
+	await _play(&"temple_bell", _drive_temple_bell)
+	await _play(&"crow_watch", _drive_crow_watch)
 
 	print("\n================= SOAK TEST =================")
 	if _failures.is_empty():
-		print("PASS  -  all four minigames reached their own ending")
+		print("PASS  -  all %d minigames reached their own ending"
+				% Game.MINIGAMES.size())
 	else:
 		print("FAIL")
 		for failure in _failures:
@@ -196,21 +199,130 @@ func _drive_cave(game: MiniGame) -> void:
 	_steer(player.position, plate.position)
 
 
-## Cast, then strike at every bite. The round ends on its own clock.
-func _drive_fishing(game: MiniGame) -> void:
-	var state: int = game.get("_state")
-	match state:
-		FISH_READY:
-			_hold(&"act")
-		FISH_CHARGING:
-			# Hold long enough for a meaningful cast, then let go.
-			if randf() < 0.06:
-				_release(&"act")
-		FISH_BITING:
-			_release(&"act")
+## Line up under the nearest fish and fire. The round ends on its own clock, so
+## this only has to prove the shot path works and can score.
+func _drive_harpoon(game: MiniGame) -> void:
+	var player: Node2D = game.get_node("Player")
+	var best: Node2D = null
+	var best_distance := INF
+	for child in game.get_node("Swimmers").get_children():
+		if child.get("hooked") or child.get("kind") == 2:      # skip bottles
+			continue
+		var distance: float = absf(child.position.x - player.position.x)
+		if distance < best_distance:
+			best_distance = distance
+			best = child
+	if best == null:
+		_release_all()
+		return
+	# Lead the target: aim where it will be by the time the bolt arrives.
+	var flight: float = (player.position.y - best.position.y) / 620.0
+	var lead: float = best.position.x + best.get("direction") * best.get("speed") * flight
+	if _steer(Vector2(player.position.x, 0.0), Vector2(lead, 0.0)):
+		_tap(&"act")
+
+
+## Walk onto whatever sunfruit is closest to landing; ignore the acorns, since
+## being hit is a setback rather than an ending.
+func _drive_acorn_storm(game: MiniGame) -> void:
+	var player: Node2D = game.get_node("Player")
+	var target := Vector2.ZERO
+	var best := -1.0
+	for holder in game.get_node("Falling").get_children():
+		if holder.get_child_count() < 2 or not holder.has_meta(&"acorn"):
+			continue
+		if bool(holder.get_meta(&"acorn")):
+			continue
+		var life: float = float(holder.get_meta(&"life"))
+		if life > best:
+			best = life
+			target = holder.get_meta(&"landing")
+	if best < 0.0:
+		_release_all()
+		return
+	_steer(player.position, target)
+
+
+## Chase the nearest firefly. Ignores the greed loop entirely -- a bot that
+## always tops up its lantern is the worst case, so if this can finish, anyone can.
+func _drive_firefly(game: MiniGame) -> void:
+	var player: Node2D = game.get_node("Player")
+	var flies: Array = game.get_node("FliesLayer/Flies").get_children()
+	if flies.is_empty():
+		_release_all()
+		return
+	var nearest: Node2D = flies[0]
+	for fly: Node2D in flies:
+		if fly.position.distance_to(player.position) \
+				< nearest.position.distance_to(player.position):
+			nearest = fly
+	_steer(player.position, nearest.position)
+
+
+## Strike whenever a marker is inside the hit window.
+func _drive_temple_bell(game: MiniGame) -> void:
+	const APPROACH := 1.6
+	const WINDOW := 0.20
+	for marker in game.get_node("Markers").get_children():
+		if marker.has_meta(&"spent"):
+			continue
+		if absf(float(marker.get_meta(&"life")) - APPROACH) <= WINDOW * 0.5:
 			_tap(&"act")
-		_:
-			_release(&"act")
+			return
+
+
+## Run at whichever crow is closest to landing.
+func _drive_crow_watch(game: MiniGame) -> void:
+	var player: Node2D = game.get_node("Player")
+	var target: Node2D = null
+	var best := -1.0
+	for holder in game.get_node("Crows").get_children():
+		if holder.get_child_count() < 2:
+			continue
+		var life: float = float(holder.get_meta(&"life"))
+		if life > best:
+			best = life
+			target = holder.get_child(1)
+	if target == null:
+		_release_all()
+		return
+	_hold(&"act")                       # sprint
+	_steer(player.position, target.position)
+
+
+## Regression test for the bug that made drowning optional: _unhandled_input
+## refused to hop in the water, but the input buffer drained from _process and
+## fired the queued hop anyway, lifting the player straight back out.
+func _test_drowning_is_not_escapable() -> void:
+	var entry := Game.definition(&"wind_leaf")
+	var game := (load(entry["scene"]) as PackedScene).instantiate() as MiniGame
+	add_child(game)
+	await _frames(3)
+	game.begin()
+	await _frames(4)
+
+	# Queue a hop, then drown on the same frame the buffer is still live.
+	_send(&"move_right", true)
+	await _frames(1)
+	_send(&"move_right", false)
+	game.call("_fall_in")
+	var lane_at_splash: int = game.get("_lane")
+
+	# Hold the direction across the whole recovery, which is what used to work.
+	_hold(&"move_left")
+	for i in 40:
+		await _frames(1)
+	var still_wet: bool = game.get("_in_water")
+	_release_all()
+
+	_checks_run += 1
+	if not still_wet:
+		_failures.append("drowning is still escapable: a buffered/held direction "
+				+ "lifted the player out of the water (lane %d)" % lane_at_splash)
+	else:
+		print("  %-11s drowning holds under a held direction" % "wind_leaf")
+	game.free()
+	await _frames(2)
 
 
 func _frames(count: int) -> void:
