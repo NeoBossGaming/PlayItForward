@@ -9,8 +9,10 @@ extends Node2D
 
 const PANEL_SECONDS := 5.0
 
-## Frames of the mascot's doze, held for these durations. He never fully wakes:
-## that is the player's job.
+## Frames of the mascot's doze, held for these durations. It never fully wakes:
+## it slept through the dawn and it is going to keep sleeping through it until
+## somebody pays a credit and goes and gets it. That is the whole premise, and
+## the attract screen is where it is stated.
 const SUN_CYCLE: Array[float] = [1.6, 0.9, 2.4]
 
 @onready var _sun: Sprite2D = $World/Sun
@@ -131,8 +133,8 @@ func _animate_wanderer(delta: float) -> void:
 func _build_panels() -> void:
 	_panels.append({
 		"title": "A PLAY IT FORWARD ADVENTURE",
-		"body": "The sun is nodding off before it can set.\n"
-			+ "One credit deals you three games from eight.",
+		"body": "The sun slept straight through the dawn.\n"
+			+ "One credit deals you three ways to wake it.",
 		"hint": "You cannot lose. Only shine brighter.",
 	})
 	# Three of the eight per cycle, chosen fresh. Showing all eight would take

@@ -79,6 +79,12 @@ func _run_deal() -> void:
 	for i in _cards.size():
 		if not is_inside_tree():
 			return
+		# The table always lays out three slots, but the hand can be shorter --
+		# the debug menu's forced hand fills one card at a time. Reading past the
+		# end of the hand crashed the deal outright.
+		if i >= Game.playlist.size():
+			_cards[i].hide()
+			continue
 		_cards[i].land_on(Game.playlist[i])
 		if i < _cards.size() - 1:
 			await Wait.on(self, SPIN_BETWEEN)

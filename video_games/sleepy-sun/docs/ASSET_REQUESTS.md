@@ -106,6 +106,25 @@ a play area with mechanics sitting on it. All in `assets/game/decor/`.
 | `scarecrow.png` · `fence.png` | 16×28 · 32×16 | Crow Watch. The scarecrow is doing a bad job; that is the joke. |
 | `cloud.png` | 48×24 | soft shadow drifting across the field. |
 
+## Priority 2e — the cutscenes
+
+The seventeen lore cutscenes are composed almost entirely from sprites that
+already exist — the player, the sun, chimes, the bell, the crows, the water.
+These four are the only art they needed, and they are the only art that would
+improve them.
+
+| Path | Size | Notes |
+|---|---|---|
+| `assets/game/village/sun_beaming.png` | 48×48 | The RADIANT ending, and the single most-looked-at frame in the game — it is what a player gets for a great run. `sun_0..2` cover awake, drowsy and asleep; none of them is *delighted*. Wide grin, eyes screwed shut with happiness, brighter than the others. |
+| `assets/game/decor/hill.png` | 256×64 | The horizon in every ending. A **seamlessly tiling** land silhouette, near-black, with a soft irregular crest. Two copies cover the screen, so the left and right edges must match. |
+| `assets/game/decor/ray.png` | 8×40 | One light ray, **base at the bottom, pointing up**, fading out toward the tip. The finale rotates twelve copies around the sun rather than baking a burst, so one ray is all that is needed. |
+| `assets/game/decor/note.png` | 8×8 | A music note. It is the only way to draw a sound, and it is drawn for the chimes and the dawn bell. |
+
+Composition notes if you redraw anything the cutscenes use: the stage is
+**480×270 with 26px letterbox bars top and bottom**, so nothing may sit above
+y=34 or below y=236, and the caption lives in the bottom bar. Ground and water
+are tiled in 32px bands from y≈206 downward.
+
 ## Priority 2d — HUD icons and overlays
 
 `assets/game/ui/`. These carry meaning that used to be words, so they have to be
@@ -137,3 +156,6 @@ readable at 9×9.
   `src/core/player.tscn`, not baked into the art.
 - **The village houses and the eight `stage_door` frames are already at native
   resolution** and are used as drawn — they needed no normalisation.
+- **`ui/card_icon_*.png` are white glyphs on transparency, and they are tinted at
+  every use site** — on the draw table, on the intro card, and now rising as the
+  gift in each game's closing cutscene. Keep them white; do not colour them in.

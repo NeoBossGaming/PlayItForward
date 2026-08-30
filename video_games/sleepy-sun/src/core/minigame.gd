@@ -22,6 +22,7 @@ var running: bool = false
 var _finished: bool = false
 var _popup_scene: PackedScene = preload("res://src/ui/score_popup.tscn")
 var _intro_scene: PackedScene = preload("res://src/ui/intro_card.tscn")
+var _cutscene_scene: PackedScene = preload("res://src/ui/cutscene.tscn")
 var _popup_root: Node2D
 
 
@@ -30,16 +31,34 @@ func _process(delta: float) -> void:
 		elapsed += delta
 
 
-## Router's entry point. Shows the intro card, then starts the game -- so every
-## minigame gets an intro for free and none of them has to know it exists.
-## Tests call begin() directly and skip straight to play.
+## Router's entry point: lore, then rules, then play.
+##
+## The cutscene runs ahead of the intro card on purpose -- why you are here
+## first, what the buttons do second. Both live here rather than in the eight
+## minigames, so every game gets them for free and none of them has to know
+## either exists. Tests call begin() directly and skip straight to play.
 func enter() -> void:
+	await play_cutscene(Lore.before(id))
+	if not is_inside_tree() or _finished:
+		return
+
 	var card: IntroCard = _intro_scene.instantiate()
 	add_child(card)
 	card.play(id, control_hint())
 	await card.dismissed
 	if is_inside_tree() and not _finished:
 		begin()
+
+
+## Plays a shot list from Lore and returns when it is off the screen. Returns
+## immediately for an empty list, so a game with no lore written yet still runs.
+func play_cutscene(shots: Array) -> void:
+	if shots.is_empty():
+		return
+	var scene: Cutscene = _cutscene_scene.instantiate()
+	add_child(scene)
+	scene.play(shots)
+	await scene.done
 
 
 ## What the controls do in *this* game, shown on the intro card. Overridden by

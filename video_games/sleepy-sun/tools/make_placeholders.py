@@ -783,6 +783,64 @@ def decor_props():
     save(img, "decor/cloud.png")
 
 
+# ------------------------------------------------------------------------ lore
+
+def lore_art():
+    """The handful of sprites the cutscenes need that no minigame already has.
+
+    Everything else in the seventeen cutscenes is composed from sprites that
+    were already on disk, which is the whole reason the lore could ship without
+    waiting on art.
+    """
+    import math as _m
+
+    # The RADIANT face. sun_0..2 cover awake / drowsy / asleep; none of them is
+    # *delighted*, and the top-tier finale is the one moment that needs it.
+    img, d = canvas(48, 48)
+    for i in range(16):
+        a = _m.tau * i / 16
+        d.line([(24 + _m.cos(a) * 16, 24 + _m.sin(a) * 16),
+                (24 + _m.cos(a) * 23, 24 + _m.sin(a) * 23)],
+               fill=P["sun_dark"], width=2)
+    d.ellipse([6, 6, 41, 41], fill=P["sun_dark"])
+    d.ellipse([8, 8, 39, 39], fill=P["sun"])
+    d.ellipse([9, 9, 38, 38], fill=(255, 232, 158, 255))
+    for cx in (17, 30):                                     # happy closed eyes
+        d.arc([cx - 4, 18, cx + 4, 26], 200, 340, fill=P["ink"], width=2)
+    d.chord([16, 26, 32, 38], 0, 180, fill=P["ink"])        # open grin
+    d.chord([20, 33, 28, 38], 0, 180, fill=(226, 118, 118, 255))
+    for cx in (12, 35):                                     # blush
+        d.ellipse([cx - 3, 27, cx + 3, 31], fill=(255, 168, 132, 120))
+    save(img, "village/sun_beaming.png")
+
+    # One ray, drawn pointing up from its base. The finale rotates copies of it
+    # around the sun rather than baking a burst into a texture, so the same
+    # sprite works for three rays or twelve.
+    img, d = canvas(8, 40)
+    for y in range(40):
+        t = y / 39.0
+        half = max(0.5, 3.5 * t)
+        a = int(230 * (1.0 - t) ** 0.7)
+        d.line([(4 - half, y), (4 + half, y)], fill=(255, 236, 176, a))
+    save(img, "decor/ray.png")
+
+    # Horizon silhouette. Wide enough that two side by side cover the screen,
+    # with a soft crest so it reads as land rather than a bar.
+    img, d = canvas(256, 64)
+    for x in range(256):
+        h = 22 + 10 * _m.sin(x / 41.0) + 5 * _m.sin(x / 13.0 + 1.7)
+        d.line([(x, 64 - h), (x, 63)], fill=(26, 28, 46, 255))
+        d.point((x, int(64 - h)), (44, 48, 72, 255))
+    save(img, "decor/hill.png")
+
+    # A note, for the chimes and the bell. The only way to draw sound.
+    img, d = canvas(8, 8)
+    d.ellipse([0, 4, 4, 7], fill=(255, 255, 255, 255))
+    d.line([(4, 6), (4, 0)], fill=(255, 255, 255, 255))
+    d.line([(4, 0), (7, 1)], fill=(255, 255, 255, 255))
+    save(img, "decor/note.png")
+
+
 def main() -> None:
     water_tiles(); ripple(); splash(); bank_tiles(); leaf_shadow()
     chime()
@@ -796,6 +854,7 @@ def main() -> None:
     firefly_mote(); lantern()
     bell(); beat_ring(); beat_marker()
     rice_tile()
+    lore_art()
     made = sorted(p.relative_to(OUT).as_posix() for p in OUT.rglob("*.png"))
     print(f"assets/game now holds {len(made)} sprites")
 

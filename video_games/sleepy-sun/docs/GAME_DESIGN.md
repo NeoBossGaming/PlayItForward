@@ -90,16 +90,87 @@ all eight would rank every run GENTLE.
 | WARM | ≥ 0.65 × par |
 | GENTLE | below |
 
+These thresholds live in **`Lore.TIERS`**, not on the results screen, because the
+finale cutscene picks its ending from the same number. A beaming sun followed by
+a WARM stamp would read as a bug to everybody who saw it, and it would be one.
+
 ---
 
-## 3. The fantasy
+## 3. The fantasy — The Waking
 
-The sun is nodding off before it has finished setting, and the evening's chores
-are dealt to you three at a time.
+> The sun slept straight through the dawn. It has overslept before, but never
+> this long, and never with the bell unrung. The valley is doing the waking by
+> hand.
 
-Deliberately thin. It exists to give eight unrelated minigames a reason to sit
-together and to give the cabinet a mascot whose state is readable at a glance.
-No cutscenes, no text anyone has to read.
+One credit deals three of eight ways to wake it. Each minigame gathers one
+**gift**, and the finale shows the player what they brought.
+
+| Game | Gift | Why it wakes the sun |
+|---|---|---|
+| **Riverleap** | the river chimes | The sun has always woken to them. The wind has stopped, so someone has to cross and ring them by hand. |
+| **Hush Meadow** | a handful of yesterday | Sunpetals keep whatever light they are given, so you pick them as the last of the day goes. The birds are still up. |
+| **Echo Hollow** | the sun's own name | Nobody alive remembers it. The stones do, one syllable each, and only in the right order. |
+| **Riverstrike** | a river clear enough to look in | The sun cannot see how late it is. Clear the bottles and the water throws the morning back at it. |
+| **Acorn Storm** | breakfast | The old oak drops its whole year in the dark. One fall in ten is sunfruit. |
+| **Firefly Lantern** | a borrowed light | Something to hold up while it decides. The darker it gets, the more each firefly is giving. |
+| **Temple Bell** | the dawn bell | The one that was missed, which is very probably the whole problem. |
+| **Crow Watch** | the harvest offering | The rice was grown for the sun. The crows would rather it were grown for them. |
+
+The premise reaches the player in four places and nowhere else: the attract
+screen states it, a cutscene before each game says why that game matters, one
+after says what it was worth, and the finale pays it off. Note that Hush Meadow
+is the one game that plays out **at dusk** — its whole mechanic is a draining
+daylight bar — so its lore is written as the start of the long night rather
+than the middle of it.
+
+`gift` is a field on every entry in `Game.MINIGAMES`, alongside the mechanical
+`blurb` the intro card teaches with. They are kept separate deliberately: lore
+must never crowd out the sentence that explains the buttons.
+
+### Cutscenes are data, not scenes
+
+Seventeen hand-built cutscene scenes would be unmaintainable and, worse,
+unreviewable — nobody would ever look at all of them. Instead there is one
+player and one table:
+
+- **`src/data/lore.gd`** — every shot in the game. A *shot* is a sky (two
+  colours), a caption, a duration and a list of actors; an actor is a texture
+  path plus where it starts, where it goes, how it fades, and whether it sways
+  or spins. Three shots make about five seconds.
+- **`src/ui/cutscene.gd`** — knows how to play a shot list and nothing about
+  what the story is. Letterbox bars in, sky crossfading between shots, one
+  caption in the bottom bar, sprites tweened on a stage.
+
+Every texture in the table was **already on disk**. The lore had to be able to
+ship without waiting on art, so the cutscenes are composed from the minigames'
+own sprites; only four placeholders were added (`village/sun_beaming`,
+`decor/ray`, `decor/hill`, `decor/note`).
+
+### Where they hook in
+
+| Beat | Hook | Note |
+|---|---|---|
+| Before | `MiniGame.enter()`, ahead of the intro card | Why you are here first, what the buttons do second. `begin()` is untouched, so every test still skips straight to play. |
+| After | `Router._on_minigame_finished()`, after the 1.4 s beat | Two versions: one if the score met 0.9 × par, a gentler one if not. Never a failure — only a quieter success. |
+| Finale | same place, when the hand is played out | Three endings, chosen by the same ratio the rank stamp uses. |
+
+Each is about five seconds and **skippable with any button after one second**.
+The one-second dead zone matters: a press in the first moment is almost always
+the tail of the press that started the game, and swallowing the story because of
+it would be a bad trade. A whole credit gains roughly 35 seconds.
+
+### The finale
+
+| Ratio | Rank | Ending |
+|---|---|---|
+| ≥ 1.15 | RADIANT | It comes up grinning, rays snapping out, the valley warm before you can blink. |
+| ≥ 0.65 | BRIGHT / WARM | It sits up, looks at what you brought, and decides that will do nicely. |
+| < 0.65 | GENTLE | It opens one eye. Morning, slow and crooked, and an invitation to come back and finish waking it. |
+
+The bottom tier is written as encouragement, not a loss — the cabinet has no
+fail state and is charity-facing, and "you failed" is the one thing it must
+never say. Every ending shows the gifts *this* run actually brought, using the
+`card_icon` of each dealt game.
 
 ---
 
@@ -191,10 +262,11 @@ building: fewer holes to drill, fewer parts to fail unattended.
 src/
 ├── autoload/   Game (run + playlist), Router (scenes), Audio (synth), Save
 ├── core/       minigame contract, player controller, scrolling backdrops, timers
+├── data/       lore.gd -- every cutscene in the game, as shot lists
 ├── shell/      boot, attract, draw (the card table), results
 ├── minigames/  wind_leaf, tall_grass, cave, harpoon,
 │               acorn_storm, firefly, temple_bell, crow_watch
-└── ui/         the shared HUD
+└── ui/         HUD, theme, intro card, score popup, cutscene player
 ```
 
 ### The minigame contract
@@ -219,8 +291,11 @@ double-report a score.
 1. Scene whose root script `extends MiniGame`; set `id` and `par_score`.
 2. Instance `src/ui/hud.tscn` and `src/core/player.tscn`.
 3. Call `finish(score, stats)` when it ends.
-4. One entry in `Game.MINIGAMES`; one `card_icon_<id>.png` in `assets/game/ui/`.
+4. One entry in `Game.MINIGAMES` including its `gift`; one `card_icon_<id>.png`
+   in `assets/game/ui/`.
 5. A `_detail_for()` case in `results.gd`, and a driver in `soak_test.gd`.
+6. A `before` and an `after` in `src/data/lore.gd` — the smoke test fails a game
+   with no lore, because a silent gap in the story is worse than a thin one.
 
 The draw, the attract cards, the results row and all three suites pick it up
 from the registry automatically.
@@ -506,12 +581,21 @@ is `ScorePop` and not `Popup`.)*
 `HUD.toast()` survives for events that belong to no object: `CHIME BURST`,
 `PHASE 2`, `DUSK`, `SAFE IN THE GRASS`.
 
-### The intro card
+### The opening of a minigame
 
-`MiniGame.enter()` (Router's entry point) plays `src/ui/intro_card.tscn`, then
-calls `begin()`. The card **flies in from the slot it was dealt to** on the draw
-table, opens into a full-screen title card — name, rule, and what the button does
-in *this* game — holds 1.4 s, and leaves. Skippable with any button.
+`MiniGame.enter()` — Router's entry point — runs three things in order and then
+hands over:
+
+1. **The lore beat** (`src/ui/cutscene.tscn`, shots from `src/data/lore.gd`):
+   about five seconds of why this game matters, letterboxed, one caption.
+2. **The intro card** (`src/ui/intro_card.tscn`): the card **flies in from the
+   slot it was dealt to** on the draw table and opens into a full-screen title
+   card — name, rule, and what the button does in *this* game — holds 1.4 s.
+3. **`begin()`**.
+
+Both are skippable with any button, and both live on the base class rather than
+in the eight minigames, so every game gets them for free and none of them knows
+either exists. See §3 for the cutscene system itself.
 
 This replaced a permanent instruction line at the top of every minigame. Nobody
 reads a sentence that has been on screen for a minute; they will read one that
@@ -581,9 +665,9 @@ tools/run_tests.sh          # or GODOT=/path/to/godot tools/run_tests.sh
 
 | Suite | What it proves |
 |---|---|
-| `smoke_test.gd` | every scene loads and runs; all 8 emit exactly one result; `finish()` cannot fire twice; 40 draws deal 3 distinct, valid cards; **the three cards on the table actually display the hand that was dealt** |
+| `smoke_test.gd` | every scene loads and runs; all 8 emit exactly one result; `finish()` cannot fire twice; 40 draws deal 3 distinct, valid cards; **the three cards on the table actually display the hand that was dealt**; **every texture path in `Lore` loads**, every game has lore of about the right length, and a cutscene both plays out and skips |
 | `soak_test.gd` | each of the 8 driven to its **own natural ending**, plus four regressions: drowning in Riverleap cannot be escaped by holding a direction; a bird's vision cone holds steady while investigating; stamina drains to empty and gates the next sprint; the meadow's roost scramble fires and resolves |
-| `flow_test.gd` | the real loop through real scene changes: attract → draw → 3 dealt games → results → attract |
+| `flow_test.gd` | the real loop through real scene changes: attract → draw → lore → intro → 3 dealt games → lore → finale → results → attract, tapping through each intro the way a repeat player would |
 
 The soak suite is the one that matters. A minigame that cannot be completed
 still looks fine in the editor and still passes a short smoke run. It has now
@@ -597,12 +681,26 @@ A note on test isolation: the high-score table lives in `user://` and survives
 between runs, so any assertion about ranking has to `Save.clear()` first or it
 depends on whatever a previous run left behind.
 
+**The lore is a table of file paths, so it needs a test that opens all of them.**
+A typo in one is invisible until that exact cutscene plays in front of somebody,
+which is the worst possible time to find it. `Lore.every_texture_path()` exists
+for that check and for nothing else.
+
 **A visual pass is not optional.** Render every screen under `xvfb-run` and look
 at it. Assertions caught none of these: the draw heading printing over the
 middle card, Temple Bell's target ring rendering invisible because `_process`
 overwrote the scene's scale, the fireflies above, the stamina bar never
 appearing because its signal does not fire while the meter sits full, and Temple
 Bell's phase 2 opening with the player 4px outside the strike range.
+
+The cutscenes were built this way and it was the entire value of the round. The
+first render showed a river that was a 32px stripe with the leaves and bottles
+floating in the air *above* it; a hollow with no hollow, five lit stones hanging
+in open sky; a rice paddy drawn with `rice_2`, which is the **bare** tile the
+crows leave behind, in the shot that says the offering went out whole; gift
+icons rendering as grey smudges because `card_icon_*` are white glyphs meant to
+be tinted; and sixteen closing shots that were all the same picture of a sun on
+a hill. Every one of those passed the assertions.
 
 One trap when capturing: under `xvfb-run` the frame rate is not pinned, so
 targeting a moment by frame count is unreliable — too few frames and the reels

@@ -43,6 +43,8 @@ func _run() -> void:
 	await _test_autoloads()
 	await _test_shell_scenes()
 	await _test_card_deal()
+	await _test_lore()
+	await _test_cutscene_player()
 	for entry in Game.MINIGAMES:
 		await _test_minigame(entry)
 	await _test_full_run()
@@ -116,6 +118,109 @@ func _test_card_deal() -> void:
 		shown.append(id)
 	draw.free()
 	await _frames(2)
+
+
+## The lore is a data table of texture paths, and a typo in one of them is
+## invisible until that exact cutscene plays in front of somebody. Loading every
+## path any cutscene can ask for is the single most valuable check in this file.
+func _test_lore() -> void:
+	var paths := Lore.every_texture_path()
+	_check(paths.size() > 20, "lore should name plenty of sprites, found %d" % paths.size())
+	for path in paths:
+		_check(ResourceLoader.exists(path), "lore names a texture that is not on disk: %s" % path)
+		if ResourceLoader.exists(path):
+			_check(load(path) != null, "lore names a texture that will not load: %s" % path)
+
+	for entry in Game.MINIGAMES:
+		var id: StringName = entry["id"]
+		_check(String(entry.get("gift", "")) != "", "%s has no gift for the sun" % id)
+		var lists: Array[Array] = [Lore.before(id), Lore.after(id, true),
+				Lore.after(id, false)]
+		for shots in lists:
+			_check(shots.size() >= 2, "%s has a cutscene with fewer than 2 shots" % id)
+			var seconds := 0.0
+			for shot: Dictionary in shots:
+				seconds += float(shot["seconds"])
+				_check(String(shot["caption"]) != "", "%s has a shot with no caption" % id)
+				_check((shot["sky"] as Array).size() == 2,
+						"%s has a shot without a two-colour sky" % id)
+				_check(not (shot["actors"] as Array).is_empty(),
+						"%s has a shot with nothing in it" % id)
+			# Neo asked for roughly five seconds a side. Anything much longer is
+			# a repeat player standing at a cabinet waiting to play.
+			_check(seconds >= 4.0 and seconds <= 6.5,
+					"%s has a cutscene running %.1fs, expected about 5" % [id, seconds])
+
+	# The finale and the results stamp read the same table, so these thresholds
+	# are the ones the rank uses too.
+	_check(Lore.tier_for(1.4) == 0, "1.4x par should be the top tier")
+	_check(Lore.tier_for(1.0) == 1, "1.0x par should be the second tier")
+	_check(Lore.tier_for(0.7) == 2, "0.7x par should be the third tier")
+	_check(Lore.tier_for(0.1) == 3, "0.1x par should be the bottom tier")
+	_check(Lore.tier_name(0) == "RADIANT", "top tier should still be RADIANT")
+
+	# The finale names the hand that was actually dealt.
+	var hand: Array[StringName] = [&"wind_leaf", &"temple_bell", &"cave"]
+	for tier in 4:
+		var finale := Lore.finale(tier, hand)
+		_check(finale.size() >= 4, "finale tier %d is too short" % tier)
+		var joined := ""
+		for shot: Dictionary in finale:
+			joined += String(shot["caption"]) + " "
+		_check(joined.contains("the dawn bell"),
+				"finale tier %d should name the gifts the run brought" % tier)
+	_check(Lore.finale(0, []).size() >= 4, "the finale must survive an empty hand")
+
+
+## Plays one of each kind end to end, and proves the skip rule: a press in the
+## first second is swallowed (it is usually the tail of the press that started
+## the game), a press after it ends the scene.
+func _test_cutscene_player() -> void:
+	var packed: PackedScene = load("res://src/ui/cutscene.tscn")
+	_check(packed != null, "could not load the cutscene scene")
+	if packed == null:
+		return
+
+	var samples: Array[Array] = [
+		Lore.before(&"wind_leaf"),
+		Lore.after(&"temple_bell", true),
+		Lore.finale(0, [&"firefly", &"harpoon", &"crow_watch"]),
+	]
+	for shots in samples:
+		var scene: Cutscene = packed.instantiate()
+		add_child(scene)
+		var over := [false]
+		scene.done.connect(func() -> void: over[0] = true)
+		scene.play(shots)
+		for i in 900:
+			if over[0]:
+				break
+			await _frames(1)
+		_check(over[0], "a cutscene never finished on its own")
+
+	# Skipping. The finale is the longest thing in the game, so if a skip works
+	# anywhere it works here.
+	var skippable: Cutscene = packed.instantiate()
+	add_child(skippable)
+	var done := [false]
+	skippable.done.connect(func() -> void: done[0] = true)
+	skippable.play(Lore.finale(3, [&"cave"]))
+	await _frames(20)                       # ~0.3s: still inside the dead zone
+	_send(&"act", true)
+	await _frames(2)
+	_send(&"act", false)
+	await _frames(20)
+	_check(not done[0], "a press in the first second should not skip a cutscene")
+
+	await _frames(70)                       # now past SKIP_AFTER
+	_send(&"act", true)
+	await _frames(2)
+	_send(&"act", false)
+	for i in 90:
+		if done[0]:
+			break
+		await _frames(1)
+	_check(done[0], "a press after the first second should skip a cutscene")
 
 
 func _test_shell_scenes() -> void:

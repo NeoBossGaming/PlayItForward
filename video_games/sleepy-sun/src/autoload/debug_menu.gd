@@ -8,13 +8,22 @@ extends CanvasLayer
 
 const SLOW_SCALE := 0.35
 
-enum Row { GAME, FORCE_HAND, RESTART, RESULTS, SLOWMO, CLEAR_SCORES, CLOSE }
+enum Row { GAME, CUTSCENE, FORCE_HAND, RESTART, RESULTS, SLOWMO, CLEAR_SCORES, CLOSE }
+
+## What the cutscene viewer steps through, in order: the four beats of one
+## game's lore, then the three endings. Reviewing the story must not cost three
+## full minigames, or it does not get reviewed.
+const CUTSCENE_VIEWS: Array[String] = ["before", "after (met par)", "after (soft)",
+		"finale RADIANT", "finale BRIGHT", "finale GENTLE"]
 
 var _rows: Array[Dictionary] = []
 var _index: int = 0
 var _open: bool = false
 var _forced_hand: Array[StringName] = []
 var _hand_cursor: int = 0
+var _cutscene_game: int = 0
+var _cutscene_view: int = 0
+var _viewing: bool = false
 
 var _panel: ColorRect
 var _title: Label
@@ -52,7 +61,7 @@ func _build_ui() -> void:
 	_panel.add_child(_list)
 
 	_hint = _label(&"Small", Color(0.7, 0.68, 0.82))
-	_hint.text = "up/down  move      SPACE  choose      F3  close"
+	_hint.text = "up/down  move    left/right  cycle    SPACE  choose    F3  close"
 	_hint.position = Vector2(16, 250)
 	_panel.add_child(_hint)
 
@@ -69,6 +78,7 @@ func _build_rows() -> void:
 	for entry in Game.MINIGAMES:
 		_rows.append({"kind": Row.GAME, "id": entry["id"],
 				"text": "play  %s" % entry["title"]})
+	_rows.append({"kind": Row.CUTSCENE, "text": ""})
 	_rows.append({"kind": Row.FORCE_HAND, "text": ""})
 	_rows.append({"kind": Row.RESTART, "text": "restart this minigame"})
 	_rows.append({"kind": Row.RESULTS, "text": "skip to results"})
@@ -79,6 +89,10 @@ func _build_rows() -> void:
 
 func _input(event: InputEvent) -> void:
 	if not OS.is_debug_build():
+		return
+	# While a cutscene is playing over the menu the menu is deaf: otherwise the
+	# button used to skip the cutscene would immediately replay it.
+	if _viewing:
 		return
 	if event.is_action_pressed(&"debug_menu"):
 		_toggle()
@@ -92,6 +106,16 @@ func _input(event: InputEvent) -> void:
 		_refresh()
 	elif event.is_action_pressed(&"move_up"):
 		_index = (_index - 1 + _rows.size()) % _rows.size()
+		_refresh()
+	elif _rows[_index]["kind"] == Row.CUTSCENE and (
+			event.is_action_pressed(&"move_left")
+			or event.is_action_pressed(&"move_right")):
+		# Left picks the game, right picks which of its beats to watch, so
+		# stepping through all 51 of them never leaves this row.
+		if event.is_action_pressed(&"move_left"):
+			_cutscene_game = (_cutscene_game + 1) % Game.MINIGAMES.size()
+		else:
+			_cutscene_view = (_cutscene_view + 1) % CUTSCENE_VIEWS.size()
 		_refresh()
 	elif event.is_action_pressed(&"act") or event.is_action_pressed(&"start"):
 		_activate()
@@ -123,6 +147,10 @@ func _refresh() -> void:
 						else "(off -- choose to add a card)")
 			Row.SLOWMO:
 				text = "slow motion:  %s" % ("ON" if Engine.time_scale < 1.0 else "off")
+			Row.CUTSCENE:
+				text = "watch lore:  %s  /  %s" % [
+						Game.MINIGAMES[_cutscene_game]["title"],
+						CUTSCENE_VIEWS[_cutscene_view]]
 		var label := _label(&"Body", Color(1, 1, 1) if i == _index else Color(0.62, 0.6, 0.74))
 		label.text = ("> " if i == _index else "  ") + text
 		_list.add_child(label)
@@ -140,6 +168,8 @@ func _activate() -> void:
 	match row["kind"]:
 		Row.GAME:
 			_play_one(row["id"])
+		Row.CUTSCENE:
+			_watch_cutscene()
 		Row.FORCE_HAND:
 			_cycle_forced_hand()
 		Row.RESTART:
@@ -167,6 +197,36 @@ func _play_one(id: StringName) -> void:
 		Game.playlist = [id]
 		Game.playlist_index = 0
 		Router.play_minigame(id))
+
+
+## Plays the selected beat straight over whatever is on screen, without
+## unpausing the game underneath it. The whole point is to be able to look at
+## all fifty-one of them in a couple of minutes.
+func _watch_cutscene() -> void:
+	var id: StringName = Game.MINIGAMES[_cutscene_game]["id"]
+	var shots: Array = []
+	match _cutscene_view:
+		0: shots = Lore.before(id)
+		1: shots = Lore.after(id, true)
+		2: shots = Lore.after(id, false)
+		_:
+			var hand: Array[StringName] = []
+			for entry in Game.MINIGAMES.slice(0, Game.PLAYLIST_SIZE):
+				hand.append(entry["id"])
+			if not Game.playlist.is_empty():
+				hand = Game.playlist.duplicate()
+			shots = Lore.finale(_cutscene_view - 3, hand)
+	if shots.is_empty():
+		return
+	# Router owns the cutscene layer, which sits below this menu -- so the menu
+	# hides itself and lets it play, with the tree still paused underneath.
+	_viewing = true
+	visible = false
+	await Router.play_cutscene(shots)
+	_viewing = false
+	visible = _open
+	if _open:
+		_refresh()
 
 
 ## Adds cards one at a time up to a full hand, then clears back to off.

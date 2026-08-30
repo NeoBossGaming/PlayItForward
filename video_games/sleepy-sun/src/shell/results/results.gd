@@ -8,14 +8,6 @@ extends Node2D
 const ROW_DELAY := 0.55
 const RETURN_SECONDS := 26.0
 
-## Fractions of the summed par score. Anything under `Gentle` still ranks.
-const RANKS: Array[Array] = [
-	[1.15, "RADIANT", Color(1, 0.87, 0.45)],
-	[0.90, "BRIGHT", Color(0.95, 0.78, 0.42)],
-	[0.65, "WARM", Color(0.78, 0.82, 0.6)],
-	[0.00, "GENTLE", Color(0.7, 0.74, 0.85)],
-]
-
 @onready var _rows: VBoxContainer = $UI/Panel/Rows
 @onready var _total: Label = $UI/Panel/Total
 @onready var _rank: Label = $UI/Rank
@@ -67,12 +59,11 @@ func _play_summary() -> void:
 	_total.text = "TOTAL   %d" % total
 	Audio.sfx(&"complete")
 
-	var ratio := float(total) / maxf(float(par), 1.0)
-	for rank in RANKS:
-		if ratio >= float(rank[0]):
-			_rank.text = String(rank[1])
-			_rank.modulate = rank[2]
-			break
+	# The rank and the finale cutscene the player just watched come from the
+	# same table in Lore, so a beaming sun can never be followed by a WARM stamp.
+	var tier := Lore.tier_for(float(total) / maxf(float(par), 1.0))
+	_rank.text = Lore.tier_name(tier)
+	_rank.modulate = Lore.tier_color(tier)
 
 	# The rank slams in rather than appearing. It is the one number the player
 	# came for, and it should arrive like a stamp.
@@ -94,6 +85,15 @@ func _flavour_text(place: int) -> String:
 	var lines := PackedStringArray()
 	if place > 0:
 		lines.append("NEW BEST  -  #%d on this cabinet" % place)
+	# What the run actually carried to the sun, in its own words. The gifts are
+	# the through-line of the cutscenes, so the summary ends on them too.
+	var gifts := PackedStringArray()
+	for id: StringName in Game.playlist:
+		var gift := String(Game.definition(id).get("gift", ""))
+		if gift != "":
+			gifts.append(gift)
+	if not gifts.is_empty():
+		lines.append("You brought it " + " + ".join(gifts) + ".")
 	var plastic := Game.plastic_removed()
 	if plastic > 0:
 		lines.append("%d bottle%s pulled out of the river"
