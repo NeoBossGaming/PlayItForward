@@ -10,8 +10,12 @@ godot --path . --editor     # edit
 tools/run_tests.sh          # headless test suite
 ```
 
-**Controls** — stick or arrows/WASD to move, `Space` to act, `Enter`/`1` to start,
-`5` to insert a credit. One stick and one button run the whole adventure.
+**Controls** — stick or arrows/WASD to move, `Space` to act (and to sprint, where
+there is a stamina bar), `Enter`/`1` to start, `5` to insert a credit. One stick
+and one button run the whole adventure.
+
+**`F3` opens the debug menu** — jump into any game, force the next hand, slow
+motion, clear scores. It only exists in debug builds, never on the cabinet.
 
 **The adventure** — one credit deals you **three games from a pool of eight**,
 and you cannot lose it. Press start, the cards spin, and you are playing.
@@ -19,12 +23,12 @@ and you cannot lose it. Press start, the cards spin, and you are playing.
 | | |
 |---|---|
 | **Riverleap** | Hop between drifting leaves. The ones that shake are about to sink. |
-| **Hush Meadow** | Gather sunpetals before dusk. Closer to a bird pays more. |
+| **Hush Meadow** | Forage before dusk, then get into cover. Closer to a bird pays more. |
 | **Echo Hollow** | Watch the stones light up, then walk the same path back. |
 | **Riverstrike** | Fire harpoons straight up. Lead the fish; bottles stop the bolt. |
 | **Acorn Storm** | Dodge the falling acorns, catch the sunfruit between them. |
 | **Firefly Lantern** | Your light is dying. The darker it gets, the more they pay. |
-| **Temple Bell** | Strike on the beat. It only gets faster. |
+| **Temple Bell** | Strike on the beat, then do it while running for pickups. |
 | **Crow Watch** | Crows are diving on the rice. Scare them off before they land. |
 
 **Documentation**

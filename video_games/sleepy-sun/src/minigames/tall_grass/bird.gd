@@ -12,11 +12,15 @@ extends Node2D
 
 signal spotted_player
 
-const VISION_RANGE := 104.0
+const VISION_RANGE := 78.0
 const VISION_HALF_ANGLE := 0.58    ## radians, ~33 degrees
-const ALERT_RISE := 1.5            ## full suspicion in about two thirds of a second
+## Full suspicion in ~0.31s. Being seen is a mistake, not a negotiation.
+const ALERT_RISE := 3.2
 const ALERT_FALL := 0.9
 const INVESTIGATE_SECONDS := 2.6
+## How close counts as arrived. Below this the bird holds position and holds
+## facing -- see _move().
+const ARRIVE_RADIUS := 6.0
 
 const COLOR_CALM := Color(1, 1, 1, 0.13)
 const COLOR_SUSPICIOUS := Color(1, 0.78, 0.35, 0.22)
@@ -65,8 +69,15 @@ func _move(delta: float) -> void:
 	if _investigating > 0.0:
 		_investigating -= delta
 		goal = _investigate_point
-		if global_position.distance_to(goal) < 8.0:
+		# Arrived: hover here and keep looking the way we came. Previously this
+		# only shortened the timer and then fell through to the movement code
+		# below, where direction_to() on a near-zero distance returns a unit
+		# vector built from floating-point residue -- so facing, and the vision
+		# cone with it, flipped every single frame. That was the twitch.
+		if global_position.distance_to(goal) <= ARRIVE_RADIUS:
 			_investigating = minf(_investigating, 0.6)
+			_apply_facing()
+			return
 	elif waypoints.size() < 2:
 		return
 	else:
@@ -74,15 +85,22 @@ func _move(delta: float) -> void:
 			_pause -= delta
 			return
 		goal = waypoints[_index]
-		if global_position.distance_to(goal) < 4.0:
+		if global_position.distance_to(goal) <= ARRIVE_RADIUS:
 			_index = (_index + 1) % waypoints.size()
 			_pause = 0.5
 			return
 
-	var step := global_position.direction_to(goal)
-	global_position += step * speed * delta
-	if step.length_squared() > 0.01:
-		facing = step.normalized()
+	# move_toward rather than a raw step, so a fast bird cannot overshoot the
+	# goal and spend the next frame turning around to come back.
+	var previous := global_position
+	global_position = global_position.move_toward(goal, speed * delta)
+	var travelled := global_position - previous
+	if travelled.length_squared() > 0.0001:
+		facing = travelled.normalized()
+	_apply_facing()
+
+
+func _apply_facing() -> void:
 	# The sprite is drawn nose-up, so rotate from -Y.
 	_sprite.rotation = facing.angle() + PI * 0.5
 	_cone.rotation = facing.angle() + PI * 0.5

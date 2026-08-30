@@ -10,7 +10,7 @@ extends Node2D
 signal landed
 
 const SPIN_FACE_SECONDS := 0.055
-const LAND_KICK := 14.0
+const LAND_KICK := 11.0
 
 @onready var _frame: Sprite2D = $Frame
 @onready var _icon: Sprite2D = $Icon

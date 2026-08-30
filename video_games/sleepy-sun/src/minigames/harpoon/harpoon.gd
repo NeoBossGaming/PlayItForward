@@ -16,15 +16,15 @@ extends MiniGame
 
 const ROUND_SECONDS := 60.0
 
-const BANK_Y := 318.0
-const BANK_MIN_X := 40.0
-const BANK_MAX_X := 600.0
+const BANK_Y := 239.0
+const BANK_MIN_X := 30.0
+const BANK_MAX_X := 450.0
 
-const WATER_TOP := 40.0
-const LANES: Array[float] = [72.0, 116.0, 160.0, 204.0, 248.0]
+const WATER_TOP := 30.0
+const LANES: Array[float] = [54.0, 87.0, 120.0, 153.0, 186.0]
 
-const BOLT_SPEED := 620.0
-const BOLT_RADIUS := 11.0
+const BOLT_SPEED := 465.0
+const BOLT_RADIUS := 9.0
 const RELOAD_SECONDS := 0.45
 
 const SPAWN_INTERVAL := 1.25
@@ -122,14 +122,14 @@ func _fire() -> void:
 
 	var bolt := Sprite2D.new()
 	bolt.texture = _bolt_texture
-	bolt.position = Vector2(_player.position.x, BANK_Y - 26.0)
+	bolt.position = Vector2(_player.position.x, BANK_Y - 20.0)
 	bolt.z_index = 6
 	bolt.set_meta(&"hits", [])
 	_bolts_root.add_child(bolt)
 
 	var kick := create_tween()
-	kick.tween_property(_launcher, "position:y", -36.0, 0.05)
-	kick.tween_property(_launcher, "position:y", -30.0, 0.14)
+	kick.tween_property(_launcher, "position:y", -27.0, 0.05)
+	kick.tween_property(_launcher, "position:y", -22.0, 0.14)
 
 
 func _tick_bolts(delta: float) -> void:
@@ -139,7 +139,7 @@ func _tick_bolts(delta: float) -> void:
 			continue
 		bolt.position.y -= BOLT_SPEED * delta
 		_check_bolt(bolt)
-		if bolt.position.y < WATER_TOP - 24.0:
+		if bolt.position.y < WATER_TOP - 18.0:
 			_resolve(bolt)
 
 
@@ -149,7 +149,7 @@ func _check_bolt(bolt: Sprite2D) -> void:
 		var swimmer := child as Swimmer
 		if swimmer == null or swimmer.hooked or swimmer in hits:
 			continue
-		if swimmer.position.distance_to(bolt.position) > BOLT_RADIUS + 12.0:
+		if swimmer.position.distance_to(bolt.position) > BOLT_RADIUS + 9.0:
 			continue
 
 		swimmer.hooked = true
@@ -208,17 +208,17 @@ func _tick_spawns(delta: float) -> void:
 	var roll := randf()
 	if roll < PLASTIC_CHANCE:
 		swimmer.kind = Swimmer.Kind.PLASTIC
-		swimmer.speed = randf_range(26.0, 38.0)
+		swimmer.speed = randf_range(20.0, 29.0)
 	elif roll < PLASTIC_CHANCE + RARE_CHANCE:
 		swimmer.kind = Swimmer.Kind.FISH_RARE
-		swimmer.speed = randf_range(72.0, 96.0)
+		swimmer.speed = randf_range(54.0, 72.0)
 	else:
 		swimmer.kind = Swimmer.Kind.FISH_COMMON
-		swimmer.speed = randf_range(38.0, 58.0)
+		swimmer.speed = randf_range(29.0, 44.0)
 
 	swimmer.direction = 1.0 if randf() < 0.5 else -1.0
 	swimmer.position = Vector2(
-		-40.0 if swimmer.direction > 0.0 else 680.0,
+		-30.0 if swimmer.direction > 0.0 else 510.0,
 		LANES[randi() % LANES.size()])
 	swimmer.z_index = 2
 	_swimmers_root.add_child(swimmer)
@@ -229,7 +229,7 @@ func _cull_swimmers() -> void:
 		var swimmer := child as Swimmer
 		if swimmer == null or swimmer.hooked:
 			continue
-		if swimmer.position.x < -80.0 or swimmer.position.x > 720.0:
+		if swimmer.position.x < -60.0 or swimmer.position.x > 540.0:
 			swimmer.queue_free()
 
 

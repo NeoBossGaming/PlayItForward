@@ -15,7 +15,7 @@ extends MiniGame
 ## No fail state: a guttered lantern relights at minimum and costs points.
 
 const ROUND_SECONDS := 60.0
-const FIELD := Rect2(40, 72, 560, 264)
+const FIELD := Rect2(30, 54, 420, 198)
 
 const LIGHT_MAX := 1.0
 const LIGHT_MIN := 0.16
@@ -24,7 +24,7 @@ const LIGHT_PER_FLY := 0.17
 const LIGHT_START := 0.85
 
 ## Lantern scale at full and at empty. Also the radius fireflies are visible in.
-const GLOW_SCALE := Vector2(4.6, 1.5)
+const GLOW_SCALE := Vector2(3.5, 1.2)
 
 const SCORE_FLY := 40
 const SCORE_GUTTER := -120
@@ -127,7 +127,7 @@ func _tick_flies(delta: float) -> void:
 		fly.modulate.a = 0.45 + 0.55 * absf(sin(phase))
 		fly.scale = Vector2.ONE * (1.0 + 0.25 * sin(phase))
 
-		if fly.position.distance_to(_player.position) < 18.0:
+		if fly.position.distance_to(_player.position) < 15.0:
 			_catch(fly)
 
 	while _flies_root.get_child_count() < FLY_TARGET:
@@ -142,7 +142,7 @@ func _spawn_fly() -> void:
 	fly.position = Vector2(
 		randf_range(FIELD.position.x, FIELD.end.x),
 		randf_range(FIELD.position.y, FIELD.end.y))
-	fly.set_meta(&"drift", Vector2(randf_range(-26.0, 26.0), randf_range(-20.0, 20.0)))
+	fly.set_meta(&"drift", Vector2(randf_range(-20.0, 20.0), randf_range(-15.0, 15.0)))
 	fly.set_meta(&"phase", randf() * TAU)
 	fly.z_index = 8
 	_flies_root.add_child(fly)

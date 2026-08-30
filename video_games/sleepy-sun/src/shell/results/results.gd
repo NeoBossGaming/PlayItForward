@@ -40,7 +40,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_bob += delta
-	_sun.position.y = 84.0 + sin(_bob * 1.4) * 4.0
+	_sun.position.y = 63.0 + sin(_bob * 1.4) * 3.0
 	_sun.rotation = sin(_bob * 0.6) * 0.05
 
 	_timeout += delta
@@ -138,8 +138,8 @@ static func _detail_for(result: MiniGameResult) -> String:
 			return "%s, %s" % [_count(stats, "chimes", "chime"),
 					_count(stats, "splashes", "splash", "splashes")]
 		&"tall_grass":
-			return "%s, dusk x%.2f" % [_count(stats, "petals", "petal"),
-					float(stats.get("daylight", 1.0))]
+			return "%s, %s" % [_count(stats, "gathered", "find"),
+					"safe at dusk" if stats.get("safe", false) else "caught out"]
 		&"cave":
 			return "%s, %s" % [_count(stats, "stages", "chamber"),
 					_count(stats, "mistakes", "slip")]
@@ -156,8 +156,9 @@ static func _detail_for(result: MiniGameResult) -> String:
 			return "%s, best x%d" % [_count(stats, "flies", "firefly", "fireflies"),
 					int(stats.get("best_multiplier", 1))]
 		&"temple_bell":
-			return "%s, best chain %d" % [_count(stats, "perfect", "perfect", "perfect"),
-					int(stats.get("chain", 0))]
+			return "%s, chain %d, %s" % [
+					_count(stats, "perfect", "perfect", "perfect"),
+					int(stats.get("chain", 0)), _count(stats, "coins", "coin")]
 		&"crow_watch":
 			return "%s saved, %s scared" % [_count(stats, "crop", "crop"),
 					_count(stats, "scares", "crow")]

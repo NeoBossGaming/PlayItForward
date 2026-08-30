@@ -48,6 +48,13 @@ func submit(score: int, plastic_removed: int = 0) -> int:
 	return 0
 
 
+## Wipes the local table. Used by the tests so a run's assertions do not depend
+## on scores left behind by a previous run, and offered in the debug menu.
+func clear() -> void:
+	_scores.clear()
+	save_scores()
+
+
 func top(count: int = 5) -> Array[Dictionary]:
 	return _scores.slice(0, count)
 

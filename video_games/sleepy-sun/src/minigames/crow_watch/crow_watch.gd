@@ -12,7 +12,7 @@ extends MiniGame
 ## No fail state: crops run out at worst, and the round still pays what you saved.
 
 const ROUND_SECONDS := 60.0
-const FIELD := Rect2(56, 108, 528, 216)
+const FIELD := Rect2(42, 81, 396, 162)
 
 const CROP_COLUMNS := 5
 const CROP_ROWS := 3
@@ -20,7 +20,7 @@ const CROP_HEALTH := 2            ## bites before a tile is stripped bare
 
 const DIVE_SECONDS := Vector2(2.4, 1.5)   ## warning time, eased across the round
 const DIVE_INTERVAL := Vector2(2.0, 0.9)
-const SCARE_RADIUS := 30.0
+const SCARE_RADIUS := 24.0
 const EAT_SECONDS := 1.1
 
 const SCORE_SCARE := 50
@@ -55,7 +55,11 @@ func _ready() -> void:
 
 	_build_field()
 	_player.can_sprint = true
-	_player.speed = 92.0
+	_player.stamina_changed.connect(_hud.set_stamina)
+	# stamina_changed only fires when the meter moves, so the bar would be
+	# invisible until the first sprint without this.
+	_hud.set_stamina(1.0, false)
+	_player.speed = 80.0
 	_player.position = FIELD.get_center()
 	_player.freeze()
 
@@ -92,8 +96,8 @@ func _build_field() -> void:
 			var crop := Sprite2D.new()
 			crop.texture = _crop_textures[0]
 			crop.position = Vector2(
-				FIELD.position.x + 44.0 + column * (FIELD.size.x - 88.0) / (CROP_COLUMNS - 1),
-				FIELD.position.y + 30.0 + row * (FIELD.size.y - 60.0) / (CROP_ROWS - 1))
+				FIELD.position.x + 33.0 + column * (FIELD.size.x - 66.0) / (CROP_COLUMNS - 1),
+				FIELD.position.y + 23.0 + row * (FIELD.size.y - 46.0) / (CROP_ROWS - 1))
 			crop.set_meta(&"health", CROP_HEALTH)
 			crop.z_index = 2
 			_crops_root.add_child(crop)
@@ -121,14 +125,14 @@ func _launch_dive() -> void:
 
 	var crow := Sprite2D.new()
 	crow.texture = _crow_textures[0]
-	crow.position = target.position + Vector2(randf_range(-90.0, 90.0), -150.0)
+	crow.position = target.position + Vector2(randf_range(-68.0, 68.0), -113.0)
 	crow.z_index = 14
-	crow.scale = Vector2(1.7, 1.7)
+	crow.scale = Vector2(1.4, 1.4)
 
 	var shadow := Sprite2D.new()
 	shadow.texture = _shadow_texture
 	shadow.position = target.position
-	shadow.scale = Vector2(0.6, 0.6)
+	shadow.scale = Vector2(0.5, 0.5)
 	shadow.modulate = Color(0.1, 0.08, 0.14, 0.4)
 	shadow.z_index = 3
 
@@ -175,7 +179,7 @@ func _tick_crows(delta: float) -> void:
 			var start: Vector2 = holder.get_meta(&"start")
 			crow.position = start.lerp(target.position, t)
 			crow.texture = _crow_textures[int(life * 9.0) % 2]
-			shadow.scale = Vector2.ONE * lerpf(0.6, 2.6, t)
+			shadow.scale = Vector2.ONE * lerpf(0.5, 2.0, t)
 			shadow.modulate.a = 0.35 + 0.45 * t
 			if t >= 1.0:
 				holder.set_meta(&"landed", true)
@@ -206,8 +210,8 @@ func _scare(holder: Node2D, crow: Sprite2D) -> void:
 	# Flees the way it came, so a scare reads as a win rather than a vanish.
 	# set_meta(key, null) deletes the key in Godot, so flag it instead.
 	holder.set_meta(&"fleeing", true)
-	var away := crow.position + (crow.position - _player.position).normalized() * 120.0
-	away.y -= 120.0
+	var away := crow.position + (crow.position - _player.position).normalized() * 90.0
+	away.y -= 90.0
 	var tween := create_tween()
 	tween.tween_property(crow, "position", away, 0.45).set_trans(Tween.TRANS_QUAD)
 	tween.parallel().tween_property(holder, "modulate:a", 0.0, 0.45)

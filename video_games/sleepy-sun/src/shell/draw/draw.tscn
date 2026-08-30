@@ -10,14 +10,14 @@ colors = PackedColorArray(0.08, 0.08, 0.18, 1, 0.22, 0.16, 0.32, 1, 0.46, 0.26, 
 
 [sub_resource type="GradientTexture2D" id="sky"]
 gradient = SubResource("grad")
-width = 640
-height = 360
+width = 480
+height = 270
 fill_to = Vector2(0, 1)
 
 [sub_resource type="GradientTexture2D" id="table"]
 gradient = SubResource("grad")
-width = 640
-height = 120
+width = 480
+height = 90
 fill_to = Vector2(0, 1)
 
 [node name="Draw" type="Node2D"]
@@ -31,17 +31,17 @@ texture = SubResource("sky")
 
 [node name="Table" type="Sprite2D" parent="World"]
 modulate = Color(1, 1, 1, 0.35)
-position = Vector2(320, 300)
+position = Vector2(240, 225)
 texture = SubResource("table")
 
 [node name="Glow" type="Sprite2D" parent="World"]
 modulate = Color(1, 1, 1, 0.28)
-position = Vector2(320, 30)
+position = Vector2(240, 22)
 scale = Vector2(1.8, 1.8)
 texture = ExtResource("3")
 
 [node name="Sun" type="Sprite2D" parent="World"]
-position = Vector2(320, 30)
+position = Vector2(240, 22)
 scale = Vector2(0.8, 0.8)
 texture = ExtResource("2")
 
@@ -52,24 +52,24 @@ texture = ExtResource("2")
 [node name="Heading" type="Label" parent="UI"]
 anchors_preset = 10
 anchor_right = 1.0
-offset_top = 58.0
-offset_bottom = 80.0
+offset_top = 44
+offset_bottom = 60
 theme_override_colors/font_color = Color(1, 0.89, 0.58, 1)
 theme_override_colors/font_outline_color = Color(0.07, 0.05, 0.11, 1)
-theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 18
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 14
 text = "YOUR HAND"
 horizontal_alignment = 1
 
 [node name="Sub" type="Label" parent="UI"]
 anchors_preset = 10
 anchor_right = 1.0
-offset_top = 80.0
-offset_bottom = 96.0
+offset_top = 60
+offset_bottom = 72
 theme_override_colors/font_color = Color(0.85, 0.82, 0.94, 1)
 theme_override_colors/font_outline_color = Color(0.07, 0.05, 0.11, 1)
-theme_override_constants/outline_size = 5
-theme_override_font_sizes/font_size = 10
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 8
 text = ""
 horizontal_alignment = 1
 
@@ -77,13 +77,13 @@ horizontal_alignment = 1
 anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
-offset_left = -140.0
-offset_top = 6.0
-offset_right = -8.0
-offset_bottom = 28.0
+offset_left = -105
+offset_top = 4
+offset_right = -6
+offset_bottom = 21
 theme_override_colors/font_color = Color(1, 0.87, 0.55, 1)
 theme_override_colors/font_outline_color = Color(0.07, 0.05, 0.11, 1)
-theme_override_constants/outline_size = 5
-theme_override_font_sizes/font_size = 16
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 13
 text = ""
 horizontal_alignment = 2

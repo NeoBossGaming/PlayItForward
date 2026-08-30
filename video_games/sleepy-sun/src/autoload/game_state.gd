@@ -86,6 +86,9 @@ var run_started_at: float = 0.0
 ## The three minigames dealt for this credit, in the order they will be played.
 var playlist: Array[StringName] = []
 var playlist_index: int = 0
+## Set by the debug menu to pin the next draw. Empty in a normal session, and
+## never set at all in a release build -- the debug menu is inert there.
+var forced_hand: Array[StringName] = []
 
 var _last_input_msec: int = 0
 
@@ -121,6 +124,11 @@ func start_run() -> void:
 ## Deals the session. Sampling without replacement, so a draw can never show the
 ## same game on two cards.
 func draw_playlist(count: int = PLAYLIST_SIZE) -> Array[StringName]:
+	if not forced_hand.is_empty():
+		playlist = forced_hand.duplicate()
+		playlist_index = 0
+		return playlist
+
 	var pool: Array[StringName] = []
 	for entry in MINIGAMES:
 		pool.append(entry["id"])

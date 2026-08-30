@@ -10,8 +10,8 @@ extends MiniGame
 ## points, then the river puts you back on a leaf. See docs/GAME_DESIGN.md #7.1.
 
 const LANES := 5
-const LANE_X: Array[float] = [141.0, 230.0, 320.0, 410.0, 499.0]
-const ROW_Y := 232.0
+const LANE_X: Array[float] = [106.0, 173.0, 240.0, 307.0, 374.0]
+const ROW_Y := 174.0
 
 const CROSSING_SECONDS := 62.0
 const HOP_TIME := 0.26
@@ -19,7 +19,7 @@ const HOP_TIME := 0.26
 ## be crossed by drumming the stick. Small on purpose -- it should read as
 ## weight, not as the controls being sticky.
 const HOP_COOLDOWN := 0.10
-const HOP_HEIGHT := 15.0
+const HOP_HEIGHT := 11.0
 const INPUT_BUFFER := 0.16
 const RECOVERY_TIME := 1.4
 const RESPAWN_DELAY := 2.2
@@ -33,14 +33,14 @@ const BANDS: Array[Array] = [
 ]
 
 const CHIME_INTERVAL := 2.5
-const CHIME_SPEED := 62.0
+const CHIME_SPEED := 47.0
 const SCORE_ARRIVAL := 1500
 const SCORE_CHIME := 80
 const SCORE_SPLASH := -150
 const SCORE_TIME_BONUS := 600
 ## Chimes collected back to back without a splash multiply. Going in the water
 ## therefore costs twice: the points, and the chain you were building.
-const CHIME_CHAIN_STEP := 2
+const CHIME_CHAIN_STEP := 3
 const CHIME_CHAIN_MAX := 5
 
 @onready var _player: TopDownPlayer = $Player
@@ -132,7 +132,7 @@ func _advance_river(delta: float) -> void:
 	_hud.set_meter(_progress, "far bank")
 
 	# The banks scrolling past are what sells the leaves as moving at all.
-	var speed := lerpf(52.0, 78.0, _progress)
+	var speed := lerpf(39.0, 59.0, _progress)
 	for bank: ScrollingTexture in [_bank_left, _bank_right]:
 		bank.scroll = Vector2(0.0, speed)
 
@@ -147,9 +147,9 @@ func _begin_arrival() -> void:
 	_hud.toast("THE FAR BANK!", Color(1, 0.9, 0.5), 1.2)
 
 	_far_bank.visible = true
-	_far_bank.position = Vector2(320, -80)
+	_far_bank.position = Vector2(240, -60)
 	var tween := create_tween()
-	tween.tween_property(_far_bank, "position:y", 96.0, 2.0) \
+	tween.tween_property(_far_bank, "position:y", 72.0, 2.0) \
 			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
 	tween.tween_callback(_land_ashore)
 
@@ -157,7 +157,7 @@ func _begin_arrival() -> void:
 func _land_ashore() -> void:
 	var tween := create_tween()
 	tween.tween_property(_player, "position",
-			Vector2(LANE_X[_lane], 122.0), 0.45).set_trans(Tween.TRANS_SINE)
+			Vector2(LANE_X[_lane], 92.0), 0.45).set_trans(Tween.TRANS_SINE)
 	tween.tween_callback(_score_run)
 
 
@@ -369,9 +369,9 @@ func _tick_chimes(delta: float) -> void:
 			continue
 		chime.position.y += CHIME_SPEED * delta
 		chime.rotation = sin(chime.position.y / 18.0) * 0.3
-		if chime.position.y > 400.0:
+		if chime.position.y > 300.0:
 			chime.queue_free()
-		elif not _in_water and chime.position.distance_to(_player.position) < 22.0:
+		elif not _in_water and chime.position.distance_to(_player.position) < 18.0:
 			_collect(chime)
 
 
@@ -380,7 +380,7 @@ func _spawn_chime() -> void:
 	chime.texture = _chime_texture
 	# The 16px art is nearly invisible against moving water at this resolution.
 	chime.scale = Vector2(2.0, 2.0)
-	chime.position = Vector2(LANE_X[randi() % LANES], -20.0)
+	chime.position = Vector2(LANE_X[randi() % LANES], -16.0)
 	_chimes_root.add_child(chime)
 
 

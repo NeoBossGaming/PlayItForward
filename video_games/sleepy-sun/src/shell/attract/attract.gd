@@ -95,8 +95,8 @@ func _look(direction: float) -> void:
 	_sun_look = direction
 	Audio.sfx(&"chime", randf_range(0.9, 1.15))
 	var tween := create_tween()
-	tween.tween_property(_sun, "position:x", 528.0 + direction * 5.0, 0.12)
-	tween.tween_property(_sun, "position:x", 528.0, 0.5) \
+	tween.tween_property(_sun, "position:x", 396.0 + direction * 4.0, 0.12)
+	tween.tween_property(_sun, "position:x", 396.0, 0.5) \
 			.set_trans(Tween.TRANS_ELASTIC).set_ease(Tween.EASE_OUT)
 
 
@@ -115,15 +115,15 @@ func _animate_sun(delta: float) -> void:
 		_sun_timer = 0.0
 		_sun_frame = (_sun_frame + 1) % _sun_textures.size()
 		_sun.texture = _sun_textures[_sun_frame]
-	_sun.position.y = 78.0 + sin(Time.get_ticks_msec() / 700.0) * 3.0
+	_sun.position.y = 58.0 + sin(Time.get_ticks_msec() / 700.0) * 2.0
 
 
 func _animate_wanderer(delta: float) -> void:
-	_wanderer.position.x += _wander_dir * 22.0 * delta
-	if _wanderer.position.x > 560.0:
+	_wanderer.position.x += _wander_dir * 17.0 * delta
+	if _wanderer.position.x > 420.0:
 		_wander_dir = -1.0
 		_wanderer.play(&"walk_left")
-	elif _wanderer.position.x < 80.0:
+	elif _wanderer.position.x < 60.0:
 		_wander_dir = 1.0
 		_wanderer.play(&"walk_right")
 

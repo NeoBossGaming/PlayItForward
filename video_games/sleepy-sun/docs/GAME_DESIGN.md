@@ -107,15 +107,30 @@ No cutscenes, no text anyone has to read.
 
 | Decision | Value | Why |
 |---|---|---|
-| Base resolution | **640 × 360** | ×3 is exactly 1080p |
+| Base resolution | **480 × 270** | ×4 is exactly 1080p |
 | Stretch | `canvas_items`, `keep`, **integer** | pixel-perfect at any size |
 | Texture filter | **Nearest** (project-wide) | it is pixel art |
 | Renderer | GL Compatibility | what a Pi 4/5 can drive |
-| Player sprite | **1.5×** (≈18 × 43 px) | at 1× the character was 1.9 % of screen width and got lost |
+| Player sprite | **1.5×** (≈18 × 43 px) | ~3.8 % of screen width at 480 wide |
 
-The player scale-up cascaded: Echo Hollow's stone ring tightened from radius 70
-to 56, and Hush Meadow's grass clumps grew from 60×44 to 72×52, so the world
-does not feel emptier around a bigger character.
+**The resolution drop was the second attempt at this.** Round 2 scaled the
+sprite 1.5× and kept 640×360; the character still read as too small. The clue
+was *"I can't cover a lot of the screen"* — a bigger sprite does not help when
+the field is still 640px wide, because crossing it takes exactly as long. So the
+whole viewport went to 480×270 and **every play field shrank with it**: Acorn
+Storm from 544×232 to 408×174, Crow Watch 528×216 to 396×162, Echo Hollow's
+stone ring from radius 56 to 42. Hazard speeds scaled to match so timings feel
+identical, but the player's base speed was deliberately held ~20% above a
+proportional rescale, so the character covers meaningfully more ground per
+second than before.
+
+Fonts scaled by 0.8 rather than 0.75, so text stays comfortably readable at
+cabinet distance.
+
+Whenever the cave ring moves, **re-verify it numerically**: the tightest chord
+between two stones must clear every other stone by more than the trigger reach
+(plate radius + player radius). At radius 42 that is 28.9px against 15px. This
+is the check that caught the original unplayable row layout.
 
 ### Art pipeline
 
@@ -131,6 +146,29 @@ Both scripts' outputs are committed, so opening the project needs no build step
 and no Python. **Swapping in real art is a file replacement** — same path, same
 dimensions, no code change. See `docs/ASSET_REQUESTS.md`.
 
+### Stamina
+
+Sprinting is a resource in the three games built around getting somewhere in
+time (**Hush Meadow**, **Crow Watch**, **Acorn Storm**). It lives on
+`TopDownPlayer`, so all three get it from one place.
+
+| | |
+|---|---|
+| Drain | 0.42/s — about 2.4 s of continuous sprint |
+| Regen | 0.30/s — about 3.3 s back to full |
+| Recover-to | **0.45** before sprinting is allowed again after bottoming out |
+
+Sprint is a **burst, not the default**: base speed stays walkable so a player
+who never sprints can still finish. The recover-to threshold is the part that
+matters and it was wrong first time round at 0.15 — the meter refilled past it
+in half a second and the player simply stutter-sprinted forever, which is the
+exact thing it exists to prevent. It has to be a real rest to be a real
+decision. Exactly one of drain or regen runs per frame, so the meter can never
+do both at once.
+
+The HUD bar is shown only by those three games, and it is pushed once at start
+because `stamina_changed` does not fire while the meter sits full.
+
 ### Input
 
 | Action | Keyboard | Joypad | Used for |
@@ -140,6 +178,7 @@ dimensions, no code change. See `docs/ASSET_REQUESTS.md`.
 | `back` | Esc | B | cancel |
 | `start` | Enter, `1` | Start | begin a run |
 | `insert_credit` | `5` | — | MAME coin key; **the payment hook** |
+| `debug_menu` | `F3` | — | the playtest menu, debug builds only |
 
 One stick and one button run all eight games. That is the control panel worth
 building: fewer holes to drill, fewer parts to fail unattended.
@@ -261,28 +300,42 @@ crossed by drumming the stick, small enough not to feel sticky.
 twice. Chimes always scored; in the first build they had no pickup feedback at
 all, which is why they felt like scenery.
 
-### 7.2 Hush Meadow (`tall_grass`) — *sneak*
-Five sections, five sunpetals, birds with **visible cones of sight**. Detection
-is a fill, not a trip-wire: white → amber (`?`) → red (`!`), about two thirds of
-a second, which is the time you need to duck into cover.
+### 7.2 Hush Meadow (`tall_grass`) — *forage under threat*
 
-Grass hides you completely and is drawn over you. Cover has to be visible from
-across the room, so clumps carry a solid dark base, dense blades and a soft
-shaded footprint — an early build drew thin blades on green ground and the
-hiding places effectively vanished.
+Reworked from an objective run (five sections, one petal each, touch a tree) to
+a **timed forage**. The tree was a stop rather than an ending, and one petal per
+section turned the whole meadow into a corridor.
 
-**Holding the button sprints** at 1.75×, but it rustles and any bird within
-96 px breaks patrol to investigate. Fast, safe, cheap: pick two.
+Birds patrol with **visible cones of sight**. Detection is a fill, not a
+trip-wire, but it is now fast: `ALERT_RISE` 3.2 confirms you in ~0.31 s, down
+from ~0.67 s. Being seen is a mistake, not a negotiation.
 
-Two score mechanics, and they pull against each other, which is the skill:
+Grass hides you completely and is slow (50 px/s vs 70 in the open). Sprinting is
+fast, costs stamina, and rustles loudly enough that a bird within 72 px breaks
+patrol to investigate.
 
-- **Daylight multiplier** — a dusk bar drains over 110 s and the final score is
-  multiplied by the daylight left (×1.0–×2.0). Rewards speed directly.
-- **Nerve bonus** — a petal grabbed near a bird's cone pays ×2 or ×3. Rewards
-  daring. Without it the optimal play is to crawl through grass forever.
+**Three pickups, pulling in three directions:**
 
-Spotted: the bird swoops, you restart the section, −100. **Petals already taken
-stay taken.**
+| | Value | Why it exists |
+|---|---|---|
+| Sunpetal | 110 | sits still; what you get for showing up |
+| Drifting seed | 200 | moves, so taking one means going where the wind is going |
+| Dew | 160 | **invisible until you stand inside a grass patch** |
+
+Dew is the one that does real work. It gives cover a reason to be *entered*
+rather than only hidden in, so the cautious route and the greedy route overlap
+for the first time.
+
+The **nerve bonus** applies to all three: a pickup taken close to a bird's eye
+pays ×2 or ×3. Without it the optimal play is to crawl through grass forever.
+
+**The roost scramble** is the ending. In the last 6 seconds every bird converges
+and a `DUSK — GET TO COVER` warning fires; when the bar empties you must be
+inside a grass patch or lose 40 % of your haul. It turns the end of a round from
+a stop into a decision — one more grab, or get to grass — at exactly the moment
+the player is most tempted to push their luck.
+
+Spotted at any point: the bird swoops, you restart the current section, −100.
 
 ### 7.3 Echo Hollow (`cave`) — *memorise*
 Five chambers of lit stones you walk back with your body, not with buttons.
@@ -354,17 +407,37 @@ Without that the one thing you are meant to see glowing in the dark rendered as
 a grey dot; additive blending did not save it, because the tint applies after
 the blend.
 
-### 7.7 Temple Bell (`temple_bell`) — *timing*
-The only non-movement verb in the pool, which is exactly why it earns its slot:
-after two movement games a card that asks for something else makes the draw feel
-worth spinning.
+### 7.7 Temple Bell (`temple_bell`) — *timing, then multitasking*
 
-Markers close on a ring around the bell; hit `act` as they land.
-Perfect +12, Good +6, chain multiplier to ×3. Tempo ramps 1.1 → 2.4 beats/s over
-55 s. Striking into empty air breaks the chain, so mashing costs.
+The only non-movement verb in the pool, which is why it earns its slot: after two
+movement cards, one that asks for something else makes the draw feel varied.
 
-*Driven by a game clock, not an audio stream* — there is no music track, so
-there is no sync to drift; each beat plays a synthesised tone.
+Two phases, because one verb for a whole minute is thin.
+
+- **Phase 1 (0–25 s)** — rooted at the bell. Marks close on a ring; hit `act` as
+  they land. Tempo 1.1 → 1.9 beats/s. Perfect +12, Good +6, chain to ×3.
+  Striking into empty air breaks the chain, so mashing costs.
+- **Phase 2 (25–55 s)** — the player is freed and the arena starts dropping
+  coins and powerups outside the ring.
+
+**A strike only registers inside the ring.** That single rule is what makes
+phase 2 a multitask rather than a free bonus round: every trip out is beats you
+are not there to hit, and the ring dims when you are out of range so the state
+is never ambiguous.
+
+| Pickup | Effect |
+|---|---|
+| Coin | +150, the reason to leave at all |
+| Chime Burst | clears every mark on screen and scores each as a Good hit |
+| Focus | hit window ×1.9 for 6 s |
+| Double | score ×2 for 6 s |
+
+**Phase 2 eases the tempo off (1.3 → 1.9) rather than piling on**, and pickups
+spawn only 8–45 px beyond the strike range. The first version did the opposite —
+1.9 → 2.6 with pickups scattered across the arena — and the soak bot correctly
+never left the bell once, because a round trip cost five or six marks. The phase
+had collapsed back into phase 1 with extra scenery. The difficulty in phase 2 is
+the split attention, not the speed.
 
 ### 7.8 Crow Watch (`crow_watch`) — *defend*
 Crows dive at a 5 × 3 rice field, telegraphed by a descending crow and a growing
@@ -380,6 +453,18 @@ An early build had dives arriving faster than anyone could cross the field —
 the bot finished with **zero** crop saved, so the headline mechanic paid nothing.
 
 ---
+
+## 7b. Debug mode
+
+`src/autoload/debug_menu.gd`, opened with **F3**, and **completely inert unless
+`OS.is_debug_build()`** — it does not even listen for the key in a release
+build, so it cannot appear on an exported cabinet.
+
+- Jump straight into any of the 8 games. This deals a **one-card hand**, so
+  Router's normal flow still runs and still ends at Results — it is a side door,
+  not a replacement. **The card draw itself is untouched.**
+- Force the next hand (`Game.forced_hand`), restart the current minigame, skip
+  to Results, toggle slow motion (`Engine.time_scale` 0.35), clear local scores.
 
 ## 8. Art & audio direction
 
@@ -405,20 +490,33 @@ tools/run_tests.sh          # or GODOT=/path/to/godot tools/run_tests.sh
 
 | Suite | What it proves |
 |---|---|
-| `smoke_test.gd` | every scene loads and runs; all 8 emit exactly one result; `finish()` cannot fire twice; 40 draws deal 3 distinct, valid cards |
-| `soak_test.gd` | each of the 8 driven to its **own natural ending**, and drowning in Riverleap cannot be escaped by holding a direction |
+| `smoke_test.gd` | every scene loads and runs; all 8 emit exactly one result; `finish()` cannot fire twice; 40 draws deal 3 distinct, valid cards; **the three cards on the table actually display the hand that was dealt** |
+| `soak_test.gd` | each of the 8 driven to its **own natural ending**, plus four regressions: drowning in Riverleap cannot be escaped by holding a direction; a bird's vision cone holds steady while investigating; stamina drains to empty and gates the next sprint; the meadow's roost scramble fires and resolves |
 | `flow_test.gd` | the real loop through real scene changes: attract → draw → 3 dealt games → results → attract |
 
 The soak suite is the one that matters. A minigame that cannot be completed
 still looks fine in the editor and still passes a short smoke run. It has now
 caught: the unplayable cave row layout, a `set_meta(key, null)` crash in Crow
 Watch (Godot *deletes* the key), Crow Watch saving zero crop, Acorn Storm's
-unreachable fruit, and the Temple Bell scoring blowout.
+unreachable fruit, the Temple Bell scoring blowout, and — most usefully — the
+fact that the bot **never once left the bell** in Temple Bell's first phase 2,
+which is how the round-trip economics turned out to be broken.
+
+A note on test isolation: the high-score table lives in `user://` and survives
+between runs, so any assertion about ranking has to `Save.clear()` first or it
+depends on whatever a previous run left behind.
 
 **A visual pass is not optional.** Render every screen under `xvfb-run` and look
 at it. Assertions caught none of these: the draw heading printing over the
 middle card, Temple Bell's target ring rendering invisible because `_process`
-overwrote the scene's scale, and the fireflies above.
+overwrote the scene's scale, the fireflies above, the stamina bar never
+appearing because its signal does not fire while the meter sits full, and Temple
+Bell's phase 2 opening with the player 4px outside the strike range.
+
+One trap when capturing: under `xvfb-run` the frame rate is not pinned, so
+targeting a moment by frame count is unreliable — too few frames and the reels
+are still spinning, too many and the table hands off to Router and frees the
+capture harness. Poll for the state you want instead.
 
 Two notes for reading test output:
 
@@ -474,11 +572,18 @@ biggest texture 192×160, but it has not run on real hardware. Measure first.
 
 ## 12. Open questions
 
-1. **Are the pars right?** They are set from a scripted bot, which is superhuman
-   at Temple Bell and Echo Hollow and underplays Riverleap's chimes and Firefly's
-   greed loop. A human pass will move them.
+1. **Are the pars right?** They are set at ~60 % of a scripted bot, which is
+   superhuman at Temple Bell and Echo Hollow and underplays Riverleap's chimes,
+   Firefly's greed loop and Hush Meadow's stealth entirely. A human pass will
+   move them.
 2. **Cabinet orientation.** Built for landscape 16:9.
 3. **Is three cards the right hand?** `Game.PLAYLIST_SIZE` is one constant.
    Four cards is ~5 minutes and a fuller session; two is higher throughput.
 4. **Price per credit**, which decides whether three games is generous.
 5. **Language.** English throughout; very little text, all in one place per screen.
+6. **Is stamina tuned right?** 2.4 s of sprint and a 1.5 s enforced rest is a
+   guess. It is three `@export`s on `TopDownPlayer`, so it can be tried live in
+   the inspector.
+7. **Does Hush Meadow need a wider meadow?** It is five sections at 420 px, but
+   the round is now timed rather than traversal-based, so the far end may never
+   be reached. Worth watching whether the last two sections see any play.

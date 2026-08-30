@@ -42,6 +42,7 @@ func _check(condition: bool, message: String) -> void:
 func _run() -> void:
 	await _test_autoloads()
 	await _test_shell_scenes()
+	await _test_card_deal()
 	for entry in Game.MINIGAMES:
 		await _test_minigame(entry)
 	await _test_full_run()
@@ -66,6 +67,14 @@ func _test_autoloads() -> void:
 			_check(not Game.definition(id).is_empty(), "draw dealt unknown id %s" % id)
 			seen.append(id)
 
+	# The debug menu must never be showing on its own. On the cabinet this is an
+	# exported release build where it does not even listen for the key, but a
+	# visible-by-default overlay would be a bad surprise either way.
+	var debug_menu := get_node_or_null(^"/root/DebugMenu")
+	_check(debug_menu != null, "DebugMenu autoload missing")
+	if debug_menu != null:
+		_check(not debug_menu.visible, "the debug menu should start hidden")
+
 	Audio.sfx(&"hop")
 	Audio.plate_note(2)
 	_check(true, "audio synthesis did not crash")
@@ -73,6 +82,40 @@ func _test_autoloads() -> void:
 	# Scoring must never hand the results screen a negative number.
 	var result := MiniGameResult.new(&"x", -500, 1.0, {})
 	_check(result.score == 0, "MiniGameResult should clamp negative scores to 0")
+
+
+## The card table is the front door of the cabinet, so it is worth proving that
+## what it shows is what was dealt -- not just that the deal itself is legal.
+func _test_card_deal() -> void:
+	Game.start_run()
+	Router.set("_draw_deals", true)
+	var draw := (load("res://src/shell/draw/draw.tscn") as PackedScene).instantiate()
+	add_child(draw)
+
+	# Poll for the reels to stop rather than waiting a fixed number of frames.
+	# The table hands off to Router about 1.5s after the last card lands, and
+	# that scene change would free this test out from under itself.
+	var cards: Array = []
+	for i in 170:
+		await _frames(1)
+		cards = draw.get_node("Cards").get_children()
+		var dealt := cards.size() == Game.PLAYLIST_SIZE
+		for card in cards:
+			if card.id == &"":
+				dealt = false
+		if dealt:
+			break
+	_check(cards.size() == Game.PLAYLIST_SIZE,
+			"the table should lay out %d cards" % Game.PLAYLIST_SIZE)
+	var shown: Array[StringName] = []
+	for i in mini(cards.size(), Game.playlist.size()):
+		var id: StringName = cards[i].id
+		_check(id == Game.playlist[i],
+				"card %d shows %s but the hand says %s" % [i + 1, id, Game.playlist[i]])
+		_check(not (id in shown), "card %d repeats %s" % [i + 1, id])
+		shown.append(id)
+	draw.free()
+	await _frames(2)
 
 
 func _test_shell_scenes() -> void:
@@ -174,8 +217,12 @@ func _test_full_run() -> void:
 	_check(Game.score_for(&"cave") == 1600, "a better replay should replace the old score")
 	_check(Game.total_score() == 4500, "total should follow the best of each chore")
 
+	# user:// survives between runs, so without this the assertion depends on
+	# whatever previous runs happened to leave in the table.
+	Save.clear()
+	_check(Save.best() == 0, "clearing should empty the high score table")
 	var rank := Save.submit(Game.total_score(), Game.plastic_removed())
-	_check(rank >= 1, "a score should make an empty high score table")
+	_check(rank == 1, "the only score in an empty table should rank first")
 	Game.end_run()
 
 

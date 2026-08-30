@@ -52,8 +52,8 @@ rest before it is all replaced:
 
 | Path | Size | Frames | Notes |
 |---|---|---|---|
-| `assets/game/ui/card_frame.png` | 132×176 | 1 | The card border. Tinted per game in code, so draw it **neutral/white** — colour comes from the game, shape carries the identity. |
-| `assets/game/ui/card_icon_<id>.png` | 40×40 | 8 | One glyph per game (`wind_leaf`, `tall_grass`, `cave`, `harpoon`, `acorn_storm`, `firefly`, `temple_bell`, `crow_watch`). Draw them **white**; the card tints them. These are the front door of the whole cabinet — they need to be tellable apart at a glance from across a room. The current crow and harpoon glyphs are both arrow-ish and are the weakest pair. |
+| `assets/game/ui/card_frame.png` | 100×136 | 1 | The card border. Tinted per game in code, so draw it **neutral/white** — colour comes from the game, shape carries the identity. |
+| `assets/game/ui/card_icon_<id>.png` | 32×32 | 8 | One glyph per game (`wind_leaf`, `tall_grass`, `cave`, `harpoon`, `acorn_storm`, `firefly`, `temple_bell`, `crow_watch`). Draw them **white**; the card tints them. These are the front door of the whole cabinet — they need to be tellable apart at a glance from across a room. The current crow and harpoon glyphs are both arrow-ish and are the weakest pair. |
 | `assets/game/acorn_storm/acorn.png` | 16×16 | 1 | The thing that hurts. Should read as dangerous at a glance. |
 | `assets/game/acorn_storm/sunfruit.png` | 16×16 | 1 | The thing that pays. Should read as *good* — warm, bright, opposite of the acorn. |
 | `assets/game/acorn_storm/impact.png` | 32×32 | 1 | The ring that tightens onto a landing spot. **Reused as the telegraph in several games**, so it is worth getting right once. |
@@ -94,8 +94,10 @@ rest before it is all replaced:
 - **`player_idle_front.png` and `player_idle_down.png` are near-duplicates.**
   Only `idle_down` is used. No action needed unless one was meant to be something
   else.
+- **The game now runs at 480×270**, not 640×360. Anything sized against the
+  screen (the card frame, backdrops) changed with it; 32×32 world sprites did not.
 - **The player is drawn at 1.5× in game** (≈18 × 43 px on screen) because at 1:1
-  the character was lost on a 640×360 field. If you redraw the player, keep the
+  the character was lost. If you redraw the player, keep the
   32 × 32 canvas and the feet on the bottom edge — the scale is applied in
   `src/core/player.tscn`, not baked into the art.
 - **The village houses and the eight `stage_door` frames are already at native

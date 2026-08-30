@@ -421,10 +421,10 @@ def ui_bits():
 def card_art():
     """Frame and icon for the draw table. Tinted per game in code, so these are
     drawn neutral -- shape carries the identity, colour carries the game."""
-    img, d = canvas(132, 176)
-    d.rounded_rectangle([0, 0, 131, 175], radius=7, fill=(255, 255, 255, 255))
-    d.rounded_rectangle([3, 3, 128, 172], radius=5, fill=(28, 26, 40, 235))
-    d.rounded_rectangle([8, 8, 123, 167], radius=4, outline=(255, 255, 255, 90))
+    img, d = canvas(100, 136)
+    d.rounded_rectangle([0, 0, 99, 135], radius=6, fill=(255, 255, 255, 255))
+    d.rounded_rectangle([2, 2, 97, 133], radius=5, fill=(28, 26, 40, 235))
+    d.rounded_rectangle([6, 6, 93, 129], radius=4, outline=(255, 255, 255, 90))
     save(img, "ui/card_frame.png")
 
     # One glyph per game, drawn white so the card tints it. A shared generic
@@ -432,52 +432,52 @@ def card_art():
     # point of a draw you are supposed to read at a glance.
     W = (255, 255, 255, 255)
 
-    img, d = canvas(40, 40)                                    # wind_leaf: a leaf
-    d.ellipse([3, 13, 36, 27], fill=W)
-    d.line([(3, 20), (36, 20)], fill=(28, 26, 40, 255))
+    img, d = canvas(32, 32)                                    # wind_leaf: a leaf
+    d.ellipse([2, 10, 29, 21], fill=W)
+    d.line([(2, 16), (29, 16)], fill=(28, 26, 40, 255))
     save(img, "ui/card_icon_wind_leaf.png")
 
-    img, d = canvas(40, 40)                                    # tall_grass: blades
-    for x, top in ((11, 8), (20, 4), (29, 10)):
-        d.line([(x, 34), (x - 2, top)], fill=W, width=3)
+    img, d = canvas(32, 32)                                    # tall_grass: blades
+    for x, top in ((9, 6), (16, 3), (23, 8)):
+        d.line([(x, 28), (x - 2, top)], fill=W, width=3)
     save(img, "ui/card_icon_tall_grass.png")
 
-    img, d = canvas(40, 40)                                    # cave: ring of stones
+    img, d = canvas(32, 32)                                    # cave: ring of stones
     import math as _m
     for i in range(5):
         a = _m.tau * i / 5 - _m.pi / 2
-        cx, cy = 20 + _m.cos(a) * 13, 20 + _m.sin(a) * 13
-        d.ellipse([cx - 4, cy - 4, cx + 4, cy + 4], fill=W)
+        cx, cy = 16 + _m.cos(a) * 10, 16 + _m.sin(a) * 10
+        d.ellipse([cx - 3, cy - 3, cx + 3, cy + 3], fill=W)
     save(img, "ui/card_icon_cave.png")
 
-    img, d = canvas(40, 40)                                    # harpoon: bolt
-    d.polygon([(20, 3), (28, 16), (20, 12), (12, 16)], fill=W)
-    d.rectangle([18, 12, 21, 36], fill=W)
+    img, d = canvas(32, 32)                                    # harpoon: bolt
+    d.polygon([(16, 2), (23, 13), (16, 10), (9, 13)], fill=W)
+    d.rectangle([14, 10, 17, 29], fill=W)
     save(img, "ui/card_icon_harpoon.png")
 
-    img, d = canvas(40, 40)                                    # acorn_storm: acorn
-    d.ellipse([10, 14, 29, 36], fill=W)
-    d.rectangle([8, 6, 31, 16], fill=W)
-    d.rectangle([18, 1, 21, 7], fill=W)
+    img, d = canvas(32, 32)                                    # acorn_storm: acorn
+    d.ellipse([8, 11, 23, 29], fill=W)
+    d.rectangle([6, 5, 25, 13], fill=W)
+    d.rectangle([14, 1, 17, 6], fill=W)
     save(img, "ui/card_icon_acorn_storm.png")
 
-    img, d = canvas(40, 40)                                    # firefly: glowing mote
-    d.ellipse([14, 14, 25, 25], fill=W)
-    for dx, dy in ((0, -13), (0, 13), (-13, 0), (13, 0),
-                   (-9, -9), (9, -9), (-9, 9), (9, 9)):
-        d.ellipse([20 + dx - 2, 20 + dy - 2, 20 + dx + 2, 20 + dy + 2], fill=W)
+    img, d = canvas(32, 32)                                    # firefly: glowing mote
+    d.ellipse([11, 11, 20, 20], fill=W)
+    for dx, dy in ((0, -11), (0, 11), (-11, 0), (11, 0),
+                   (-8, -8), (8, -8), (-8, 8), (8, 8)):
+        d.ellipse([16 + dx - 2, 16 + dy - 2, 16 + dx + 2, 16 + dy + 2], fill=W)
     save(img, "ui/card_icon_firefly.png")
 
-    img, d = canvas(40, 40)                                    # temple_bell: bell
-    d.rectangle([18, 3, 21, 8], fill=W)
-    d.pieslice([7, 7, 32, 32], 180, 360, fill=W)
-    d.rectangle([7, 19, 32, 30], fill=W)
-    d.rectangle([4, 29, 35, 34], fill=W)
+    img, d = canvas(32, 32)                                    # temple_bell: bell
+    d.rectangle([14, 2, 17, 6], fill=W)
+    d.pieslice([5, 5, 26, 26], 180, 360, fill=W)
+    d.rectangle([5, 15, 26, 24], fill=W)
+    d.rectangle([3, 23, 28, 27], fill=W)
     save(img, "ui/card_icon_temple_bell.png")
 
-    img, d = canvas(40, 40)                                    # crow_watch: bird
-    d.polygon([(20, 10), (36, 24), (20, 19), (4, 24)], fill=W)
-    d.polygon([(18, 18), (22, 18), (20, 32)], fill=W)
+    img, d = canvas(32, 32)                                    # crow_watch: bird
+    d.polygon([(16, 8), (29, 19), (16, 15), (3, 19)], fill=W)
+    d.polygon([(14, 14), (18, 14), (16, 26)], fill=W)
     save(img, "ui/card_icon_crow_watch.png")
 
 

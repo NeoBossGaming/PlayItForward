@@ -5,7 +5,7 @@
 [ext_resource type="Texture2D" path="res://assets/game/village/glow.png" id="3"]
 
 [sub_resource type="CircleShape2D" id="shape"]
-radius = 13.0
+radius = 10
 
 [node name="PressurePlate" type="Area2D"]
 collision_layer = 8

@@ -11,8 +11,8 @@ extends Node2D
 
 enum Mode { DEAL, ADVANCE }
 
-const CARD_X: Array[float] = [148.0, 320.0, 492.0]
-const CARD_Y := 214.0
+const CARD_X: Array[float] = [80.0, 240.0, 400.0]
+const CARD_Y := 162.0
 
 const SPIN_BEFORE_FIRST := 0.85
 const SPIN_BETWEEN := 0.55
@@ -54,7 +54,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_bob += delta
-	_sun.position.y = 30.0 + sin(_bob * 1.5) * 3.0
+	_sun.position.y = 24.0 + sin(_bob * 1.5) * 3.0
 
 	if Game.idle_seconds() > Game.IDLE_TIMEOUT and not _leaving:
 		_leaving = true

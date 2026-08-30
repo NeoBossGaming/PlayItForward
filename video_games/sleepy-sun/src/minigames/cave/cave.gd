@@ -23,19 +23,19 @@ const PLATE_COUNT := 5
 ## read as too spread out around the character. Verified: the tightest chord
 ## between two stones still clears every other stone by 38px against a 20px
 ## trigger reach (13px plate + 7px player).
-const RING_CENTRE := Vector2(320, 250)
-const RING_RADIUS := 56.0
+const RING_CENTRE := Vector2(240, 188)
+const RING_RADIUS := 42.0
 const PLATE_POSITIONS: Array[Vector2] = [
-	Vector2(353, 205), Vector2(373, 267), Vector2(320, 306),
-	Vector2(267, 267), Vector2(287, 205),
+	Vector2(265, 154), Vector2(280, 201), Vector2(240, 230),
+	Vector2(200, 201), Vector2(215, 154),
 ]
 const PLAYER_START := RING_CENTRE
-const ROOM_MIN_X := 100.0
-const ROOM_MAX_X := 540.0
-const ROOM_MIN_Y := 188.0
-const ROOM_MAX_Y := 344.0
-const DOORWAY_HALF_WIDTH := 26.0
-const DOORWAY_MIN_Y := 150.0
+const ROOM_MIN_X := 75.0
+const ROOM_MAX_X := 405.0
+const ROOM_MIN_Y := 141.0
+const ROOM_MAX_Y := 258.0
+const DOORWAY_HALF_WIDTH := 20.0
+const DOORWAY_MIN_Y := 112.0
 
 ## [steps, seconds lit, gap between]
 const STAGES: Array[Array] = [

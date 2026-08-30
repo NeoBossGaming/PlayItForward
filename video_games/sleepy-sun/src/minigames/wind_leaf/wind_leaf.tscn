@@ -16,8 +16,8 @@ colors = PackedColorArray(0.29, 0.42, 0.25, 1, 0.29, 0.42, 0.25, 1, 0.77, 0.66, 
 
 [sub_resource type="GradientTexture2D" id="shore"]
 gradient = SubResource("shore_grad")
-width = 672
-height = 200
+width = 504
+height = 150
 fill_to = Vector2(0, 1)
 
 [node name="WindLeaf" type="Node2D"]
@@ -28,38 +28,38 @@ par_score = 1800
 [node name="World" type="Node2D" parent="."]
 
 [node name="Water" type="Sprite2D" parent="World"]
-position = Vector2(320, 180)
+position = Vector2(240, 135)
 texture = ExtResource("5")
 script = ExtResource("4")
 frames = Array[Texture2D]([ExtResource("5"), ExtResource("6"), ExtResource("7")])
 frames_per_second = 4.0
 scroll = Vector2(0, 14)
-area = Vector2i(672, 424)
+area = Vector2i(504, 318)
 
 [node name="BankLeft" type="Sprite2D" parent="World"]
-position = Vector2(48, 180)
+position = Vector2(36, 135)
 texture = ExtResource("8")
 script = ExtResource("4")
 scroll = Vector2(0, 52)
-area = Vector2i(96, 424)
+area = Vector2i(72, 318)
 
 [node name="BankRight" type="Sprite2D" parent="World"]
-position = Vector2(592, 180)
+position = Vector2(444, 135)
 texture = ExtResource("8")
 script = ExtResource("4")
 scroll = Vector2(0, 52)
-area = Vector2i(96, 424)
+area = Vector2i(72, 318)
 
 [node name="TreeA" type="Sprite2D" parent="World/BankLeft"]
-position = Vector2(-14, -60)
+position = Vector2(-10, -45)
 texture = ExtResource("9")
 
 [node name="TreeB" type="Sprite2D" parent="World/BankRight"]
-position = Vector2(12, 40)
+position = Vector2(9, 30)
 texture = ExtResource("9")
 
 [node name="FarBank" type="Sprite2D" parent="World"]
-position = Vector2(320, -80)
+position = Vector2(240, -60)
 texture = SubResource("shore")
 visible = false
 
@@ -68,6 +68,6 @@ visible = false
 [node name="Leaves" type="Node2D" parent="."]
 
 [node name="Player" parent="." instance=ExtResource("2")]
-position = Vector2(320, 232)
+position = Vector2(240, 174)
 
 [node name="HUD" parent="." instance=ExtResource("3")]

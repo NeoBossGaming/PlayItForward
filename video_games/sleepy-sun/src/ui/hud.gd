@@ -9,6 +9,8 @@ extends CanvasLayer
 @onready var _objective: Label = $Root/Top/Objective
 @onready var _score: Label = $Root/Top/Score
 @onready var _meter: ProgressBar = $Root/Meter
+@onready var _stamina: ProgressBar = $Root/Stamina
+@onready var _stamina_label: Label = $Root/StaminaLabel
 @onready var _meter_label: Label = $Root/MeterLabel
 @onready var _toast: Label = $Root/Toast
 @onready var _prompt: Label = $Root/Prompt
@@ -21,6 +23,8 @@ var _toast_tween: Tween
 func _ready() -> void:
 	_meter.visible = false
 	_meter_label.visible = false
+	_stamina.visible = false
+	_stamina_label.visible = false
 	_toast.modulate.a = 0.0
 	_prompt.modulate.a = 0.0
 
@@ -62,6 +66,23 @@ func set_meter(ratio: float, label: String = "") -> void:
 func hide_meter() -> void:
 	_meter.visible = false
 	_meter_label.visible = false
+
+
+## Shown only by the games with sprint. Flashes red while spent, so the reason
+## the player suddenly stopped accelerating is visible rather than mysterious.
+func set_stamina(value: float, is_exhausted: bool) -> void:
+	_stamina.visible = true
+	_stamina_label.visible = true
+	_stamina.value = clampf(value, 0.0, 1.0) * 100.0
+	var tint := Color(1, 0.42, 0.38) if is_exhausted else Color(0.55, 0.9, 1.0)
+	_stamina.modulate = tint
+	_stamina_label.text = "winded" if is_exhausted else "run"
+	_stamina_label.modulate = tint
+
+
+func hide_stamina() -> void:
+	_stamina.visible = false
+	_stamina_label.visible = false
 
 
 ## Big centred flash. Used for "SPOTTED!", "+150", "STAGE 3" and so on.

@@ -11,59 +11,59 @@ script = ExtResource("1")
 texture = ExtResource("2")
 
 [node name="Icon" type="Sprite2D" parent="."]
-position = Vector2(0, -34)
+position = Vector2(0, -26)
 texture = ExtResource("3")
 
 [node name="Number" type="Label" parent="."]
-offset_left = -56.0
-offset_top = -80.0
-offset_right = -34.0
-offset_bottom = -62.0
+offset_left = -42
+offset_top = -60
+offset_right = -26
+offset_bottom = -46
 theme_override_colors/font_color = Color(0.72, 0.7, 0.84, 1)
 theme_override_colors/font_outline_color = Color(0.07, 0.05, 0.11, 1)
-theme_override_constants/outline_size = 5
-theme_override_font_sizes/font_size = 13
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 10
 text = "1"
 horizontal_alignment = 1
 mouse_filter = 2
 
 [node name="Title" type="Label" parent="."]
-offset_left = -62.0
-offset_top = 2.0
-offset_right = 62.0
-offset_bottom = 20.0
+offset_left = -46
+offset_top = 2
+offset_right = 46
+offset_bottom = 15
 theme_override_colors/font_color = Color(1, 0.96, 0.88, 1)
 theme_override_colors/font_outline_color = Color(0.07, 0.05, 0.11, 1)
-theme_override_constants/outline_size = 5
-theme_override_font_sizes/font_size = 12
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 10
 text = "?"
 horizontal_alignment = 1
 autowrap_mode = 2
 mouse_filter = 2
 
 [node name="Blurb" type="Label" parent="."]
-offset_left = -60.0
-offset_top = 22.0
-offset_right = 60.0
-offset_bottom = 74.0
+offset_left = -45
+offset_top = 16
+offset_right = 45
+offset_bottom = 56
 theme_override_colors/font_color = Color(0.84, 0.83, 0.92, 1)
 theme_override_colors/font_outline_color = Color(0.07, 0.05, 0.11, 1)
-theme_override_constants/outline_size = 4
-theme_override_font_sizes/font_size = 8
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 6
 text = ""
 horizontal_alignment = 1
 autowrap_mode = 2
 mouse_filter = 2
 
 [node name="Score" type="Label" parent="."]
-offset_left = -60.0
-offset_top = 76.0
-offset_right = 60.0
-offset_bottom = 94.0
+offset_left = -45
+offset_top = 57
+offset_right = 45
+offset_bottom = 70
 theme_override_colors/font_color = Color(1, 0.87, 0.5, 1)
 theme_override_colors/font_outline_color = Color(0.07, 0.05, 0.11, 1)
-theme_override_constants/outline_size = 5
-theme_override_font_sizes/font_size = 14
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 11
 text = ""
 horizontal_alignment = 1
 mouse_filter = 2

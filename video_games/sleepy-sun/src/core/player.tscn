@@ -5,7 +5,7 @@
 [ext_resource type="Texture2D" path="res://assets/game/ui/shadow_small.png" id="3"]
 
 [sub_resource type="CircleShape2D" id="shape"]
-radius = 7.0
+radius = 5
 
 [node name="Player" type="CharacterBody2D"]
 collision_layer = 1
@@ -22,9 +22,9 @@ texture = ExtResource("3")
 sprite_frames = ExtResource("2")
 animation = &"idle_down"
 autoplay = "idle_down"
-offset = Vector2(0, -14)
+offset = Vector2(0, -10)
 scale = Vector2(1.5, 1.5)
 
 [node name="Shape" type="CollisionShape2D" parent="."]
-position = Vector2(0, -4)
+position = Vector2(0, -3)
 shape = SubResource("shape")

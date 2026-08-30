@@ -10,31 +10,31 @@
 [node name="CrowWatch" type="Node2D"]
 script = ExtResource("1")
 id = &"crow_watch"
-par_score = 2200
+par_score = 1800
 
 [node name="Ground" type="Sprite2D" parent="."]
 modulate = Color(0.92, 0.88, 0.72, 1)
-position = Vector2(320, 180)
+position = Vector2(240, 135)
 texture = ExtResource("5")
 script = ExtResource("4")
-area = Vector2i(672, 424)
+area = Vector2i(504, 318)
 
 [node name="HedgeTop" type="Sprite2D" parent="."]
-position = Vector2(320, 84)
+position = Vector2(240, 63)
 texture = ExtResource("6")
 script = ExtResource("4")
-area = Vector2i(672, 40)
+area = Vector2i(504, 30)
 
 [node name="HedgeBottom" type="Sprite2D" parent="."]
-position = Vector2(320, 340)
+position = Vector2(240, 255)
 texture = ExtResource("6")
 script = ExtResource("4")
-area = Vector2i(672, 40)
+area = Vector2i(504, 30)
 
 [node name="Crops" type="Node2D" parent="."]
 
 [node name="Player" parent="." instance=ExtResource("2")]
-position = Vector2(320, 216)
+position = Vector2(240, 162)
 z_index = 10
 
 [node name="Crows" type="Node2D" parent="."]
