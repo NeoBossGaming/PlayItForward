@@ -31,6 +31,9 @@ and you cannot lose it. Press start, the cards spin, and you are playing.
 | **Temple Bell** | Strike on the beat, then do it while running for pickups. |
 | **Crow Watch** | Crows are diving on the rice. Scare them off before they land. |
 
+**Fonts** — Press Start 2P and Pixelify Sans, both under the SIL Open Font
+License; the licence files ship beside them in `assets/game/fonts/`.
+
 **Documentation**
 
 - [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md) — the full design and planning

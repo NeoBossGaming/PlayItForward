@@ -66,9 +66,10 @@ func change_scene(path: String) -> void:
 	_busy = false
 	scene_ready.emit(scene)
 
-	# Hand control over only once the screen is actually visible.
+	# Hand control over only once the screen is actually visible. enter() plays
+	# the intro card first and calls begin() when it is done.
 	if scene is MiniGame:
-		(scene as MiniGame).begin()
+		(scene as MiniGame).enter()
 
 	_flush_pending()
 

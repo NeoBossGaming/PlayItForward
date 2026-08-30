@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://src/minigames/crow_watch/crow_watch.gd" id="1"]
 [ext_resource type="PackedScene" path="res://src/core/player.tscn" id="2"]
@@ -6,6 +6,10 @@
 [ext_resource type="Script" path="res://src/core/scrolling_texture.gd" id="4"]
 [ext_resource type="Texture2D" path="res://assets/game/tall_grass/ground_0.png" id="5"]
 [ext_resource type="Texture2D" path="res://assets/game/tall_grass/hedge.png" id="6"]
+[ext_resource type="Script" path="res://src/core/decor.gd" id="d_decor"]
+[ext_resource type="Texture2D" path="res://assets/game/decor/scarecrow.png" id="d_scare"]
+[ext_resource type="Texture2D" path="res://assets/game/decor/fence.png" id="d_fence"]
+[ext_resource type="Texture2D" path="res://assets/game/decor/cloud.png" id="d_cloud"]
 
 [node name="CrowWatch" type="Node2D"]
 script = ExtResource("1")
@@ -30,6 +34,29 @@ position = Vector2(240, 255)
 texture = ExtResource("6")
 script = ExtResource("4")
 area = Vector2i(504, 30)
+
+[node name="Scarecrow" type="Sprite2D" parent="."]
+position = Vector2(30, 128)
+texture = ExtResource("d_scare")
+
+[node name="FenceA" type="Sprite2D" parent="."]
+position = Vector2(16, 250)
+texture = ExtResource("d_fence")
+
+[node name="FenceB" type="Sprite2D" parent="."]
+position = Vector2(464, 250)
+texture = ExtResource("d_fence")
+
+[node name="Clouds" type="Node2D" parent="."]
+z_index = 6
+script = ExtResource("d_decor")
+texture = ExtResource("d_cloud")
+count = 3
+drift = Vector2(11, 3)
+area = Rect2(-40, 60, 560, 210)
+tint = Color(1, 1, 1, 0.55)
+scale_range = Vector2(1.4, 2.4)
+sway = 0.0
 
 [node name="Crops" type="Node2D" parent="."]
 

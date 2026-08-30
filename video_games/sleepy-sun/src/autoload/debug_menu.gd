@@ -41,7 +41,7 @@ func _build_ui() -> void:
 	_panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_panel)
 
-	_title = _label(16, Color(1, 0.85, 0.5))
+	_title = _label(&"Heading", Color(1, 0.85, 0.5))
 	_title.text = "DEBUG  (debug builds only)"
 	_title.position = Vector2(16, 10)
 	_panel.add_child(_title)
@@ -51,18 +51,16 @@ func _build_ui() -> void:
 	_list.add_theme_constant_override(&"separation", 1)
 	_panel.add_child(_list)
 
-	_hint = _label(8, Color(0.7, 0.68, 0.82))
+	_hint = _label(&"Small", Color(0.7, 0.68, 0.82))
 	_hint.text = "up/down  move      SPACE  choose      F3  close"
 	_hint.position = Vector2(16, 250)
 	_panel.add_child(_hint)
 
 
-func _label(size: int, colour: Color) -> Label:
+func _label(variation: StringName, colour: Color) -> Label:
 	var label := Label.new()
-	label.add_theme_font_size_override(&"font_size", size)
+	label.theme_type_variation = variation
 	label.add_theme_color_override(&"font_color", colour)
-	label.add_theme_color_override(&"font_outline_color", Color(0.05, 0.04, 0.09))
-	label.add_theme_constant_override(&"outline_size", 3)
 	return label
 
 
@@ -125,7 +123,7 @@ func _refresh() -> void:
 						else "(off -- choose to add a card)")
 			Row.SLOWMO:
 				text = "slow motion:  %s" % ("ON" if Engine.time_scale < 1.0 else "off")
-		var label := _label(9, Color(1, 1, 1) if i == _index else Color(0.62, 0.6, 0.74))
+		var label := _label(&"Body", Color(1, 1, 1) if i == _index else Color(0.62, 0.6, 0.74))
 		label.text = ("> " if i == _index else "  ") + text
 		_list.add_child(label)
 

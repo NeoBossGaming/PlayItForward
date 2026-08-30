@@ -573,6 +573,216 @@ def rice_tile():
         save(img, f"crow_watch/rice_{state}.png")
 
 
+# ------------------------------------------------------------------ HUD icons
+
+def hud_icons():
+    """A meter needs to say what it is measuring. An icon does that without a
+    word, which is the whole point of this round."""
+    W = (255, 255, 255, 255)
+
+    img, d = canvas(9, 9)                                   # sun (dusk)
+    d.ellipse([2, 2, 6, 6], fill=W)
+    for dx, dy in ((0, -4), (0, 4), (-4, 0), (4, 0)):
+        d.point((4 + dx, 4 + dy), W)
+    save(img, "ui/icon_sun.png")
+
+    img, d = canvas(9, 9)                                   # clock (timed round)
+    d.ellipse([0, 0, 8, 8], outline=W)
+    d.line([(4, 4), (4, 2)], fill=W)
+    d.line([(4, 4), (6, 5)], fill=W)
+    save(img, "ui/icon_clock.png")
+
+    img, d = canvas(9, 9)                                   # wheat (crop)
+    d.line([(4, 8), (4, 1)], fill=W)
+    for y in (2, 4, 6):
+        d.line([(4, y), (2, y - 1)], fill=W)
+        d.line([(4, y), (6, y - 1)], fill=W)
+    save(img, "ui/icon_wheat.png")
+
+    img, d = canvas(9, 9)                                   # lantern
+    d.rectangle([3, 0, 5, 1], fill=W)
+    d.rectangle([2, 2, 6, 7], fill=W)
+    d.rectangle([3, 3, 5, 6], fill=(28, 26, 40, 255))
+    save(img, "ui/icon_lantern.png")
+
+    img, d = canvas(9, 9)                                   # flag (far bank)
+    d.line([(2, 8), (2, 0)], fill=W)
+    d.polygon([(3, 1), (8, 3), (3, 5)], fill=W)
+    save(img, "ui/icon_flag.png")
+
+    img, d = canvas(9, 9)                                   # doorway (chambers)
+    d.rectangle([1, 1, 7, 8], fill=W)
+    d.rectangle([3, 4, 5, 8], fill=(28, 26, 40, 255))
+    save(img, "ui/icon_door.png")
+
+    img, d = canvas(7, 7)                                   # sequence pip
+    d.ellipse([0, 0, 6, 6], fill=W)
+    save(img, "ui/pip.png")
+
+
+def alarm_frame():
+    """Red pulse in from the screen edges. Drawn as a frame that is opaque at the
+    border and clear in the middle, so it never covers what you are looking at."""
+    img, _ = canvas(480, 270)
+    px = img.load()
+    for y in range(270):
+        for x in range(480):
+            edge = min(x / 104.0, (479 - x) / 104.0, y / 62.0, (269 - y) / 62.0)
+            a = max(0.0, 1.0 - edge) ** 1.7
+            px[x, y] = (255, 60, 48, int(a * 235))
+    save(img, "ui/alarm_frame.png")
+
+
+def scrim():
+    """A soft dark band along the bottom. Titles and prompts have to sit over
+    whatever the scene happens to be doing; a scrim buys legibility without
+    putting a hard box around the text."""
+    img, _ = canvas(480, 120)
+    px = img.load()
+    for y in range(120):
+        # Nearly linear: a steep curve leaves the text sitting in the faint part
+        # of the gradient, which is exactly where it needs the help.
+        a = (y / 119.0) ** 0.9
+        for x in range(480):
+            px[x, y] = (10, 7, 20, int(a * 215))
+    save(img, "ui/scrim.png")
+
+
+def vignette():
+    """A soft dark frame on every screen. Costs nothing and stops the pixel art
+    from ending in a hard rectangle against the bezel."""
+    img, _ = canvas(480, 270)
+    px = img.load()
+    for y in range(270):
+        for x in range(480):
+            edge = min(x / 160.0, (479 - x) / 160.0, y / 96.0, (269 - y) / 96.0)
+            a = max(0.0, 1.0 - edge) ** 2.4
+            px[x, y] = (8, 6, 16, int(a * 150))
+    save(img, "ui/vignette.png")
+
+
+# --------------------------------------------------------------------- decor
+#
+# Small pieces that do not affect play. They exist so each scene reads as a
+# place rather than a play area with the mechanics sitting on it.
+
+def decor_motes():
+    img, d = canvas(4, 4)                                   # dust
+    d.ellipse([0, 0, 3, 3], fill=(255, 250, 235, 255))
+    save(img, "decor/dust.png")
+
+    img, d = canvas(8, 8)                                   # sparkle
+    d.line([(4, 0), (4, 7)], fill=(255, 255, 255, 255))
+    d.line([(0, 4), (7, 4)], fill=(255, 255, 255, 255))
+    d.point((4, 4), (255, 255, 255, 255))
+    save(img, "decor/sparkle.png")
+
+    img, d = canvas(3, 3)                                   # star
+    d.point((1, 1), (255, 255, 255, 255))
+    d.point((0, 1), (255, 255, 255, 160))
+    d.point((2, 1), (255, 255, 255, 160))
+    d.point((1, 0), (255, 255, 255, 160))
+    d.point((1, 2), (255, 255, 255, 160))
+    save(img, "decor/star.png")
+
+    img, d = canvas(8, 8)                                   # falling petal
+    d.ellipse([1, 2, 6, 5], fill=(255, 190, 205, 255))
+    d.ellipse([2, 3, 5, 4], fill=(255, 225, 235, 255))
+    save(img, "decor/petal.png")
+
+    img, d = canvas(8, 8)                                   # falling leaf
+    d.polygon([(4, 0), (7, 4), (4, 7), (1, 4)], fill=(196, 132, 58, 255))
+    d.line([(4, 1), (4, 6)], fill=(140, 90, 40, 255))
+    save(img, "decor/leaf.png")
+
+
+def decor_props():
+    rng = random.Random(300)
+
+    img, d = canvas(16, 40)                                 # reed
+    for x, lean in ((5, -2), (8, 1), (11, -1)):
+        d.line([(x, 39), (x + lean, 6)], fill=P["hedge"], width=2)
+        d.ellipse([x + lean - 2, 2, x + lean + 2, 9], fill=(120, 96, 54, 255))
+    save(img, "decor/reed.png")
+
+    img, d = canvas(24, 16)                                 # lily pad
+    d.ellipse([0, 1, 23, 14], fill=P["grass_dark"])
+    d.ellipse([2, 2, 21, 12], fill=P["grass"])
+    d.polygon([(12, 8), (23, 6), (23, 10)], fill=(20, 40, 60, 0))
+    save(img, "decor/lilypad.png")
+
+    img, d = canvas(16, 10)                                 # dragonfly
+    d.line([(3, 5), (12, 5)], fill=(90, 150, 170, 255))
+    d.ellipse([1, 3, 5, 7], fill=(120, 200, 220, 255))
+    for wx in (6, 9):
+        d.ellipse([wx, 0, wx + 5, 4], fill=(200, 235, 245, 150))
+        d.ellipse([wx, 5, wx + 5, 9], fill=(200, 235, 245, 150))
+    save(img, "decor/dragonfly.png")
+
+    img, d = canvas(12, 16)                                 # cave crystal
+    d.polygon([(6, 0), (11, 8), (6, 15), (1, 8)], fill=(140, 190, 230, 220))
+    d.polygon([(6, 2), (9, 8), (6, 12)], fill=(210, 240, 255, 230))
+    save(img, "decor/crystal.png")
+
+    img, d = canvas(16, 8)                                  # floor rubble
+    for _ in range(7):
+        x, y = rng.randrange(1, 14), rng.randrange(2, 7)
+        d.ellipse([x, y, x + rng.randrange(1, 3), y + 1], fill=P["cave_dark"])
+    save(img, "decor/rubble.png")
+
+    img, d = canvas(16, 16)                                 # squirrel silhouette
+    d.ellipse([4, 6, 12, 14], fill=(38, 30, 26, 255))
+    d.ellipse([8, 2, 13, 8], fill=(38, 30, 26, 255))
+    d.polygon([(4, 12), (0, 4), (3, 3), (6, 10)], fill=(38, 30, 26, 255))
+    save(img, "decor/squirrel.png")
+
+    img, d = canvas(24, 24)                                 # moon
+    d.ellipse([0, 0, 23, 23], fill=(238, 240, 220, 255))
+    d.ellipse([6, 5, 11, 10], fill=(216, 220, 200, 255))
+    d.ellipse([13, 13, 18, 18], fill=(216, 220, 200, 255))
+    save(img, "decor/moon.png")
+
+    img, d = canvas(64, 16)                                 # mist band
+    px = img.load()
+    for y in range(16):
+        for x in range(64):
+            a = (1.0 - abs(y - 8) / 8.0) ** 1.5
+            px[x, y] = (210, 225, 235, int(a * 70))
+    save(img, "decor/mist.png")
+
+    img, d = canvas(12, 20)                                 # hanging lantern
+    d.line([(6, 0), (6, 4)], fill=P["wood_dark"])
+    d.rectangle([2, 4, 9, 15], fill=(214, 96, 74, 255))
+    d.rectangle([4, 6, 7, 13], fill=(255, 226, 150, 255))
+    d.rectangle([2, 15, 9, 17], fill=P["wood_dark"])
+    save(img, "decor/lantern_hang.png")
+
+    img, d = canvas(16, 28)                                 # scarecrow
+    d.line([(8, 27), (8, 6)], fill=P["wood_dark"], width=2)
+    d.line([(1, 12), (14, 12)], fill=P["wood_dark"], width=2)
+    d.ellipse([4, 2, 11, 9], fill=(206, 176, 96, 255))
+    d.polygon([(2, 4), (13, 4), (8, 0)], fill=(150, 110, 60, 255))
+    d.rectangle([5, 12, 10, 20], fill=(180, 78, 70, 255))
+    save(img, "decor/scarecrow.png")
+
+    img, d = canvas(32, 16)                                 # fence
+    d.line([(0, 6), (31, 6)], fill=P["wood"], width=2)
+    d.line([(0, 11), (31, 11)], fill=P["wood"], width=2)
+    for x in (4, 16, 28):
+        d.line([(x, 1), (x, 15)], fill=P["wood_dark"], width=2)
+    save(img, "decor/fence.png")
+
+    img, d = canvas(48, 24)                                 # cloud shadow
+    px = img.load()
+    import math as _m
+    for y in range(24):
+        for x in range(48):
+            dx, dy = (x - 24) / 24.0, (y - 12) / 12.0
+            a = max(0.0, 1.0 - _m.sqrt(dx * dx + dy * dy)) ** 1.6
+            px[x, y] = (10, 14, 30, int(a * 70))
+    save(img, "decor/cloud.png")
+
+
 def main() -> None:
     water_tiles(); ripple(); splash(); bank_tiles(); leaf_shadow()
     chime()
@@ -580,7 +790,8 @@ def main() -> None:
     cave_tiles(); pressure_plates(); torch()
     harpoon_bolt(); harpoon_launcher(); aim_guide()
     village_tiles(); signpost(); tree(); sun_mascot(); glow()
-    ui_bits(); card_art()
+    ui_bits(); card_art(); hud_icons(); alarm_frame(); vignette(); scrim()
+    decor_motes(); decor_props()
     acorn(); sunfruit(); impact_marker()
     firefly_mote(); lantern()
     bell(); beat_ring(); beat_marker()

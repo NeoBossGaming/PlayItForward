@@ -63,9 +63,11 @@ func _ready() -> void:
 	_player.freeze()
 	_reload_bar.visible = false
 
-	_hud.set_title("Riverstrike")
 	_hud.reset_score(0)
-	_hud.set_objective("Line up under a fish and fire. Lead it -- the bolt is slow.")
+
+
+func control_hint() -> String:
+	return "STICK  move      BUTTON  fire"
 
 
 func begin() -> void:
@@ -80,7 +82,7 @@ func _process(delta: float) -> void:
 		return
 
 	_time_left = maxf(_time_left - delta, 0.0)
-	_hud.set_meter(_time_left / ROUND_SECONDS, "%ds left" % ceili(_time_left))
+	_hud.set_meter(_time_left / ROUND_SECONDS, &"time")
 	if _time_left <= 0.0:
 		_finish()
 		return
@@ -168,28 +170,33 @@ func _resolve(bolt: Sprite2D) -> void:
 	var fish_hit := 0
 	var gained := 0
 
+	# Each catch pops its own value where it was speared, so a multi-kill reads
+	# as three separate wins landing at once rather than one lump sum.
 	for swimmer: Swimmer in hits:
 		if swimmer.is_plastic():
 			_plastic += 1
 			gained += SCORE_PLASTIC
+			pop(swimmer.position, SCORE_PLASTIC, 1, "BOTTLE")
 			Audio.sfx(&"trash")
 		else:
 			_fish += 1
 			fish_hit += 1
 			gained += swimmer.value()
+			pop(swimmer.position, swimmer.value())
 		swimmer.sink_away()
 
 	if fish_hit >= 2:
 		gained *= fish_hit
 		_best_multikill = maxi(_best_multikill, fish_hit)
-		_hud.toast("%s  +%d" % [MULTIKILL_LABELS.get(fish_hit, "x%d" % fish_hit), gained],
-				Color(1, 0.9, 0.45), 1.0)
+		_hud.toast(MULTIKILL_LABELS.get(fish_hit, "x%d" % fish_hit),
+				Color(1, 0.9, 0.45), 0.9)
+		_hud.set_multiplier(fish_hit)
 		Audio.sfx(&"complete", 1.3)
+		# The one place hit-stop is used. It stays special by being rare.
+		Juice.shake(self, 4.0)
+		Juice.hit_stop(self, 0.06)
 	elif fish_hit == 1:
-		_hud.toast("+%d" % gained, Color(0.75, 1, 0.8), 0.5)
 		Audio.sfx(&"catch")
-	elif not hits.is_empty():
-		_hud.toast("%d  BOTTLE" % gained, Color(0.75, 0.78, 0.85), 0.7)
 
 	_score = maxi(_score + gained, 0)
 	_hud.set_score(_score)

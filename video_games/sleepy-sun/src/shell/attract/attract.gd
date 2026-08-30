@@ -133,7 +133,7 @@ func _build_panels() -> void:
 		"title": "A PLAY IT FORWARD ADVENTURE",
 		"body": "The sun is nodding off before it can set.\n"
 			+ "One credit deals you three games from eight.",
-		"hint": "You cannot lose -- only shine brighter.",
+		"hint": "You cannot lose. Only shine brighter.",
 	})
 	# Three of the eight per cycle, chosen fresh. Showing all eight would take
 	# forty seconds to loop past, which is longer than anyone stands and reads.

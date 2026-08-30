@@ -61,9 +61,11 @@ func _ready() -> void:
 	# invisible until the first sprint without this.
 	_hud.set_stamina(1.0, false)
 	_player.freeze()
-	_hud.set_title("Acorn Storm")
 	_hud.reset_score(0)
-	_hud.set_objective("Catch the sunfruit. Do not stand where the ring grows.")
+
+
+func control_hint() -> String:
+	return "STICK  move      BUTTON  sprint"
 
 
 func begin() -> void:
@@ -78,7 +80,7 @@ func _process(delta: float) -> void:
 		return
 
 	_time_left = maxf(_time_left - delta, 0.0)
-	_hud.set_meter(_time_left / ROUND_SECONDS, "%ds left" % ceili(_time_left))
+	_hud.set_meter(_time_left / ROUND_SECONDS, &"time")
 	if _time_left <= 0.0:
 		_finish()
 		return
@@ -196,12 +198,9 @@ func _catch(at: Vector2) -> void:
 	_score += SCORE_FRUIT * multiplier
 	_hud.set_score(_score)
 	Audio.sfx(&"pickup", 1.0 + 0.08 * multiplier)
-	if multiplier > 1:
-		_hud.toast("+%d   x%d" % [SCORE_FRUIT * multiplier, multiplier],
-				Color(1, 0.9, 0.5), 0.6)
-	else:
-		_hud.toast("+%d" % SCORE_FRUIT, Color(0.85, 1, 0.7), 0.45)
-	_pop(at, Color(1, 0.9, 0.5))
+	_hud.set_multiplier(multiplier)
+	pop(at, SCORE_FRUIT * multiplier, multiplier)
+	_flash(at, Color(1, 0.9, 0.5))
 
 
 func _take_hit() -> void:
@@ -211,15 +210,17 @@ func _take_hit() -> void:
 	_stun = STUN_SECONDS
 	_player.freeze()
 	_hud.set_score(_score)
+	_hud.set_multiplier(1)
 	Audio.sfx(&"deny", 0.8)
-	_hud.toast("BONK!", Color(1, 0.5, 0.4), 0.6)
+	Juice.shake(self, 3.5)
+	pop_on_player(SCORE_HIT, "BONK")
 
 
 func combo_multiplier() -> int:
 	return clampi(1 + _combo / COMBO_PER_LEVEL, 1, COMBO_MAX)
 
 
-func _pop(at: Vector2, colour: Color) -> void:
+func _flash(at: Vector2, colour: Color) -> void:
 	var flash := Sprite2D.new()
 	flash.texture = _impact_texture
 	flash.position = at

@@ -466,6 +466,96 @@ build, so it cannot appear on an exported cabinet.
 - Force the next hand (`Game.forced_hand`), restart the current minigame, skip
   to Results, toggle slow motion (`Engine.time_scale` 0.35), clear local scores.
 
+## 7c. Presentation
+
+### Fonts
+
+Two OFL pixel fonts, in `assets/game/fonts/` **with their `OFL.txt` alongside** —
+this ships on a public machine and the licence travels with the font.
+
+| Font | Use | Constraint |
+|---|---|---|
+| **Press Start 2P** | titles, score, multiplier badge, popups | clean at any size but roughly **twice the width** of a normal face — column widths had to be rebuilt around it |
+| **Pixelify Sans** | body, rules, hints | **falls apart below 11px**; 11 is a hard floor, established by rendering a size ladder and looking at it |
+
+Both imported with **antialiasing, hinting and subpixel positioning off**. Without
+that a pixel font renders blurry and there was no point installing one.
+
+Sizes: Display 20 · Title 12 · Score 16 · Heading 8 · Body 12 · Small 11.
+
+### One theme, not 111 overrides
+
+There were 111 `theme_override_*` lines scattered across seven scenes, which is
+why the text never looked like one game. They are gone. `src/ui/game_theme.tres`
+is the project-wide default (`gui/theme/custom`) and defines Label variations —
+`Display`, `Title`, `Heading`, `Score`, `Body`, `Small`, `ScorePop` — that scenes
+and code both use. Restyling every word in the game is now a one-file edit.
+
+*(A variation cannot be named after a built-in class, which is why the popup one
+is `ScorePop` and not `Popup`.)*
+
+### Feedback happens where the thing happened
+
+`src/ui/score_popup.gd`, spawned through `MiniGame.pop()` / `pop_on_player()`.
+
+- **Gains rise off the object** — the chime, the fish, the stone, the crow. The
+  number and its cause are in the same glance.
+- **Losses pop on the player**, and they *shake* instead of drifting, so a loss
+  can never be mistaken for a win at a distance.
+
+`HUD.toast()` survives for events that belong to no object: `CHIME BURST`,
+`PHASE 2`, `DUSK`, `SAFE IN THE GRASS`.
+
+### The intro card
+
+`MiniGame.enter()` (Router's entry point) plays `src/ui/intro_card.tscn`, then
+calls `begin()`. The card **flies in from the slot it was dealt to** on the draw
+table, opens into a full-screen title card — name, rule, and what the button does
+in *this* game — holds 1.4 s, and leaves. Skippable with any button.
+
+This replaced a permanent instruction line at the top of every minigame. Nobody
+reads a sentence that has been on screen for a minute; they will read one that
+arrives and leaves. The rule text comes from `Game.MINIGAMES.blurb`, so the
+card table and the intro cannot disagree about what a game is.
+
+### Nothing permanent is a sentence
+
+The HUD is now score, bars, and shapes:
+
+- **Score** and a **multiplier badge** that only exists above ×1 — this replaced
+  the `CHAIN x3` / `STREAK x3` lines in four games.
+- **Meter bar with an icon** instead of a text label: sun, clock, wheat, lantern,
+  flag, door.
+- **Pip row** — Echo Hollow's "stone 2 of 5" is five dots that fill as you step.
+- **Alarm frame** — the meadow's dusk warning pulses red in from the screen
+  edges instead of printing a sentence at someone who is panicking.
+- **Vignette** on every screen.
+
+### Decoration kit
+
+Shared, so eight scenes are decorated the same way rather than eight ways:
+
+- `src/core/decor.gd` — a drifting particle field (dust, petals, leaves, stars,
+  sparkles, fireflies) that wraps rather than respawns, so it never thins out.
+  Plain sprites, not `GPUParticles2D`: cheaper on a Pi at this scale and tunable
+  from one script.
+- `src/core/juice.gd` — `shake()`, `flash()`, `hit_stop()`. Hit-stop is used in
+  exactly one place, the harpoon multi-kill, because it stops being special the
+  moment it is common.
+- `ui/scrim.png` — a soft dark band so text can sit over a busy scene.
+
+Per scene: stars and fireflies on attract; dust on the card table; sparkles and a
+slamming rank stamp on results; reeds, lily pads, dragonflies and water shimmer
+in the two river games; torchlight flicker, crystals, rubble and dust in the
+cave; squirrel silhouettes and falling leaves in Acorn Storm; moon and mist in
+Firefly; hanging lanterns and falling petals in Temple Bell; a scarecrow, fences
+and drifting cloud shadows in Crow Watch.
+
+**Hush Meadow's daylight bar is also its lighting.** A `CanvasModulate` shifts
+the whole meadow toward blue as dusk falls and fireflies fade in past the
+halfway mark — the clock you feel rather than read, and the cue that the roost
+scramble is coming.
+
 ## 8. Art & audio direction
 
 Dusk palette throughout, so eight environments read as one evening. Everything
@@ -478,7 +568,8 @@ Legibility rules that came out of the build:
   and `!` as well as changing hue.
 - **Telegraph before consequence, always** — and use the *same* telegraph. The
   growing ring means "this lands here" in three different games.
-- **The HUD states the rule once**, in plain words, always on screen.
+- **The HUD states no rules at all.** They live on the intro card, which arrives
+  and leaves. Anything permanent on screen is a bar, a badge or a row of pips.
 
 ---
 

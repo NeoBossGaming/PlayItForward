@@ -85,12 +85,47 @@ rest before it is all replaced:
 
 ---
 
+## Priority 2c — decoration
+
+None of these affect play. They exist so each scene reads as a place rather than
+a play area with mechanics sitting on it. All in `assets/game/decor/`.
+
+| Path | Size | Notes |
+|---|---|---|
+| `dust.png` | 4×4 | one mote. Used for dust, fireflies and pollen, tinted per scene. |
+| `sparkle.png` | 8×8 | four-point twinkle: water shimmer and the results screen. |
+| `star.png` | 3×3 | attract sky. |
+| `petal.png` · `leaf.png` | 8×8 | falling, and they spin. Temple Bell and Acorn Storm. |
+| `reed.png` | 16×40 | riverbank reeds, both river games. |
+| `lilypad.png` | 24×16 | floating, decorative only — not a leaf you can stand on. |
+| `dragonfly.png` | 16×10 | drifts over the river. |
+| `crystal.png` · `rubble.png` | 12×16 · 16×8 | cave walls and floor. |
+| `squirrel.png` | 16×16 | **silhouette**, sits in the Acorn Storm canopy. Whoever is throwing the acorns. |
+| `moon.png` · `mist.png` | 24×24 · 64×16 | Firefly Lantern night. |
+| `lantern_hang.png` | 12×20 | hangs beside the temple bell. |
+| `scarecrow.png` · `fence.png` | 16×28 · 32×16 | Crow Watch. The scarecrow is doing a bad job; that is the joke. |
+| `cloud.png` | 48×24 | soft shadow drifting across the field. |
+
+## Priority 2d — HUD icons and overlays
+
+`assets/game/ui/`. These carry meaning that used to be words, so they have to be
+readable at 9×9.
+
+| Path | Size | Notes |
+|---|---|---|
+| `icon_sun.png` · `icon_clock.png` · `icon_wheat.png` · `icon_lantern.png` · `icon_flag.png` · `icon_door.png` | 9×9 | says what the meter bar is measuring |
+| `pip.png` | 7×7 | one dot in a sequence row |
+| `vignette.png` · `alarm_frame.png` | 480×270 | **full-screen overlays, not pixel art** — drawn at native size because a small texture stretched to full screen bands visibly |
+| `scrim.png` | 480×120 | soft dark band so text can sit over a busy scene |
+
 ## Not art, but worth knowing
 
-- **A pixel font.** Everything currently uses Godot's default font, which is a
-  smooth vector face and slightly at odds with 32px pixel art at 640×360. A
-  bitmap font (m5x7, Pixellari or similar) dropped in as a project-wide theme
-  would lift the whole game more than any single sprite here.
+- **Fonts are done.** Press Start 2P (titles, numbers) and Pixelify Sans (body),
+  both OFL, in `assets/game/fonts/` with their licences. Two constraints if you
+  ever restyle: Press Start 2P is about twice the width of a normal face, so
+  column widths are tight everywhere; and **Pixelify Sans is unreadable below
+  11px**, which is why nothing uses it smaller. All text goes through
+  `src/ui/game_theme.tres` — change it there, not per label.
 - **`player_idle_front.png` and `player_idle_down.png` are near-duplicates.**
   Only `idle_down` is used. No action needed unless one was meant to be something
   else.

@@ -90,15 +90,16 @@ func _ready() -> void:
 	_player.set_facing(&"up")
 
 	_far_bank.visible = false
-	_hud.set_title("Riverleap")
-	_hud.set_objective("Cross the river. Shaking leaves are about to sink.")
 	_hud.reset_score(0)
-	_hud.set_meter(0.0, "far bank")
+	_hud.set_meter(0.0, &"far bank")
+
+
+func control_hint() -> String:
+	return "STICK  hop between leaves"
 
 
 func begin() -> void:
 	super.begin()
-	_hud.toast("HOP!", Color(0.7, 1, 0.75), 0.7)
 
 
 func _process(delta: float) -> void:
@@ -129,7 +130,7 @@ func _advance_river(delta: float) -> void:
 	if _arriving:
 		return
 	_progress = minf(_progress + delta / CROSSING_SECONDS, 1.0)
-	_hud.set_meter(_progress, "far bank")
+	_hud.set_meter(_progress, &"far bank")
 
 	# The banks scrolling past are what sells the leaves as moving at all.
 	var speed := lerpf(39.0, 59.0, _progress)
@@ -250,13 +251,11 @@ func _fall_in() -> void:
 	_buffered_direction = 0
 	_buffer_timer = 0.0
 	Audio.sfx(&"splash")
+	Juice.shake(self, 2.5)
 	var lost := _chain
 	_chain = 0
 	_refresh_score()
-	if lost >= CHIME_CHAIN_STEP:
-		_hud.toast("SPLASH!  chain lost", Color(1, 0.5, 0.45), 0.9)
-	else:
-		_hud.toast("SPLASH  %d" % SCORE_SPLASH, Color(0.62, 0.85, 1.0), 0.8)
+	pop_on_player(SCORE_SPLASH, "CHAIN LOST" if lost >= CHIME_CHAIN_STEP else "SPLASH")
 	_player.anim.modulate = Color(0.7, 0.85, 1.0, 0.85)
 	_player.anim.play(&"idle_down")
 
@@ -393,13 +392,8 @@ func _collect(chime: Sprite2D) -> void:
 	_refresh_score()
 
 	Audio.sfx(&"chime", 1.0 + 0.08 * multiplier)
-	# The chimes always scored; they just never said so, which is why they felt
-	# like scenery. Now every pickup announces itself.
-	if multiplier > 1:
-		_hud.toast("+%d   x%d" % [SCORE_CHIME * multiplier, multiplier],
-				Color(1, 0.92, 0.55), 0.7)
-	else:
-		_hud.toast("+%d" % SCORE_CHIME, Color(0.8, 1, 0.85), 0.55)
+	# The number rises off the chime itself, so it is obvious what scored.
+	pop(chime.position, SCORE_CHIME * multiplier, multiplier)
 
 	var pop := create_tween()
 	pop.tween_property(chime, "scale", Vector2(3.2, 3.2), 0.12)
@@ -416,8 +410,4 @@ func chain_multiplier() -> int:
 func _refresh_score() -> void:
 	_score = maxi(_score, 0)
 	_hud.set_score(maxi(_score + _splashes * SCORE_SPLASH, 0))
-	if _chain >= CHIME_CHAIN_STEP:
-		_hud.set_objective("CHAIN x%d  -  keep collecting, do not fall in"
-				% chain_multiplier())
-	else:
-		_hud.set_objective("Cross the river. Shaking leaves are about to sink.")
+	_hud.set_multiplier(chain_multiplier())

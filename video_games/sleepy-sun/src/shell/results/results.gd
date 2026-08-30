@@ -74,6 +74,15 @@ func _play_summary() -> void:
 			_rank.modulate = rank[2]
 			break
 
+	# The rank slams in rather than appearing. It is the one number the player
+	# came for, and it should arrive like a stamp.
+	_rank.pivot_offset = _rank.size / 2.0
+	_rank.scale = Vector2(2.6, 2.6)
+	var stamp := create_tween()
+	stamp.tween_property(_rank, "scale", Vector2.ONE, 0.22) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_IN)
+	stamp.tween_callback(func() -> void: Juice.shake(self, 3.0))
+
 	var place := Save.submit(total, Game.plastic_removed())
 	_flavour.text = _flavour_text(place)
 
@@ -94,30 +103,33 @@ func _flavour_text(place: int) -> String:
 
 
 func _add_row(title: String, result: MiniGameResult, color: Color) -> void:
+	# Column widths are tight because Press Start 2P is roughly twice the width
+	# of the vector font this used to use: 122 + 116 + 48 fits the 322px panel
+	# with room for the separators, and anything wider runs off the screen.
 	var row := HBoxContainer.new()
-	row.add_theme_constant_override(&"separation", 8)
+	row.add_theme_constant_override(&"separation", 6)
 
 	var name_label := Label.new()
 	name_label.text = title
-	name_label.custom_minimum_size.x = 190.0
-	_style(name_label, 12, color)
+	name_label.custom_minimum_size.x = 122.0
+	_style(name_label, &"Heading", color)
 	row.add_child(name_label)
 
 	var detail := Label.new()
-	detail.custom_minimum_size.x = 120.0
+	detail.custom_minimum_size.x = 116.0
 	if result == null:
 		detail.text = "not played"
-		_style(detail, 10, Color(0.6, 0.6, 0.7))
+		_style(detail, &"Small", Color(0.6, 0.6, 0.7))
 	else:
 		detail.text = _detail_for(result)
-		_style(detail, 10, Color(0.78, 0.8, 0.9))
+		_style(detail, &"Small")
 	row.add_child(detail)
 
 	var score_label := Label.new()
 	score_label.text = "%d" % (result.score if result != null else 0)
-	score_label.custom_minimum_size.x = 70.0
+	score_label.custom_minimum_size.x = 48.0
 	score_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
-	_style(score_label, 14, Color(1, 0.87, 0.55))
+	_style(score_label, &"Heading")
 	row.add_child(score_label)
 
 	_rows.add_child(row)
@@ -173,8 +185,9 @@ static func _count(stats: Dictionary, key: String, singular: String,
 	return "%d %s" % [value, singular if value == 1 else plural]
 
 
-static func _style(label: Label, size: int, color: Color) -> void:
-	label.add_theme_font_size_override(&"font_size", size)
-	label.add_theme_color_override(&"font_color", color)
-	label.add_theme_color_override(&"font_outline_color", Color(0.07, 0.05, 0.11))
-	label.add_theme_constant_override(&"outline_size", 5)
+## Everything text-shaped goes through the theme, so restyling the whole game
+## stays a one-file edit in src/ui/game_theme.tres.
+static func _style(label: Label, variation: StringName, color := Color.TRANSPARENT) -> void:
+	label.theme_type_variation = variation
+	if color.a > 0.0:
+		label.add_theme_color_override(&"font_color", color)

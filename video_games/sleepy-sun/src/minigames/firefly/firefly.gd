@@ -58,9 +58,11 @@ func _ready() -> void:
 	for i in FLY_TARGET:
 		_spawn_fly()
 
-	_hud.set_title("Firefly Lantern")
 	_hud.reset_score(0)
-	_hud.set_objective("Catch fireflies. The dimmer your lantern, the more they pay.")
+
+
+func control_hint() -> String:
+	return "STICK  move"
 
 
 func begin() -> void:
@@ -103,7 +105,8 @@ func _update_light() -> void:
 
 	var multiplier := light_multiplier()
 	_best_multiplier = maxi(_best_multiplier, multiplier)
-	_hud.set_meter(t, "lantern   x%d" % multiplier)
+	_hud.set_meter(t, &"lantern")
+	_hud.set_multiplier(multiplier)
 
 
 func _tick_flies(delta: float) -> void:
@@ -155,9 +158,8 @@ func _catch(fly: Sprite2D) -> void:
 	_light = minf(_light + LIGHT_PER_FLY, LIGHT_MAX)
 	_hud.set_score(_score)
 	Audio.sfx(&"pickup", 1.0 + 0.1 * multiplier)
-	if multiplier > 1:
-		_hud.toast("+%d   x%d" % [SCORE_FLY * multiplier, multiplier],
-				Color(1, 0.96, 0.6), 0.5)
+	_hud.set_multiplier(multiplier)
+	pop(fly.position, SCORE_FLY * multiplier, multiplier)
 	fly.queue_free()
 
 
@@ -167,7 +169,7 @@ func _gutter() -> void:
 	_score = maxi(_score + SCORE_GUTTER, 0)
 	_hud.set_score(_score)
 	Audio.sfx(&"deny", 0.7)
-	_hud.toast("THE LANTERN GUTTERS", Color(0.8, 0.7, 0.5), 0.9)
+	pop_on_player(SCORE_GUTTER, "GUTTERED")
 
 
 func _finish() -> void:

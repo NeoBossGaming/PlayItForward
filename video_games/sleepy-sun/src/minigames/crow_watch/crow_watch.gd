@@ -63,9 +63,11 @@ func _ready() -> void:
 	_player.position = FIELD.get_center()
 	_player.freeze()
 
-	_hud.set_title("Crow Watch")
 	_hud.reset_score(0)
-	_hud.set_objective("Run at a crow before it lands. Hold the button to sprint.")
+
+
+func control_hint() -> String:
+	return "STICK  move      BUTTON  sprint"
 
 
 func begin() -> void:
@@ -203,9 +205,8 @@ func _scare(holder: Node2D, crow: Sprite2D) -> void:
 	_score += SCORE_SCARE * multiplier
 	_hud.set_score(_score)
 	Audio.sfx(&"spotted", 1.4)
-	if multiplier > 1:
-		_hud.toast("+%d   x%d" % [SCORE_SCARE * multiplier, multiplier],
-				Color(1, 0.9, 0.5), 0.5)
+	_hud.set_multiplier(multiplier)
+	pop(crow.position, SCORE_SCARE * multiplier, multiplier)
 
 	# Flees the way it came, so a scare reads as a win rather than a vanish.
 	# set_meta(key, null) deletes the key in Godot, so flag it instead.
@@ -223,7 +224,10 @@ func _bite(crop: Sprite2D) -> void:
 	crop.set_meta(&"health", health)
 	crop.texture = _crop_textures[clampi(CROP_HEALTH - health, 0, 2)]
 	Audio.sfx(&"trash", 0.9)
-	_hud.toast("CROP EATEN", Color(1, 0.5, 0.4), 0.6)
+	Juice.shake(self, 3.0)
+	Juice.flash(self, Color(1, 0.4, 0.32, 0.28))
+	_hud.set_multiplier(1)
+	pop(crop.position, 0, 1, "EATEN")
 	_update_meter()
 
 
@@ -249,7 +253,7 @@ func _crop_health_total() -> int:
 func _update_meter() -> void:
 	var total := _crop_health_total()
 	var max_total := _crops.size() * CROP_HEALTH
-	_hud.set_meter(float(total) / float(max_total), "crop  %d / %d" % [total, max_total])
+	_hud.set_meter(float(total) / float(max_total), &"crop")
 
 
 func _finish() -> void:

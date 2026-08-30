@@ -47,6 +47,8 @@ const PICKUP_RADIUS := 15.0
 @onready var _props_root: Node2D = $Props
 @onready var _birds_root: Node2D = $Birds
 @onready var _pickups_root: Node2D = $Pickups
+@onready var _dusk: CanvasModulate = $Dusk
+@onready var _fireflies: Node2D = $Fireflies
 
 var _birds: Array[PatrolBird] = []
 var _grass_areas: Array[Rect2] = []
@@ -93,9 +95,12 @@ func _ready() -> void:
 	_camera.limit_right = int(SECTION_WIDTH * SECTIONS)
 	_camera.limit_bottom = int(LEVEL_HEIGHT)
 
-	_hud.set_title("Hush Meadow")
 	_hud.reset_score(0)
 	_update_objective()
+
+
+func control_hint() -> String:
+	return "STICK  move      BUTTON  sprint"
 
 
 func begin() -> void:
@@ -110,6 +115,7 @@ func _process(delta: float) -> void:
 		return
 
 	_daylight = maxf(_daylight - delta / ROUND_SECONDS, 0.0)
+	_light_the_evening()
 	if not _scrambling and _daylight * ROUND_SECONDS <= SCRAMBLE_SECONDS:
 		_begin_scramble()
 	if _daylight <= 0.0:
@@ -128,6 +134,16 @@ func _process(delta: float) -> void:
 
 
 # --- concealment and sight ---------------------------------------------------
+
+## The daylight bar is also the lighting. Watching the meadow actually go
+## orange and then blue is a much better clock than a number, and the fireflies
+## coming out is the cue that the scramble is close.
+func _light_the_evening() -> void:
+	var t := 1.0 - _daylight
+	_dusk.color = Color(1, 1, 1).lerp(Color(0.52, 0.46, 0.72), t * 0.85)
+	if t > 0.45:
+		_fireflies.modulate.a = minf((t - 0.45) / 0.4, 1.0)
+
 
 func _update_concealment() -> void:
 	var hidden := _grass_at(_player.position) >= 0
@@ -187,7 +203,9 @@ func _on_bird_spotted(bird: PatrolBird) -> void:
 	_recovering = true
 	_spotted += 1
 	Audio.sfx(&"spotted")
-	_hud.toast("SPOTTED!", Color(1, 0.45, 0.4), 1.0)
+	Juice.flash(self, Color(1, 0.35, 0.3, 0.4))
+	Juice.shake(self, 3.0)
+	pop_on_player(SCORE_SPOTTED, "SPOTTED")
 	_hud.set_score(_current_score())
 	_player.freeze()
 
@@ -275,13 +293,7 @@ func _collect(pickup: MeadowPickup) -> void:
 	_pickup_score += gained
 
 	Audio.sfx(&"pickup", 1.0 + 0.12 * nerve)
-	var name := pickup.label()
-	if nerve > 1:
-		_hud.toast("NERVE x%d   +%d" % [nerve, gained], Color(1, 0.75, 0.4), 0.8)
-	elif name != "":
-		_hud.toast("%s  +%d" % [name, gained], Color(0.85, 1, 0.9), 0.5)
-	else:
-		_hud.toast("+%d" % gained, Color(1, 0.9, 0.55), 0.45)
+	pop(pickup.position, gained, nerve, "NERVE" if nerve > 1 else pickup.label())
 	_hud.set_score(_current_score())
 	pickup.queue_free()
 
@@ -312,13 +324,10 @@ func _begin_scramble() -> void:
 
 
 func _update_objective() -> void:
-	_hud.set_meter(_daylight, "dusk   x%.2f" % daylight_multiplier())
-	if _scrambling:
-		var safe := _concealed
-		_hud.set_objective("GET INTO THE GRASS  -  %s"
-				% ("safe" if safe else "you are in the open!"))
-	else:
-		_hud.set_objective("Forage before dusk. Closer to a bird pays more.")
+	_hud.set_meter(_daylight, &"dusk")
+	# The scramble warning is a red vignette pulsing in from the screen edges,
+	# not a sentence -- nobody reads a sentence while panicking.
+	_hud.set_alarm(1.0 if _scrambling and not _concealed else 0.0)
 
 
 func _current_score() -> int:

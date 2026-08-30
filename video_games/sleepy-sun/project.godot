@@ -33,6 +33,10 @@ window/stretch/mode="canvas_items"
 window/stretch/aspect="keep"
 window/stretch/scale_mode="integer"
 
+[gui]
+
+theme/custom="res://src/ui/game_theme.tres"
+
 [input]
 
 move_left={

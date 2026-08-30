@@ -92,14 +92,16 @@ var _pickup_scene := preload("res://src/minigames/temple_bell/pickup.tscn")
 
 
 func _ready() -> void:
-	_hud.set_title("Temple Bell")
 	_hud.reset_score(0)
-	_hud.set_objective("Strike as each mark touches the ring.")
 	_player.freeze()
 	_player.set_facing(&"up")
 	# Quicker on his feet than the walking games: phase 2 is a dash out and back,
 	# and it has to fit between two beats.
 	_player.speed = 95.0
+
+
+func control_hint() -> String:
+	return "BUTTON  strike      then STICK  move"
 
 
 func begin() -> void:
@@ -113,7 +115,7 @@ func _process(delta: float) -> void:
 		return
 
 	_time_left = maxf(_time_left - delta, 0.0)
-	_hud.set_meter(_time_left / ROUND_SECONDS, "%ds left" % ceili(_time_left))
+	_hud.set_meter(_time_left / ROUND_SECONDS, &"time")
 	if _time_left <= 0.0:
 		_finish()
 		return
@@ -129,11 +131,10 @@ func _process(delta: float) -> void:
 		_player.position = _player.position.clamp(ARENA.position, ARENA.end)
 		_tick_pickups(delta)
 		_tick_powerups(delta)
-		# In range or not is the whole tension, so it is never ambiguous.
+		# In range or not is the whole tension. The ring itself is the signal --
+		# bright when a strike will land, dim when it will not.
 		var in_range := _in_strike_range()
-		_ring.modulate.a = 0.75 if in_range else 0.3
-		_hud.set_objective("PHASE 2  -  %s" % ("in range, strike!" if in_range
-				else "get back to the bell!"))
+		_ring.modulate.a = 0.8 if in_range else 0.22
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -209,7 +210,7 @@ func _take(pickup: BellPickup) -> void:
 			_score += pickup.value() * (2 if _double_left > 0.0 else 1)
 			_hud.set_score(_score)
 			Audio.sfx(&"pickup", 1.2)
-			_hud.toast("+%d" % pickup.value(), Color(1, 0.92, 0.55), 0.4)
+			pop(pickup.position, pickup.value())
 		BellPickup.Kind.BURST:
 			_chime_burst()
 		BellPickup.Kind.FOCUS:
@@ -325,15 +326,16 @@ func _strike() -> void:
 	var multiplier := chain_multiplier()
 
 	var doubler := 2 if _double_left > 0.0 else 1
+	_hud.set_multiplier(multiplier)
 	if error <= perfect_window:
 		_perfect += 1
 		_score += SCORE_PERFECT * multiplier * doubler
-		_hud.toast("PERFECT   x%d" % multiplier, Color(1, 0.9, 0.5), 0.4)
+		pop(marker.position, SCORE_PERFECT * multiplier * doubler, multiplier, "PERFECT")
 		Audio.plate_note(2)
 	else:
 		_good += 1
 		_score += SCORE_GOOD * multiplier * doubler
-		_hud.toast("GOOD   x%d" % multiplier, Color(0.8, 0.95, 1.0), 0.35)
+		pop(marker.position, SCORE_GOOD * multiplier * doubler, multiplier)
 		Audio.plate_note(0)
 
 	_hud.set_score(_score)
@@ -351,8 +353,9 @@ func _miss(marker: Sprite2D) -> void:
 
 func _break_chain() -> void:
 	if _chain >= CHAIN_PER_LEVEL:
-		_hud.toast("CHAIN BROKEN", Color(1, 0.5, 0.45), 0.6)
+		pop_on_player(0, "CHAIN BROKEN")
 	_chain = 0
+	_hud.set_multiplier(1)
 
 
 func chain_multiplier() -> int:

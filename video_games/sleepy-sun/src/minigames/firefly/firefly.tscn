@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://src/minigames/firefly/firefly.gd" id="1"]
 [ext_resource type="PackedScene" path="res://src/core/player.tscn" id="2"]
@@ -8,6 +8,8 @@
 [ext_resource type="Texture2D" path="res://assets/game/village/glow.png" id="6"]
 [ext_resource type="Texture2D" path="res://assets/game/firefly/lantern.png" id="7"]
 [ext_resource type="Texture2D" path="res://assets/game/tall_grass/grass_1.png" id="8"]
+[ext_resource type="Texture2D" path="res://assets/game/decor/moon.png" id="d_moon"]
+[ext_resource type="Texture2D" path="res://assets/game/decor/mist.png" id="d_mist"]
 
 [sub_resource type="CanvasItemMaterial" id="additive"]
 blend_mode = 1
@@ -40,6 +42,23 @@ texture = ExtResource("8")
 position = Vector2(225, 237)
 scale = Vector2(1.4, 1.4)
 texture = ExtResource("8")
+
+[node name="Moon" type="Sprite2D" parent="."]
+modulate = Color(1, 1, 1, 0.8)
+position = Vector2(414, 42)
+texture = ExtResource("d_moon")
+
+[node name="MistA" type="Sprite2D" parent="."]
+modulate = Color(1, 1, 1, 0.5)
+position = Vector2(140, 96)
+scale = Vector2(2.4, 1.4)
+texture = ExtResource("d_mist")
+
+[node name="MistB" type="Sprite2D" parent="."]
+modulate = Color(1, 1, 1, 0.45)
+position = Vector2(340, 216)
+scale = Vector2(2.8, 1.6)
+texture = ExtResource("d_mist")
 
 [node name="FliesLayer" type="CanvasLayer" parent="."]
 layer = 5
