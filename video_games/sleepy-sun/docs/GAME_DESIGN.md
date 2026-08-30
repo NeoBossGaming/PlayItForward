@@ -21,8 +21,8 @@ which is Phase 2 and is deliberately absent from the code (see §11).
 What is built today:
 
 ```
-Boot → Attract → Card draw → game 1 → game 2 → game 3 → Results → Attract
-                     ↑ the "Payment Wait" step slots in here
+Boot  →  Attract  →  Village hub  ⇄  four minigames  →  Results  →  Attract
+						(the "Payment Wait" step sits between Attract and Hub)
 ```
 
 `tests/flow_test.gd` asserts that exact loop on every run, which is the
