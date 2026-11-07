@@ -42,6 +42,24 @@ const DIRECTIONS := {
 ## stop. It has to be a real rest to be a real decision.
 @export var stamina_recover_to: float = 0.45
 
+## --- jump look ---------------------------------------------------------------
+##
+## A game that moves the player by tween (Riverleap hops between leaves) used to
+## leave the sprite in its idle pose, so the character slid through the air
+## standing still. There are no drawn jump frames and inventing some would not
+## match the hand-drawn set, so the jump is posed instead: squash on the way
+## out, stretch through the rise, a lean into the direction of travel, and a
+## hard squash on landing. The landing squash is the part that sells the weight.
+
+## Radians the sprite leans into the hop at full tilt.
+const JUMP_LEAN := 0.21
+## How far the sprite stretches along its travel, as a fraction of normal.
+const JUMP_STRETCH := 0.17
+## How far it squashes on impact. Bigger than the stretch on purpose -- landings
+## read as heavier than take-offs.
+const LAND_SQUASH := 0.28
+const LAND_RECOVER := 0.17
+
 signal started_moving
 signal stopped_moving
 signal stamina_changed(value: float, exhausted: bool)
@@ -51,13 +69,25 @@ var sprinting: bool = false
 var is_moving: bool = false
 var stamina: float = 1.0
 var exhausted: bool = false
+## True between start_jump() and land(). While it is set the normal walk/idle
+## animation picker stands down, so it cannot fight the pose.
+var jumping: bool = false
+
+const _PUFF: Texture2D = preload("res://assets/game/decor/dust.png")
 
 @onready var anim: AnimatedSprite2D = $Anim
 @onready var shadow: Sprite2D = $Shadow
 
+var _rest_scale := Vector2.ONE
+var _rest_shadow := Vector2.ONE
+
 
 func _ready() -> void:
 	stamina = max_stamina
+	# The sprite is authored at 1.5x, so every squash and stretch is relative to
+	# whatever the scene set rather than to 1.
+	_rest_scale = anim.scale
+	_rest_shadow = shadow.scale
 
 
 func _physics_process(delta: float) -> void:
@@ -105,7 +135,93 @@ func _recover_stamina(delta: float) -> void:
 	stamina_changed.emit(stamina / max_stamina, exhausted)
 
 
+## --- jumping -----------------------------------------------------------------
+
+## Call once as the hop leaves the ground. `direction` is -1, 0 or 1 for the
+## lean. The walk clip is paused on a mid-stride frame: a tucked, legs-apart
+## pose reads as airborne where a looping walk reads as running on the spot.
+func start_jump(direction: int = 0) -> void:
+	jumping = true
+	var clip := StringName("walk_" + facing)
+	if anim.sprite_frames != null and anim.sprite_frames.has_animation(clip):
+		anim.play(clip)
+		anim.frame = 1
+	anim.pause()
+	_puff(2, 0.45)
+	set_jump_progress(0.0, direction)
+
+
+## Call every frame of the hop with `t` running 0 -> 1.
+func set_jump_progress(t: float, direction: int = 0) -> void:
+	if not jumping:
+		return
+	var height := sin(clampf(t, 0.0, 1.0) * PI)     # 0 at both ends, 1 at apex
+	var vertical := cos(clampf(t, 0.0, 1.0) * PI)   # +1 rising, -1 falling
+
+	# Stretched while climbing and while dropping, neutral at the apex, which is
+	# where a real body is least deformed.
+	var stretch := JUMP_STRETCH * absf(vertical)
+	anim.scale = Vector2(_rest_scale.x * (1.0 - stretch * 0.55),
+			_rest_scale.y * (1.0 + stretch))
+	anim.rotation = JUMP_LEAN * float(direction) * height
+
+	# The shadow is the only thing telling the player how high they are.
+	shadow.scale = _rest_shadow * (1.0 - height * 0.38)
+	shadow.modulate.a = 0.75 - height * 0.4
+
+
+## Call once on touchdown.
+func land() -> void:
+	if not jumping:
+		return
+	jumping = false
+	anim.rotation = 0.0
+	shadow.scale = _rest_shadow
+	shadow.modulate.a = 0.75
+	_puff(3, 0.7)
+
+	anim.scale = Vector2(_rest_scale.x * (1.0 + LAND_SQUASH),
+			_rest_scale.y * (1.0 - LAND_SQUASH))
+	create_tween().tween_property(anim, "scale", _rest_scale, LAND_RECOVER) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+## Drops the pose without the landing flourish, for a hop that ended in water
+## rather than on a leaf. Safe to call when not jumping.
+func cancel_jump() -> void:
+	jumping = false
+	anim.rotation = 0.0
+	anim.scale = _rest_scale
+	shadow.scale = _rest_shadow
+	shadow.modulate.a = 0.75
+
+
+## A few motes kicked up at the feet. Cheap, and it is what makes a landing
+## land rather than merely stop.
+func _puff(count: int, strength: float) -> void:
+	for i in count:
+		var mote := Sprite2D.new()
+		mote.texture = _PUFF
+		mote.position = Vector2(randf_range(-3.0, 3.0), randf_range(-1.0, 2.0))
+		# Big and warm rather than small and white: at 4px a near-white mote is
+		# invisible over both the water and a lit leaf, which is every surface
+		# this game has.
+		mote.modulate = Color(1, 0.96, 0.82, 0.85 * strength)
+		mote.scale = Vector2.ONE * randf_range(1.6, 3.2)
+		add_child(mote)
+		var drift := Vector2(randf_range(-16.0, 16.0), randf_range(-10.0, -3.0)) * strength
+		var tween := create_tween()
+		tween.set_parallel(true)
+		tween.tween_property(mote, "position", mote.position + drift, 0.34)
+		tween.tween_property(mote, "modulate:a", 0.0, 0.34)
+		tween.chain().tween_callback(mote.queue_free)
+
+
 func _update_animation() -> void:
+	# A posed jump owns the sprite outright; letting the picker run would reset
+	# the frame and unpause the clip every physics tick.
+	if jumping:
+		return
 	var was_moving := is_moving
 	is_moving = velocity.length() > 6.0
 	if is_moving != was_moving:

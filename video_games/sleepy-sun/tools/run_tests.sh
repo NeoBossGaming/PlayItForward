@@ -23,14 +23,12 @@ status=0
 echo "=== importing assets ==="
 "$GODOT" --headless --path "$PROJECT" --import 2>&1 | grep -aiE 'error|failed' && status=1
 
-# --fixed-fps lets the soak and flow tests simulate minutes of play in seconds.
-for suite in smoke soak flow; do
-  echo
-  echo "=== ${suite} test ==="
-  "$GODOT" --headless --fixed-fps 60 --path "$PROJECT" "tests/${suite}_test.tscn" 2>&1 | quiet
-  [ "${PIPESTATUS[0]}" -ne 0 ] && status=1
-done
+# --fixed-fps lets a minute of play run in a couple of seconds.
+echo
+echo "=== soak test ==="
+"$GODOT" --headless --fixed-fps 60 --path "$PROJECT" "tests/soak_test.tscn" 2>&1 | quiet
+[ "${PIPESTATUS[0]}" -ne 0 ] && status=1
 
 echo
-[ "$status" -eq 0 ] && echo "ALL SUITES PASSED" || echo "SOME SUITES FAILED"
+[ "$status" -eq 0 ] && echo "PASSED" || echo "FAILED"
 exit "$status"

@@ -19,8 +19,12 @@ const HOP_TIME := 0.26
 ## be crossed by drumming the stick. Small on purpose -- it should read as
 ## weight, not as the controls being sticky.
 const HOP_COOLDOWN := 0.10
-const HOP_HEIGHT := 11.0
+## The arc has to be tall enough to read as a jump in the quarter-second it
+## lasts. At 11 it was a slide with a shadow.
+const HOP_HEIGHT := 18.0
 const INPUT_BUFFER := 0.16
+## Seconds after the last hop before the character turns back upstream.
+const FACE_UPSTREAM_AFTER := 0.5
 const RECOVERY_TIME := 1.4
 const RESPAWN_DELAY := 2.2
 
@@ -71,6 +75,7 @@ var _chain: int = 0
 var _best_chain: int = 0
 var _score: int = 0
 var _hop_cooldown: float = 0.0
+var _idle_facing_timer: float = 0.0
 
 var _leaf_scene := preload("res://src/minigames/wind_leaf/leaf.tscn")
 var _chime_texture := preload("res://assets/game/wind_leaf/chime.png")
@@ -93,13 +98,19 @@ func _ready() -> void:
 	_hud.reset_score(0)
 	_hud.set_meter(0.0, &"far bank")
 
-
-func control_hint() -> String:
-	return "STICK  hop between leaves"
+	# No shell in front of it for now, so the game starts itself and loops on
+	# its own -- but only when it really is the scene being played. The soak
+	# test instances it as a child and drives begin() itself, and must not get
+	# a run card or a scene reload out of the bargain.
+	if get_tree().current_scene == self:
+		finished.connect(_on_run_finished)
+		await get_tree().process_frame
+		begin()
 
 
 func begin() -> void:
 	super.begin()
+	_hud.toast("CROSS THE RIVER", Color(0.8, 0.95, 1.0), 1.4)
 
 
 func _process(delta: float) -> void:
@@ -112,6 +123,7 @@ func _process(delta: float) -> void:
 	_tick_director(delta)
 	_tick_chimes(delta)
 	_tick_recovery(delta)
+	_tick_facing(delta)
 	_check_footing()
 
 
@@ -160,6 +172,22 @@ func _land_ashore() -> void:
 	tween.tween_property(_player, "position",
 			Vector2(LANE_X[_lane], 92.0), 0.45).set_trans(Tween.TRANS_SINE)
 	tween.tween_callback(_score_run)
+
+
+## The end of a run, standing in for the results screen while the shell is
+## parked: read what happened, then go again.
+func _on_run_finished(result: MiniGameResult) -> void:
+	var best := Save.best()
+	Save.submit(result.score)
+	var card := RunCard.new()
+	add_child(card)
+	card.replay.connect(func() -> void: get_tree().reload_current_scene())
+	card.show_run("RIVERLEAP", result.score, [
+		["chimes", "%d" % int(result.stats.get("chimes", 0))],
+		["best chain", "x%d" % maxi(int(result.stats.get("chain", 0)), 1)],
+		["splashes", "%d" % int(result.stats.get("splashes", 0))],
+		["crossing", "%.0fs" % result.duration],
+	], best)
 
 
 func _score_run() -> void:
@@ -211,10 +239,16 @@ func _consume_buffer() -> void:
 
 
 func _hop_to(target_lane: int) -> void:
-	_player.set_facing(&"left" if target_lane < _lane else &"right")
+	var direction := 1 if target_lane > _lane else -1
+	_player.set_facing(&"left" if direction < 0 else &"right")
 	_hopping = true
 	_lane = target_lane
+	_idle_facing_timer = FACE_UPSTREAM_AFTER
 	Audio.sfx(&"hop", randf_range(0.95, 1.1))
+
+	# The arc is this game's; the pose is the player controller's, so any game
+	# that jumps gets the same weight out of it.
+	_player.start_jump(direction)
 
 	var from := _player.position
 	var to := Vector2(LANE_X[target_lane], ROW_Y)
@@ -222,7 +256,7 @@ func _hop_to(target_lane: int) -> void:
 	tween.tween_method(
 		func(t: float) -> void:
 			_player.position = from.lerp(to, t) + Vector2(0, -sin(t * PI) * HOP_HEIGHT)
-			_player.shadow.scale = Vector2.ONE * (1.3 - sin(t * PI) * 0.45),
+			_player.set_jump_progress(t, direction),
 		0.0, 1.0, HOP_TIME)
 	tween.tween_callback(_on_hop_landed)
 
@@ -230,8 +264,21 @@ func _hop_to(target_lane: int) -> void:
 func _on_hop_landed() -> void:
 	_hopping = false
 	_hop_cooldown = HOP_COOLDOWN
-	_player.shadow.scale = Vector2(1.3, 1.3)
+	_player.land()
 	_check_footing()
+
+
+## Left after a hop, the character stays side-on indefinitely, which reads as
+## the player having stopped paying attention to the far bank. A beat after the
+## last hop they turn back upstream, which is where they are actually going.
+func _tick_facing(delta: float) -> void:
+	if _hopping or _in_water or _arriving:
+		return
+	if _idle_facing_timer <= 0.0:
+		return
+	_idle_facing_timer -= delta
+	if _idle_facing_timer <= 0.0:
+		_player.set_facing(&"up")
 
 
 ## The player is only ever unsupported for the instant a leaf goes out from
@@ -256,6 +303,7 @@ func _fall_in() -> void:
 	_chain = 0
 	_refresh_score()
 	pop_on_player(SCORE_SPLASH, "CHAIN LOST" if lost >= CHIME_CHAIN_STEP else "SPLASH")
+	_player.cancel_jump()
 	_player.anim.modulate = Color(0.7, 0.85, 1.0, 0.85)
 	_player.anim.play(&"idle_down")
 

@@ -1,55 +1,51 @@
 # Sleepy Sun
 
-The first adventure for the **Play It Forward** charity arcade cabinet: a
-slot-machine card draw and eight short minigames, built in Godot 4.6 for a
-Raspberry Pi 4/5.
+The first adventure for the **Play It Forward** charity arcade cabinet, built in
+Godot 4.6 for a Raspberry Pi 4/5.
+
+**Right now this project is one game.** Four earlier rounds built eight
+minigames and a whole cabinet shell around them; none of them got finished
+properly, because the work was always split eight ways. So it is stripped back
+to **Riverleap**, which gets polished until it is genuinely good before anything
+else returns. Everything parked is in `main`'s history and listed at the end of
+[`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md).
 
 ```bash
-godot --path .              # play
+godot --path .              # play -- boots straight into the game
 godot --path . --editor     # edit
-tools/run_tests.sh          # headless test suite
+tools/run_tests.sh          # headless soak suite
 ```
 
-**Controls** — stick or arrows/WASD to move, `Space` to act (and to sprint, where
-there is a stamina bar), `Enter`/`1` to start, `5` to insert a credit. One stick
-and one button run the whole adventure.
+**Controls** — stick or arrows/WASD to hop left and right. That is the whole
+game.
 
-**`F3` opens the debug menu** — jump into any game, force the next hand, watch
-any cutscene without playing for it, slow motion, clear scores. It only exists in
-debug builds, never on the cabinet.
+**Debug keys**, in debug builds only: **F5** restarts instantly, **F3** toggles
+slow motion.
 
-**The adventure** — the sun slept straight through the dawn, and the valley is
-doing the waking by hand. One credit deals you **three games from a pool of
-eight**, and you cannot lose it. Press start, the cards spin, and you are
-playing. Each game brings the sun one thing that might wake it, a short cutscene
-either side says what and why, and the ending changes with how the run went.
+## Riverleap
 
-| | What you do | What it brings the sun |
-|---|---|---|
-| **Riverleap** | Hop between drifting leaves. The ones that shake are about to sink. | the river chimes |
-| **Hush Meadow** | Forage before dusk, then get into cover. Closer to a bird pays more. | a handful of yesterday |
-| **Echo Hollow** | Watch the stones light up, then walk the same path back. | the sun's own name |
-| **Riverstrike** | Fire harpoons straight up. Lead the fish; bottles stop the bolt. | a river clear enough to look in |
-| **Acorn Storm** | Dodge the falling acorns, catch the sunfruit between them. | breakfast |
-| **Firefly Lantern** | Your light is dying. The darker it gets, the more they pay. | a borrowed light |
-| **Temple Bell** | Strike on the beat, then do it while running for pickups. | the dawn bell |
-| **Crow Watch** | Crows are diving on the rice. Scare them off before they land. | the harvest offering |
+The sun slept through the dawn, and it has always woken to the river chimes. The
+wind has stopped, so somebody has to cross and ring them by hand.
 
-Cutscenes are skippable with any button after a second, so a repeat player is
-never held up by a story they have already seen.
+Five leaves drift downstream and you hop between them for about a minute. A leaf
+that shakes is about to sink — telegraphed three ways at once, because this has
+to read on a scuffed screen from a few feet back. Leaves always come back, so
+the row can never be wiped out, and **you cannot lose**: going in the water
+costs points and a second and a half, never the run. Chimes float past and chain
+up to ×5; splashing costs the chain as well as the points.
 
 **Fonts** — Press Start 2P and Pixelify Sans, both under the SIL Open Font
 License; the licence files ship beside them in `assets/game/fonts/`.
 
-**Documentation**
+## Documentation
 
-- [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md) — the full design and planning
-  document: session shape, architecture, per-minigame rules and tuning tables,
-  testing, and the deferred work with its hook points.
+- [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md) — the premise, the technical
+  baseline, how Riverleap works and where it is weak, testing, and the full list
+  of what is parked and where to find it.
 - [`docs/ASSET_REQUESTS.md`](docs/ASSET_REQUESTS.md) — the art still to draw,
   with exact sizes. Everything on that list ships as a placeholder today.
 
-**Art pipeline** — hand-drawn source art lives untouched in `assets/`;
-`tools/normalize_assets.py` writes game-ready copies into `assets/game/` and
-`tools/make_placeholders.py` fills the gaps. Both need `pillow`; their outputs
-are committed, so neither is needed just to open the project.
+**Art pipeline** — `tools/normalize_assets.py` recovers true-resolution copies
+from hugely upscaled hand-drawn exports; `tools/make_placeholders.py` fills the
+gaps. Both need `pillow`; their outputs are committed, so neither is needed just
+to open the project.

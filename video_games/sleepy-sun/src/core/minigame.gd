@@ -2,18 +2,21 @@ class_name MiniGame
 extends Node2D
 ## Base class every minigame extends. The whole contract is three things:
 ##
-##   1. Router calls begin() once the fade-in has finished.
+##   1. Something calls begin().
 ##   2. The minigame plays out however it likes.
 ##   3. It calls finish(), which emits `finished` and hands control back.
 ##
-## Nothing in a minigame ever changes scenes or touches Game directly, so each
-## one can be run standalone in the editor (F6) or from tests/smoke_test.gd.
+## The cabinet shell that used to do step 1 -- the card draw, the lore cutscene,
+## the intro card -- is parked while one game at a time gets finished properly,
+## so for now the game starts itself. The contract is unchanged, which is the
+## point of having one: the shell can be put back in front of it without the
+## game knowing.
 
 signal finished(result: MiniGameResult)
 
-## Identifier matching an entry in Game.MINIGAMES.
+## Short identifier for this game. Used by saves and test output.
 @export var id: StringName = &""
-## Score a competent player should land near. Drives the rank on the results screen.
+## Score a competent player should land near.
 @export var par_score: int = 1000
 
 var elapsed: float = 0.0
@@ -21,8 +24,6 @@ var running: bool = false
 
 var _finished: bool = false
 var _popup_scene: PackedScene = preload("res://src/ui/score_popup.tscn")
-var _intro_scene: PackedScene = preload("res://src/ui/intro_card.tscn")
-var _cutscene_scene: PackedScene = preload("res://src/ui/cutscene.tscn")
 var _popup_root: Node2D
 
 
@@ -31,43 +32,8 @@ func _process(delta: float) -> void:
 		elapsed += delta
 
 
-## Router's entry point: lore, then rules, then play.
-##
-## The cutscene runs ahead of the intro card on purpose -- why you are here
-## first, what the buttons do second. Both live here rather than in the eight
-## minigames, so every game gets them for free and none of them has to know
-## either exists. Tests call begin() directly and skip straight to play.
-func enter() -> void:
-	await play_cutscene(Lore.before(id))
-	if not is_inside_tree() or _finished:
-		return
-
-	var card: IntroCard = _intro_scene.instantiate()
-	add_child(card)
-	card.play(id, control_hint())
-	await card.dismissed
-	if is_inside_tree() and not _finished:
-		begin()
-
-
-## Plays a shot list from Lore and returns when it is off the screen. Returns
-## immediately for an empty list, so a game with no lore written yet still runs.
-func play_cutscene(shots: Array) -> void:
-	if shots.is_empty():
-		return
-	var scene: Cutscene = _cutscene_scene.instantiate()
-	add_child(scene)
-	scene.play(shots)
-	await scene.done
-
-
-## What the controls do in *this* game, shown on the intro card. Overridden by
-## the games whose button does something other than nothing.
-func control_hint() -> String:
-	return "STICK  move"
-
-
-## Called once the intro is gone. Override this, not _ready().
+## Where a game actually starts. Override this, not _ready(), so that setup and
+## the first frame of play stay separable.
 func begin() -> void:
 	running = true
 
