@@ -14,6 +14,11 @@ const LANE_X: Array[float] = [106.0, 173.0, 240.0, 307.0, 374.0]
 const ROW_Y := 174.0
 
 const CROSSING_SECONDS := 62.0
+## How fast the shore passes, start to end of the crossing. The water surface
+## is deliberately an order of magnitude slower (set in the scene): you are
+## floating with the current, so it should not be rushing past you.
+const CURRENT_START := 39.0
+const CURRENT_END := 59.0
 const HOP_TIME := 0.26
 ## A short beat after landing before another hop can start, so the river cannot
 ## be crossed by drumming the stick. Small on purpose -- it should read as
@@ -52,8 +57,16 @@ const CHIME_CHAIN_MAX := 5
 @onready var _leaves_root: Node2D = $Leaves
 @onready var _chimes_root: Node2D = $Chimes
 @onready var _far_bank: Sprite2D = $World/FarBank
-@onready var _bank_left: ScrollingTexture = $World/BankLeft
-@onready var _bank_right: ScrollingTexture = $World/BankRight
+
+## Everything that is *shore* and so passes you at the speed of the current:
+## the ground, the waterline strip, and the trees and reeds standing on it.
+## They are driven from one value every frame, because when they were not --
+## the banks were set here and the water was left on whatever the scene said --
+## they visibly disagreed with each other.
+@onready var _current_movers: Array[Node] = [
+	$World/BankLeft, $World/BankEdgeLeft, $World/BankPropsLeft,
+	$World/BankRight, $World/BankEdgeRight, $World/BankPropsRight,
+]
 
 var _leaves: Array[RiverLeaf] = []
 var _lane: int = 2
@@ -144,10 +157,12 @@ func _advance_river(delta: float) -> void:
 	_progress = minf(_progress + delta / CROSSING_SECONDS, 1.0)
 	_hud.set_meter(_progress, &"far bank")
 
-	# The banks scrolling past are what sells the leaves as moving at all.
-	var speed := lerpf(39.0, 59.0, _progress)
-	for bank: ScrollingTexture in [_bank_left, _bank_right]:
-		bank.scroll = Vector2(0.0, speed)
+	# The shore going past is the *only* thing that sells the crossing: the
+	# water is nearly still in camera terms because the player is floating on
+	# it. All the speed lives here.
+	var speed := lerpf(CURRENT_START, CURRENT_END, _progress)
+	for mover in _current_movers:
+		mover.scroll = Vector2(0.0, speed)
 
 	if _progress >= 1.0:
 		_begin_arrival()

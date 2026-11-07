@@ -1,19 +1,22 @@
-[gd_scene load_steps=17 format=3]
+[gd_scene load_steps=20 format=3]
 
 [ext_resource type="Script" path="res://src/minigames/wind_leaf/wind_leaf.gd" id="1"]
 [ext_resource type="PackedScene" path="res://src/core/player.tscn" id="2"]
 [ext_resource type="PackedScene" path="res://src/ui/hud.tscn" id="3"]
 [ext_resource type="Script" path="res://src/core/scrolling_texture.gd" id="4"]
-[ext_resource type="Texture2D" path="res://assets/game/shared/water_0.png" id="5"]
-[ext_resource type="Texture2D" path="res://assets/game/shared/water_1.png" id="6"]
-[ext_resource type="Texture2D" path="res://assets/game/shared/water_2.png" id="7"]
+[ext_resource type="Script" path="res://src/core/scrolling_props.gd" id="4b"]
+[ext_resource type="Texture2D" path="res://assets/game/shared/water.png" id="5"]
+[ext_resource type="Texture2D" path="res://assets/game/shared/water_glints.png" id="6"]
+[ext_resource type="Texture2D" path="res://assets/game/shared/bank_edge.png" id="7"]
 [ext_resource type="Texture2D" path="res://assets/game/village/ground_0.png" id="8"]
 [ext_resource type="Texture2D" path="res://assets/game/village/tree.png" id="9"]
 [ext_resource type="Script" path="res://src/core/decor.gd" id="d_decor"]
-[ext_resource type="Texture2D" path="res://assets/game/decor/sparkle.png" id="d_spark"]
+[ext_resource type="Texture2D" path="res://assets/game/decor/glint.png" id="d_glint"]
 [ext_resource type="Texture2D" path="res://assets/game/decor/reed.png" id="d_reed"]
-[ext_resource type="Texture2D" path="res://assets/game/decor/lilypad.png" id="d_lily"]
 [ext_resource type="Texture2D" path="res://assets/game/decor/dragonfly.png" id="d_fly"]
+[ext_resource type="Texture2D" path="res://assets/game/decor/foam.png" id="d_foam"]
+[ext_resource type="Texture2D" path="res://assets/game/decor/twig.png" id="d_twig"]
+[ext_resource type="Texture2D" path="res://assets/game/decor/driftleaf.png" id="d_driftleaf"]
 
 [sub_resource type="Gradient" id="shore_grad"]
 offsets = PackedFloat32Array(0, 0.55, 0.75, 1)
@@ -32,89 +35,172 @@ par_score = 1800
 
 [node name="World" type="Node2D" parent="."]
 
+; --- the river ---------------------------------------------------------------
+; The player is floating WITH the current, so in camera terms the surface does
+; not translate at all and the banks are what fly past. Life comes from the
+; layers over it, never from dragging the base along -- that reads as a
+; conveyor belt rather than a river.
+;
+; The base is deliberately at zero rather than merely slow. Textures snap a
+; whole pixel at a time under nearest filtering, and one game pixel is three
+; on screen at 1080p, so a surface creeping at 4px/s ticks visibly once a
+; quarter second. Anything that moves slowly here has to either not move or
+; twinkle while it does.
+
 [node name="Water" type="Sprite2D" parent="World"]
 position = Vector2(240, 135)
 texture = ExtResource("5")
 script = ExtResource("4")
-frames = Array[Texture2D]([ExtResource("5"), ExtResource("6"), ExtResource("7")])
-frames_per_second = 4.0
-scroll = Vector2(0, 14)
 area = Vector2i(504, 318)
 
+[node name="WaterGlints" type="Sprite2D" parent="World"]
+position = Vector2(240, 135)
+texture = ExtResource("6")
+script = ExtResource("4")
+scroll = Vector2(0, 11)
+area = Vector2i(504, 318)
+
+[node name="Shimmer" type="Node2D" parent="World"]
+z_index = 1
+script = ExtResource("d_decor")
+texture = ExtResource("d_glint")
+count = 22
+drift = Vector2(0, 9)
+area = Rect2(78, 0, 324, 270)
+tint = Color(0.9, 0.98, 1, 0.5)
+scale_range = Vector2(0.6, 1.1)
+sway = 5.0
+twinkle = true
+
+; Things the current carries. They drift only a little faster than the surface,
+; because they are floating alongside you rather than rushing past -- the turn
+; and the bob are what sell them as afloat.
+[node name="RiverLitter" type="Node2D" parent="World"]
+z_index = 2
+script = ExtResource("4b")
+scroll = Vector2(0, 7)
+span = Vector2(-40, 310)
+speed_variance = 0.45
+jitter_x = Vector2(88, 392)
+bob = 3.0
+spin = 0.25
+
+[node name="Foam1" type="Sprite2D" parent="World/RiverLitter"]
+modulate = Color(1, 1, 1, 0.8)
+position = Vector2(132, 40)
+texture = ExtResource("d_foam")
+
+[node name="Foam2" type="Sprite2D" parent="World/RiverLitter"]
+modulate = Color(1, 1, 1, 0.65)
+position = Vector2(318, 150)
+texture = ExtResource("d_foam")
+
+[node name="Foam3" type="Sprite2D" parent="World/RiverLitter"]
+modulate = Color(1, 1, 1, 0.75)
+position = Vector2(206, 248)
+texture = ExtResource("d_foam")
+
+[node name="Twig1" type="Sprite2D" parent="World/RiverLitter"]
+position = Vector2(368, 86)
+texture = ExtResource("d_twig")
+
+[node name="DriftLeaf1" type="Sprite2D" parent="World/RiverLitter"]
+position = Vector2(104, 196)
+texture = ExtResource("d_driftleaf")
+
+[node name="DriftLeaf2" type="Sprite2D" parent="World/RiverLitter"]
+position = Vector2(286, 12)
+texture = ExtResource("d_driftleaf")
+
+; --- the banks ---------------------------------------------------------------
+; Ground, waterline and props all read one speed, set every frame by
+; wind_leaf.gd, so they cannot drift out of step with each other again.
+
 [node name="BankLeft" type="Sprite2D" parent="World"]
-position = Vector2(36, 135)
+position = Vector2(28, 135)
 texture = ExtResource("8")
 script = ExtResource("4")
-scroll = Vector2(0, 52)
-area = Vector2i(72, 318)
+scroll = Vector2(0, 46)
+area = Vector2i(56, 318)
+
+[node name="BankEdgeLeft" type="Sprite2D" parent="World"]
+position = Vector2(60, 135)
+texture = ExtResource("7")
+script = ExtResource("4")
+scroll = Vector2(0, 46)
+area = Vector2i(24, 318)
+
+[node name="BankPropsLeft" type="Node2D" parent="World"]
+script = ExtResource("4b")
+scroll = Vector2(0, 46)
+span = Vector2(-56, 326)
+
+[node name="TreeA" type="Sprite2D" parent="World/BankPropsLeft"]
+position = Vector2(22, 58)
+texture = ExtResource("9")
+
+[node name="TreeB" type="Sprite2D" parent="World/BankPropsLeft"]
+position = Vector2(30, 232)
+texture = ExtResource("9")
+
+[node name="ReedA" type="Sprite2D" parent="World/BankPropsLeft"]
+position = Vector2(54, 140)
+texture = ExtResource("d_reed")
+
+[node name="ReedB" type="Sprite2D" parent="World/BankPropsLeft"]
+position = Vector2(50, 290)
+texture = ExtResource("d_reed")
 
 [node name="BankRight" type="Sprite2D" parent="World"]
-position = Vector2(444, 135)
+position = Vector2(452, 135)
 texture = ExtResource("8")
 script = ExtResource("4")
-scroll = Vector2(0, 52)
-area = Vector2i(72, 318)
+scroll = Vector2(0, 46)
+area = Vector2i(56, 318)
 
-[node name="TreeA" type="Sprite2D" parent="World/BankLeft"]
-position = Vector2(-10, -45)
+[node name="BankEdgeRight" type="Sprite2D" parent="World"]
+position = Vector2(420, 135)
+flip_h = true
+texture = ExtResource("7")
+script = ExtResource("4")
+scroll = Vector2(0, 46)
+area = Vector2i(24, 318)
+
+[node name="BankPropsRight" type="Node2D" parent="World"]
+script = ExtResource("4b")
+scroll = Vector2(0, 46)
+span = Vector2(-56, 326)
+
+[node name="TreeC" type="Sprite2D" parent="World/BankPropsRight"]
+position = Vector2(456, 104)
 texture = ExtResource("9")
 
-[node name="TreeB" type="Sprite2D" parent="World/BankRight"]
-position = Vector2(9, 30)
+[node name="TreeD" type="Sprite2D" parent="World/BankPropsRight"]
+position = Vector2(448, 278)
 texture = ExtResource("9")
+
+[node name="ReedC" type="Sprite2D" parent="World/BankPropsRight"]
+position = Vector2(426, 40)
+texture = ExtResource("d_reed")
+
+[node name="ReedD" type="Sprite2D" parent="World/BankPropsRight"]
+position = Vector2(430, 196)
+texture = ExtResource("d_reed")
 
 [node name="FarBank" type="Sprite2D" parent="World"]
 position = Vector2(240, -60)
 texture = SubResource("shore")
 visible = false
 
-[node name="ReedA" type="Sprite2D" parent="World"]
-position = Vector2(26, 60)
-texture = ExtResource("d_reed")
-
-[node name="ReedB" type="Sprite2D" parent="World"]
-position = Vector2(58, 190)
-texture = ExtResource("d_reed")
-
-[node name="ReedC" type="Sprite2D" parent="World"]
-position = Vector2(424, 110)
-texture = ExtResource("d_reed")
-
-[node name="ReedD" type="Sprite2D" parent="World"]
-position = Vector2(452, 232)
-texture = ExtResource("d_reed")
-
-[node name="LilyA" type="Sprite2D" parent="World"]
-modulate = Color(0.8, 0.9, 0.82, 1)
-position = Vector2(96, 66)
-texture = ExtResource("d_lily")
-
-[node name="LilyB" type="Sprite2D" parent="World"]
-modulate = Color(0.8, 0.9, 0.82, 1)
-position = Vector2(392, 214)
-texture = ExtResource("d_lily")
-
-[node name="Shimmer" type="Node2D" parent="World"]
-z_index = 1
-script = ExtResource("d_decor")
-texture = ExtResource("d_spark")
-count = 20
-drift = Vector2(0, 26)
-area = Rect2(80, 0, 320, 270)
-tint = Color(0.85, 0.96, 1, 0.4)
-scale_range = Vector2(0.5, 0.9)
-sway = 4.0
-twinkle = true
-
 [node name="Dragonflies" type="Node2D" parent="World"]
 z_index = 30
 script = ExtResource("d_decor")
 texture = ExtResource("d_fly")
-count = 3
-drift = Vector2(-16, 5)
-area = Rect2(60, 40, 360, 200)
-tint = Color(1, 1, 1, 0.85)
-sway = 20.0
+count = 2
+drift = Vector2(-14, 6)
+area = Rect2(70, 40, 340, 200)
+tint = Color(1, 1, 1, 0.9)
+sway = 22.0
 
 [node name="Chimes" type="Node2D" parent="."]
 

@@ -9,13 +9,12 @@ extends CanvasLayer
 ## that caused it. What is left is state you glance at: how you are doing, how
 ## long you have, and whether you are on a run.
 
+## Only the meters the shipping games actually use. The other four icons went
+## with their minigames; naming a file that is not on disk is a crash waiting
+## for whoever adds the next meter.
 const METER_ICONS := {
-	&"dusk": "res://assets/game/ui/icon_sun.png",
 	&"time": "res://assets/game/ui/icon_clock.png",
-	&"crop": "res://assets/game/ui/icon_wheat.png",
-	&"lantern": "res://assets/game/ui/icon_lantern.png",
 	&"far bank": "res://assets/game/ui/icon_flag.png",
-	&"chamber": "res://assets/game/ui/icon_door.png",
 }
 
 @onready var _score: Label = $Root/Score

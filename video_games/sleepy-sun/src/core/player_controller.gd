@@ -138,15 +138,24 @@ func _recover_stamina(delta: float) -> void:
 ## --- jumping -----------------------------------------------------------------
 
 ## Call once as the hop leaves the ground. `direction` is -1, 0 or 1 for the
-## lean. The walk clip is paused on a mid-stride frame: a tucked, legs-apart
-## pose reads as airborne where a looping walk reads as running on the spot.
+## lean. The clip is paused on a mid-stride frame: a tucked, legs-apart pose
+## reads as airborne where a looping walk reads as running on the spot.
+##
+## It always poses from the SAME clip and mirrors it, because the two side
+## walk sets are not mirrors of each other -- `walk_right_*` strides, and
+## `walk_left_*` keeps the legs together in all four frames. Posing from
+## `walk_<facing>` therefore gave a stride hopping one way and none hopping
+## the other, which is exactly what it looked like.
+const JUMP_CLIP := &"walk_right"
+const JUMP_FRAME := 1
+
 func start_jump(direction: int = 0) -> void:
 	jumping = true
-	var clip := StringName("walk_" + facing)
-	if anim.sprite_frames != null and anim.sprite_frames.has_animation(clip):
-		anim.play(clip)
-		anim.frame = 1
+	if anim.sprite_frames != null and anim.sprite_frames.has_animation(JUMP_CLIP):
+		anim.play(JUMP_CLIP)
+		anim.frame = JUMP_FRAME
 	anim.pause()
+	anim.flip_h = direction < 0
 	_puff(2, 0.45)
 	set_jump_progress(0.0, direction)
 
@@ -176,6 +185,7 @@ func land() -> void:
 		return
 	jumping = false
 	anim.rotation = 0.0
+	anim.flip_h = false
 	shadow.scale = _rest_shadow
 	shadow.modulate.a = 0.75
 	_puff(3, 0.7)
@@ -191,6 +201,7 @@ func land() -> void:
 func cancel_jump() -> void:
 	jumping = false
 	anim.rotation = 0.0
+	anim.flip_h = false
 	anim.scale = _rest_scale
 	shadow.scale = _rest_shadow
 	shadow.modulate.a = 0.75
@@ -222,6 +233,9 @@ func _update_animation() -> void:
 	# the frame and unpause the clip every physics tick.
 	if jumping:
 		return
+	# The jump pose mirrors the sprite; nothing else ever should, so clear it
+	# here too rather than trusting every exit from the pose to tidy up.
+	anim.flip_h = false
 	var was_moving := is_moving
 	is_moving = velocity.length() > 6.0
 	if is_moving != was_moving:

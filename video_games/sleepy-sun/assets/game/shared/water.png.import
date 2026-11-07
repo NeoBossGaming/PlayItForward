@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://uedxlws2ba1k"
-path="res://.godot/imported/sparkle.png-f4f014d976c893010747b9b6908ffbeb.ctex"
+uid="uid://ccrialdbl1joh"
+path="res://.godot/imported/water.png-f162d7988587dd127b1bbd3243782966.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/game/decor/sparkle.png"
-dest_files=["res://.godot/imported/sparkle.png-f4f014d976c893010747b9b6908ffbeb.ctex"]
+source_file="res://assets/game/shared/water.png"
+dest_files=["res://.godot/imported/water.png-f162d7988587dd127b1bbd3243782966.ctex"]
 
 [params]
 

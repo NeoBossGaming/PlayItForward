@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bvc8rr82645qe"
-path="res://.godot/imported/water_1.png-3a868671c4136d9541dc1177271e15ad.ctex"
+uid="uid://cjgo2f3tvdqtb"
+path="res://.godot/imported/glint.png-8fd11e1fc6809b980e47bdeb5f7ff42a.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/game/shared/water_1.png"
-dest_files=["res://.godot/imported/water_1.png-3a868671c4136d9541dc1177271e15ad.ctex"]
+source_file="res://assets/game/decor/glint.png"
+dest_files=["res://.godot/imported/glint.png-8fd11e1fc6809b980e47bdeb5f7ff42a.ctex"]
 
 [params]
 

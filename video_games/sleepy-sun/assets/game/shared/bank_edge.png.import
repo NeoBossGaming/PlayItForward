@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://cp7cgvvp042y"
-path="res://.godot/imported/water_2.png-37ebd22e8c3fef78b637dee4738deef7.ctex"
+uid="uid://djhylrtmi68uj"
+path="res://.godot/imported/bank_edge.png-72c5299407b5077495655038d94f26cb.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/game/shared/water_2.png"
-dest_files=["res://.godot/imported/water_2.png-37ebd22e8c3fef78b637dee4738deef7.ctex"]
+source_file="res://assets/game/shared/bank_edge.png"
+dest_files=["res://.godot/imported/bank_edge.png-72c5299407b5077495655038d94f26cb.ctex"]
 
 [params]
 

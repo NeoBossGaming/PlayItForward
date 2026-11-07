@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bcebb0ox2d3qg"
-path="res://.godot/imported/scrim.png-9e62d9fe17bbd3d83995e50ff598e71f.ctex"
+uid="uid://dqik65nlcg02i"
+path="res://.godot/imported/water_glints.png-c479ac229ab0dbcf213aeac648a258e4.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/game/ui/scrim.png"
-dest_files=["res://.godot/imported/scrim.png-9e62d9fe17bbd3d83995e50ff598e71f.ctex"]
+source_file="res://assets/game/shared/water_glints.png"
+dest_files=["res://.godot/imported/water_glints.png-c479ac229ab0dbcf213aeac648a258e4.ctex"]
 
 [params]
 

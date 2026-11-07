@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c6hns3yljpwus"
-path="res://.godot/imported/water_0.png-19d684622f0a7622d76291b57be38238.ctex"
+uid="uid://pxuxje82d1gg"
+path="res://.godot/imported/twig.png-466340f4eb4fff521adc6450c06d6fea.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/game/shared/water_0.png"
-dest_files=["res://.godot/imported/water_0.png-19d684622f0a7622d76291b57be38238.ctex"]
+source_file="res://assets/game/decor/twig.png"
+dest_files=["res://.godot/imported/twig.png-466340f4eb4fff521adc6450c06d6fea.ctex"]
 
 [params]
 

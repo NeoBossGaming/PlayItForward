@@ -30,7 +30,9 @@ before it is all replaced:
 |---|---|---|---|
 | `assets/game/wind_leaf/leaf.png` | 32×32 | 1 | The thing the whole game is about. Seen from above, floating. It is tinted toward red and rotated in code as it starts to sink, so draw it **neutral and flat-on** — no baked shadow, no baked tilt. |
 | `assets/game/wind_leaf/chime.png` | 16×16 | 1 | A hanging river chime. Should read as metal and as *ringable* from a few feet back; it is the only pickup in the game. |
-| `assets/game/shared/water_0..2.png` | 32×32 | 3 | **Must tile seamlessly in both directions.** Three frames of gentle shimmer. The banks scroll past these, so a visible seam will be obvious. |
+| `assets/game/shared/water.png` | 64×64 | 1 | The river surface. **Must tile seamlessly in both directions** — check the wrap columns and rows, do not eye it. Two rules learned the hard way: no mark may span the full tile (continuous lines read as corrugated metal, not water), and there is no animation frame — the surface is a still base with `water_glints.png` drifting over it. |
+| `assets/game/shared/water_glints.png` | 64×64 | 1 | Mostly transparent. Sparse, soft-ended highlight streaks that drift over the base; this layer is where the water's movement comes from. |
+| `assets/game/shared/bank_edge.png` | 24×32 | 1 | The waterline, drawn for the LEFT bank (land left, water right; the right bank mirrors it). Grass, a wet lip, then shallows that **fade out in alpha** across the last third so the river shows through. If the water side ends in a colour instead of in transparency, it is a straight cut again. |
 | `assets/game/shared/ripple.png` | 32×32 | 1 | Expands under a leaf that is about to sink — one of the three redundant warnings, so it has to be legible on its own. |
 
 ## Priority 2 — the player
@@ -38,6 +40,7 @@ before it is all replaced:
 | Path | Size | Frames | Notes |
 |---|---|---|---|
 | `assets/game/player/idle_up.png` | 32×32 | 1 | **The only genuinely missing player art.** Currently frame 0 of the up-walk held still. Back view, standing — and it is what you look at most, since the character turns upstream between hops. |
+| `assets/game/player/walk_left_0..3.png` | 32×32 | 4 | **Not a mirror of the right-facing set, and missing its stride** — the legs stay together in all four frames while `walk_right_*` strides in three. The jump works around this by posing from the right set and mirroring it, so nothing is broken; but until these are redrawn, left-facing *walking* would look wrong in any future game that uses it. |
 
 The jump is **posed in code**, not drawn: squash, stretch, lean, and a landing
 squash applied to the walk frames. No jump sprites are needed. If you redraw the
@@ -48,8 +51,11 @@ scale is applied in `src/core/player.tscn`, not baked into the art.
 
 | Path | Size | Notes |
 |---|---|---|
-| `assets/game/village/ground_0.png` · `tree.png` | 32×32 · 32×48 | the two banks sliding past |
-| `assets/game/decor/reed.png` · `lilypad.png` · `dragonfly.png` · `sparkle.png` | small | river decoration |
+| `assets/game/village/ground_0.png` | 32×32 | the bank, tiled and scrolling |
+| `assets/game/village/tree.png` | 40×40 | Top-down, seen from above. It has now failed twice in opposite directions: first a near-black canopy that read as a stain on the grass, then one whose mid-tone was *exactly* the bank's green, so it vanished into the ground. It has to separate in value from `#4A7A3C` in both directions, and the cast shadow belongs in the sprite only because nothing else draws one. |
+| `assets/game/decor/reed.png` · `dragonfly.png` | small | bank and air. Both were redrawn once already for being too dark — at this size, anything near-black on the bank reads as a stain and anything grey over the water reads as dirt. |
+| `assets/game/decor/foam.png` · `twig.png` · `driftleaf.png` | small | what the current carries. These replaced lily pads, which grow in still water and read as wrong on a river however they move. |
+| `assets/game/decor/glint.png` | 6×4 | a soft highlight on the water. Replaced a hard plus-sign sparkle that read as a crosshair. |
 | `assets/game/decor/dust.png` | 4×4 | the motes kicked up by a landing. Warm, not white — a near-white mote is invisible over both the water and a lit leaf, which is every surface this game has |
 | `assets/game/ui/icon_flag.png` · `icon_clock.png` | 9×9 | says what the meter bar is measuring |
 | `assets/game/ui/pip.png` · `panel.png` · `shadow_small.png` | small | |

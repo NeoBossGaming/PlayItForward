@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://wo1nxos15xsu"
-path="res://.godot/imported/lilypad.png-47f326786f3cad01f3dc269e6495c140.ctex"
+uid="uid://dudd3rn2t6mj"
+path="res://.godot/imported/driftleaf.png-06cd60596d717d309cb15b09c58bbe72.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/game/decor/lilypad.png"
-dest_files=["res://.godot/imported/lilypad.png-47f326786f3cad01f3dc269e6495c140.ctex"]
+source_file="res://assets/game/decor/driftleaf.png"
+dest_files=["res://.godot/imported/driftleaf.png-06cd60596d717d309cb15b09c58bbe72.ctex"]
 
 [params]
 

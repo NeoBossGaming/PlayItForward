@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://7ggfh6re8fs0"
-path="res://.godot/imported/panel.png-d12239f5f085e12bd92cc95bd5f6528f.ctex"
+uid="uid://bddxy78d1evoa"
+path="res://.godot/imported/foam.png-843e85ea0efb205a8fe687974ce645cb.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/game/ui/panel.png"
-dest_files=["res://.godot/imported/panel.png-d12239f5f085e12bd92cc95bd5f6528f.ctex"]
+source_file="res://assets/game/decor/foam.png"
+dest_files=["res://.godot/imported/foam.png-843e85ea0efb205a8fe687974ce645cb.ctex"]
 
 [params]
 

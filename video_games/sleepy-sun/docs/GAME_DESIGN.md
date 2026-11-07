@@ -158,6 +158,42 @@ buffer means a press during a hop is honoured on landing.
 ×5. Splashing costs 150 points **and** the chain, so going in the water hurts
 twice.
 
+### The river
+
+The player floats **with** the current, so in camera terms the water surface
+does not translate at all and the banks are what fly past. All the speed lives
+in one value — `CURRENT_START`/`CURRENT_END` in `wind_leaf.gd`, applied every
+frame to the ground, the waterline strip and the bank props together. When it
+was not one value, the water crawled at 14 px/s while the banks ran at 39–59
+and the mismatch was the first thing a player noticed.
+
+Three things about the surface are worth not undoing:
+
+- **No mark spans the tile.** The first water tile drew a full-width dark line
+  every 12 rows out of a 32px tile. Continuous lines read as corrugated metal;
+  32 is not divisible by 12, so the pattern also broke at every seam; and the
+  three "shimmer" frames each shifted the bands 3px at 4fps, so the stripes
+  teleported four times a second. It is now one 64px tile of broken streaks and
+  soft mottling, seam-checked numerically, with **no flipbook at all**.
+- **The base layer is pinned at zero, not merely slow.** Textures snap a whole
+  pixel at a time under nearest filtering, and one game pixel is three on
+  screen at 1080p, so a surface creeping at 4 px/s ticks visibly once a quarter
+  second. Anything slow here either does not move or twinkles while it does.
+  Life comes from `WaterGlints` drifting over the top, the twinkling glint
+  field, and the litter.
+- **The shoreline ends in alpha, not in a colour.** Three attempts: a straight
+  vertical cut; sand so wide and bright it read as a dirt path; then shallows
+  drawn as an opaque rectangle, which simply moved the straight edge a few
+  pixels right. The tile now fades out across its last third and the river
+  shows through, and `BankLeft`/`BankRight` stop *short* of the fade — when
+  they did not, the fade revealed grass and hid the cut rather than removing it.
+
+`src/core/scrolling_props.gd` exists because `ScrollingTexture` scrolls a
+`region_rect`, so anything parented to it never moves: that is why the trees
+used to stand perfectly still on a bank racing past them. It carries
+hand-placed children and wraps them, and the river litter uses the same node
+with a bob and a slow turn.
+
 ### The hop has a pose
 
 There are no drawn jump frames, and inventing some would not match the
@@ -176,6 +212,12 @@ so any later game that jumps gets the same weight:
 - a hard squash on touchdown recovering over 0.17 s. **This is the part that
   sells the weight**, and it is the one to protect if anything here is tuned;
 - a few warm motes kicked up at the feet on take-off and landing.
+
+It always poses from **one clip, mirrored** (`walk_right` frame 1, with
+`flip_h`). The two side walk sets are not mirrors of each other: `walk_right_*`
+strides in three of its four frames and `walk_left_*` keeps the legs together
+in all four. Posing from `walk_<facing>` therefore gave a stride hopping one
+way and none hopping the other, which is exactly what it looked like.
 
 The arc went from 11 px to 18 px at the same time. At 11 the hop was a slide
 with a shadow: a quarter of a second is not long enough for a pose to register
