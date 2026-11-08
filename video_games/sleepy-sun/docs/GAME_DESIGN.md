@@ -160,12 +160,41 @@ twice.
 
 ### The river
 
-The player floats **with** the current, so in camera terms the water surface
-does not translate at all and the banks are what fly past. All the speed lives
-in one value — `CURRENT_START`/`CURRENT_END` in `wind_leaf.gd`, applied every
-frame to the ground, the waterline strip and the bank props together. When it
-was not one value, the water crawled at 14 px/s while the banks ran at 39–59
-and the mismatch was the first thing a player noticed.
+Everything scrolls, in one direction, at a fraction of one number:
+`CURRENT_START` → `CURRENT_END` in `wind_leaf.gd`, now **34 → 88 px/s** across
+the crossing. `LAYER_SPEEDS` in the same file is the whole parallax stack:
+
+| Layer | × current |
+|---|---|
+| treeline, past the bank | 0.35 |
+| water surface | 0.45 |
+| water glints | 0.60 |
+| river litter | 0.50 |
+| speed streaks | 1.25 |
+| bank, waterline, bank props | 1.00 |
+
+Different speeds in the **same** direction is the oldest depth cue in 2D, and
+it is what sells travelling rather than sliding. Nothing in the scene sets its
+own speed any more.
+
+### Two scroll bugs worth never repeating
+
+**`ScrollingTexture` and `ScrollingProps` disagreed on what a positive number
+meant.** The texture one advances a `region_rect` offset, which slides content
+*up*; the props one adds to `position.y`, which moves children *down*. Both
+were set to `(0, 46)`, so the grass and the shoreline crawled backwards past
+the trees standing on them, at 2.8 px/frame each way. It survived a soak run
+and three rounds of screenshots; it took a player to say the grass looked
+wrong. `ScrollingTexture` now negates internally so **positive Y means down**
+everywhere, and `tests/soak_test.gd` drives both scrollers and fails if they
+ever disagree again.
+
+**Freezing the water to stop a pixel-snap tick made it look dead.** The real
+culprit the round before had been the three-frame flipbook jumping 3px four
+times a second, not slow drift. A surface that does not move at all reads as a
+sticker over the river. The base layer moves again; the measured frame-to-frame
+change over the water went 3.9 (frozen) → 17 early → 21 late, and the curve is
+*flat*, which is the difference between flowing and strobing.
 
 Three things about the surface are worth not undoing:
 
@@ -191,8 +220,22 @@ Three things about the surface are worth not undoing:
 `src/core/scrolling_props.gd` exists because `ScrollingTexture` scrolls a
 `region_rect`, so anything parented to it never moves: that is why the trees
 used to stand perfectly still on a bank racing past them. It carries
-hand-placed children and wraps them, and the river litter uses the same node
-with a bob and a slow turn.
+hand-placed children and wraps them; the litter and the speed streaks use the
+same node.
+
+### Selling speed
+
+Beyond the parallax: **streaks** in the open water stretch from 0.55× to 1.9×
+and fade up from 0.12 to 0.6 alpha as the current rises, **chimes arrive twice
+as often** by the end, and `src/core/game_camera.gd` adds a whole-pixel rumble
+and a 1.03 push-in. Racing games widen the field of view at speed; this one
+zooms *in*, because zooming out would shrink a character that has already been
+called too small twice. `max_zoom = 1.0` turns the push-in off; the measured
+pixel-fidelity cost is in that file's comment.
+
+The crossing meter also left the top-right corner, where at 77×7 px it was
+small enough to finish a run without noticing, and became a band across the
+top with a marker riding the fill.
 
 ### The hop has a pose
 
@@ -226,6 +269,21 @@ unless the movement under it is legible too.
 Left side-on after a hop, the character used to stay that way indefinitely,
 which read as having stopped caring about the far bank. Half a second after the
 last hop they turn back upstream.
+
+### The pads
+
+`wind_leaf/leaf_*.png` is a lotus pad: a foreshortened disc with a wedge notch
+and veins radiating from it. The notch is mechanical, not decorative — it gives
+the pad an orientation, so the wobble that warns you it is about to sink reads
+as rotation instead of as a shimmer. Four float frames carry a highlight round
+the rim; three sink frames tip it under. Pads start on a random frame, because
+five pads drawing the same frame at the same instant read as one object
+repeated five times.
+
+The float cycle also runs up to 3.2× faster while a pad is shaking. That is a
+*fourth* warning cue on top of the wobble, the colour shift and the widening
+ripple — all four stay, because this is the only thing the game ever asks the
+player to read in a hurry.
 
 ### Known weakness, to be answered by playing
 

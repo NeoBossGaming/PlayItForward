@@ -16,7 +16,7 @@ const RISE_TIME := 0.45
 
 @export var lane: int = 0
 
-@onready var _sprite: Sprite2D = $Sprite
+@onready var _sprite: AnimatedSprite2D = $Sprite
 @onready var _ripple: Sprite2D = $Ripple
 
 var state: State = State.STABLE
@@ -26,10 +26,21 @@ var _shake_seed: float = 0.0
 var _respawn_delay: float = 2.2
 
 
+## How much faster the float cycle runs while the pad is about to go under.
+## The animation speeding up is a fourth warning cue alongside the wobble, the
+## colour shift and the ripple -- redundant on purpose, because this is the
+## only thing the game ever asks the player to read in a hurry.
+const SHAKE_ANIM_SCALE := 3.2
+
+
 func _ready() -> void:
 	_shake_seed = randf() * TAU
 	_ripple.modulate.a = 0.0
 	_sprite.scale = Vector2(2.0, 2.0)
+	# Pads all drawing the same frame at the same instant reads as one object
+	# repeated five times; an offset start reads as five pads.
+	_sprite.play(&"float")
+	_sprite.frame = randi() % 4
 
 
 func _process(delta: float) -> void:
@@ -61,6 +72,7 @@ func _process_shaking(delta: float) -> void:
 	_ripple.modulate.a = 0.25 + 0.45 * progress
 	_ripple.scale = Vector2.ONE * lerpf(1.4, 2.6, progress)
 	_ripple.rotation += delta * 2.0
+	_sprite.speed_scale = lerpf(1.0, SHAKE_ANIM_SCALE, progress)
 
 	if progress >= 1.0:
 		_begin_sinking()
@@ -68,6 +80,9 @@ func _process_shaking(delta: float) -> void:
 
 func _process_sinking() -> void:
 	var progress := clampf(_timer / SINK_TIME, 0.0, 1.0)
+	if _sprite.animation != &"sink":
+		_sprite.speed_scale = 1.0
+		_sprite.play(&"sink")
 	_sprite.scale = Vector2.ONE * lerpf(2.0, 1.2, progress)
 	_sprite.modulate.a = 1.0 - progress
 	_ripple.modulate.a = (1.0 - progress) * 0.5
@@ -99,6 +114,8 @@ func _begin_rising() -> void:
 	_sprite.rotation = 0.0
 	_sprite.position = Vector2.ZERO
 	_sprite.modulate = Color(1, 1, 1, 0.0)
+	_sprite.speed_scale = 1.0
+	_sprite.play(&"float")
 
 
 func _enter(new_state: State) -> void:

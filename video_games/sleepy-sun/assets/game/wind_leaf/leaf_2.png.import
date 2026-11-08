@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://dc7oltsfn88hw"
-path="res://.godot/imported/leaf.png-5646734b56cbe85a94b2091c9455fcd6.ctex"
+uid="uid://bvpf3y3tc7hil"
+path="res://.godot/imported/leaf_2.png-76e6aea1a52df4431ec3f6fbad5a03be.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/game/wind_leaf/leaf.png"
-dest_files=["res://.godot/imported/leaf.png-5646734b56cbe85a94b2091c9455fcd6.ctex"]
+source_file="res://assets/game/wind_leaf/leaf_2.png"
+dest_files=["res://.godot/imported/leaf_2.png-76e6aea1a52df4431ec3f6fbad5a03be.ctex"]
 
 [params]
 

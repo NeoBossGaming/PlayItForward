@@ -24,6 +24,8 @@ var _reacted_to_lane: int = -1
 
 func _ready() -> void:
 	await _test_contract()
+	await _test_scrollers_agree()
+	await _test_parallax_order()
 	await _test_crossing()
 	await _test_drowning_is_not_escapable()
 
@@ -84,6 +86,89 @@ func _test_contract() -> void:
 	await _frames(1)
 	_check(received.size() == 1, "a second finish() should be ignored")
 
+	game.free()
+	await _frames(2)
+
+
+## The two scrollers have to mean the same thing by a positive number.
+##
+## They did not, for a whole round. ScrollingTexture advances a region offset,
+## which slides content UP; ScrollingProps adds to position.y, which moves
+## children DOWN. Set to the same +46 the grass crawled backwards past the
+## trees standing on it. Nothing caught it: the soak passed, the screenshots
+## looked fine, and it took a player to say the grass looked wrong.
+func _test_scrollers_agree() -> void:
+	var texture := ScrollingTexture.new()
+	texture.texture = load("res://assets/game/village/ground_0.png")
+	texture.area = Vector2i(64, 64)
+	texture.scroll = Vector2(0, 60)
+	add_child(texture)
+
+	var props := ScrollingProps.new()
+	props.scroll = Vector2(0, 60)
+	props.span = Vector2(-500, 500)          # far enough not to wrap in the window
+	var marker := Sprite2D.new()
+	marker.position = Vector2.ZERO
+	props.add_child(marker)
+	add_child(props)
+
+	await _frames(2)
+	var region_before: float = texture.region_rect.position.y
+	var prop_before: float = marker.position.y
+	await _frames(20)
+
+	# Content moves down when the region offset DEcreases, and when a child's
+	# position.y INcreases. Both must read "down" for the same positive scroll.
+	var texture_down := region_before - texture.region_rect.position.y
+	var props_down := marker.position.y - prop_before
+
+	_check(texture_down > 0.0,
+			"a positive scroll should move ScrollingTexture content down, got %.1f"
+			% texture_down)
+	_check(props_down > 0.0,
+			"a positive scroll should move ScrollingProps children down, got %.1f"
+			% props_down)
+	_check(absf(texture_down - props_down) < 2.0,
+			"the two scrollers disagree: texture moved %.1f, props moved %.1f"
+			% [texture_down, props_down])
+	if texture_down > 0.0 and props_down > 0.0:
+		print("  scrollers    agree: +scroll moves content down in both")
+	texture.free()
+	props.free()
+	await _frames(2)
+
+
+## Every layer must ride the current in the SAME direction, ordered by
+## distance. Measuring this from screenshots is hopeless -- the tiles repeat
+## every 32 or 64px, so a correlation cannot tell a shift from its alias --
+## but the speeds the game sets are exact, so assert those.
+func _test_parallax_order() -> void:
+	var game := (load(SCENE) as PackedScene).instantiate() as MiniGame
+	add_child(game)
+	await _frames(3)
+	game.begin()
+	await _frames(10)
+
+	var order := ["World/TreelineLeft", "World/Water", "World/RiverLitter",
+			"World/BankLeft"]
+	var speeds: Array[float] = []
+	for path in order:
+		var node := game.get_node_or_null(NodePath(path))
+		_check(node != null, "parallax layer %s is missing" % path)
+		if node == null:
+			game.free()
+			return
+		speeds.append(node.scroll.y)
+
+	for i in speeds.size():
+		_check(speeds[i] > 0.0,
+				"%s scrolls %.1f -- every layer must travel the same way as the "
+				% [order[i], speeds[i]] + "rest, downstream toward the player")
+	for i in speeds.size() - 1:
+		_check(speeds[i] < speeds[i + 1],
+				"parallax out of order: %s (%.1f) should be slower than %s (%.1f)"
+				% [order[i], speeds[i], order[i + 1], speeds[i + 1]])
+	print("  parallax    %s" % [speeds])
 	game.free()
 	await _frames(2)
 

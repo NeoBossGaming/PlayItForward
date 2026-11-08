@@ -14,11 +14,30 @@ const LANE_X: Array[float] = [106.0, 173.0, 240.0, 307.0, 374.0]
 const ROW_Y := 174.0
 
 const CROSSING_SECONDS := 62.0
-## How fast the shore passes, start to end of the crossing. The water surface
-## is deliberately an order of magnitude slower (set in the scene): you are
-## floating with the current, so it should not be rushing past you.
-const CURRENT_START := 39.0
-const CURRENT_END := 59.0
+## How fast the shore passes, start to end of the crossing -- about 2.5x, so
+## the river is plainly quicker by the end instead of imperceptibly so.
+const CURRENT_START := 34.0
+const CURRENT_END := 88.0
+
+## Every scrolling layer is a fraction of the current, so the whole scene is
+## one parallax stack driven by one number. Different speeds in the SAME
+## direction is the oldest depth cue in 2D and it is what this scene never
+## had: distance behind, the surface you float on in the middle, the shore
+## you are passing at full speed.
+const LAYER_SPEEDS := {
+	"World/TreelineLeft": 0.35,
+	"World/TreelineRight": 0.35,
+	"World/Water": 0.45,
+	"World/WaterGlints": 0.60,
+	"World/RiverLitter": 0.50,
+	"World/Streaks": 1.25,
+	"World/BankLeft": 1.0,
+	"World/BankEdgeLeft": 1.0,
+	"World/BankPropsLeft": 1.0,
+	"World/BankRight": 1.0,
+	"World/BankEdgeRight": 1.0,
+	"World/BankPropsRight": 1.0,
+}
 const HOP_TIME := 0.26
 ## A short beat after landing before another hop can start, so the river cannot
 ## be crossed by drumming the stick. Small on purpose -- it should read as
@@ -42,7 +61,6 @@ const BANDS: Array[Array] = [
 ]
 
 const CHIME_INTERVAL := 2.5
-const CHIME_SPEED := 47.0
 const SCORE_ARRIVAL := 1500
 const SCORE_CHIME := 80
 const SCORE_SPLASH := -150
@@ -58,15 +76,8 @@ const CHIME_CHAIN_MAX := 5
 @onready var _chimes_root: Node2D = $Chimes
 @onready var _far_bank: Sprite2D = $World/FarBank
 
-## Everything that is *shore* and so passes you at the speed of the current:
-## the ground, the waterline strip, and the trees and reeds standing on it.
-## They are driven from one value every frame, because when they were not --
-## the banks were set here and the water was left on whatever the scene said --
-## they visibly disagreed with each other.
-@onready var _current_movers: Array[Node] = [
-	$World/BankLeft, $World/BankEdgeLeft, $World/BankPropsLeft,
-	$World/BankRight, $World/BankEdgeRight, $World/BankPropsRight,
-]
+@onready var _camera: GameCamera = $Camera
+@onready var _streaks: ScrollingProps = $World/Streaks
 
 var _leaves: Array[RiverLeaf] = []
 var _lane: int = 2
@@ -157,12 +168,24 @@ func _advance_river(delta: float) -> void:
 	_progress = minf(_progress + delta / CROSSING_SECONDS, 1.0)
 	_hud.set_meter(_progress, &"far bank")
 
-	# The shore going past is the *only* thing that sells the crossing: the
-	# water is nearly still in camera terms because the player is floating on
-	# it. All the speed lives here.
+	# One current, every layer a fraction of it. Nothing in the scene sets its
+	# own speed any more -- two scrollers disagreeing is how the grass ended up
+	# crawling backwards past the trees standing on it.
 	var speed := lerpf(CURRENT_START, CURRENT_END, _progress)
-	for mover in _current_movers:
-		mover.scroll = Vector2(0.0, speed)
+	for path in LAYER_SPEEDS:
+		var layer := get_node_or_null(NodePath(path))
+		if layer != null:
+			layer.scroll = Vector2(0.0, speed * float(LAYER_SPEEDS[path]))
+
+	# Streaks stretch and multiply with the current. More of them, longer,
+	# and moving faster is three cues for the price of one.
+	var rush := clampf((speed - CURRENT_START) / (CURRENT_END - CURRENT_START),
+			0.0, 1.0)
+	for streak: Node2D in _streaks.get_children():
+		streak.scale = Vector2(lerpf(0.55, 1.9, rush), 1.0)
+		streak.modulate.a = lerpf(0.12, 0.6, rush)
+
+	_camera.set_intensity(rush)
 
 	if _progress >= 1.0:
 		_begin_arrival()
@@ -423,18 +446,26 @@ func _tick_chimes(delta: float) -> void:
 	if not _arriving:
 		_chime_timer -= delta
 		if _chime_timer <= 0.0:
-			_chime_timer = CHIME_INTERVAL * randf_range(0.8, 1.3)
+			# Up to twice as often by the end of the crossing.
+			var rate := lerpf(1.0, 0.5, _progress)
+			_chime_timer = CHIME_INTERVAL * rate * randf_range(0.8, 1.3)
 			_spawn_chime()
 
 	for chime: Sprite2D in _chimes_root.get_children():
 		if chime.has_meta(&"collected"):
 			continue
-		chime.position.y += CHIME_SPEED * delta
+		chime.position.y += _chime_speed() * delta
 		chime.rotation = sin(chime.position.y / 18.0) * 0.3
 		if chime.position.y > 300.0:
 			chime.queue_free()
 		elif not _in_water and chime.position.distance_to(_player.position) < 18.0:
 			_collect(chime)
+
+
+## Chimes drift with the river, a shade faster than the surface so they still
+## close on the player rather than hanging alongside.
+func _chime_speed() -> float:
+	return lerpf(CURRENT_START, CURRENT_END, _progress) * 0.85
 
 
 func _spawn_chime() -> void:

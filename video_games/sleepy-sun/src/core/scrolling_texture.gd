@@ -10,7 +10,15 @@ extends Sprite2D
 ## Extra tile frames. If set, the sprite cycles through them for a shimmer.
 @export var frames: Array[Texture2D] = []
 @export var frames_per_second: float = 5.0
-## Pixels per second the texture drifts. Positive Y scrolls downstream.
+## Pixels per second the texture drifts. **Positive Y moves the visible content
+## DOWN the screen**, the same as adding to a node's `position.y` and the same
+## as ScrollingProps -- so one number means one thing everywhere.
+##
+## That costs a negation below, because the region offset runs the other way:
+## raising region_rect.position.y samples further down the texture, which slides
+## the content UP. The two scrollers disagreed on this for a whole round. The
+## grass and the shoreline crawled backwards past trees and litter going
+## forwards, and nothing layered on top of that could feel coherent.
 @export var scroll: Vector2 = Vector2.ZERO
 @export var area: Vector2i = Vector2i(704, 424):
 	set(value):
@@ -36,7 +44,7 @@ func _apply_area() -> void:
 
 func _process(delta: float) -> void:
 	if scroll != Vector2.ZERO:
-		_offset += scroll * delta
+		_offset -= scroll * delta
 		# Wrap on the tile size so the offset never grows without bound.
 		if texture != null:
 			var size := Vector2(texture.get_size())
@@ -53,6 +61,7 @@ func _process(delta: float) -> void:
 
 
 ## Nudges the drift directly, for one-off pushes rather than constant flow.
+## Same convention as `scroll`: positive Y pushes the content down.
 func add_offset(delta_offset: Vector2) -> void:
-	_offset += delta_offset
+	_offset -= delta_offset
 	_apply_area()

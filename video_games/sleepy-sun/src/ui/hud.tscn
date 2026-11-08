@@ -1,9 +1,10 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=8 format=3]
 
 [ext_resource type="Script" path="res://src/ui/hud.gd" id="1"]
 [ext_resource type="Texture2D" path="res://assets/game/ui/icon_clock.png" id="2"]
 [ext_resource type="Texture2D" path="res://assets/game/ui/alarm_frame.png" id="3"]
 [ext_resource type="Texture2D" path="res://assets/game/ui/vignette.png" id="4"]
+[ext_resource type="Texture2D" path="res://assets/game/ui/pip.png" id="5"]
 
 [sub_resource type="StyleBoxFlat" id="bg"]
 bg_color = Color(0.07, 0.06, 0.12, 0.7)
@@ -79,36 +80,39 @@ text = "x2"
 horizontal_alignment = 0
 mouse_filter = 2
 
-[node name="MeterIcon" type="TextureRect" parent="Root"]
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -95.0
-offset_top = 26.0
-offset_right = -86.0
-offset_bottom = 35.0
-texture = ExtResource("2")
-stretch_mode = 5
-mouse_filter = 2
-
 [node name="Meter" type="ProgressBar" parent="Root"]
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -83.0
-offset_top = 28.0
-offset_right = -6.0
-offset_bottom = 33.0
+offset_left = 14.0
+offset_top = 7.0
+offset_right = 316.0
+offset_bottom = 14.0
 theme_override_styles/background = SubResource("bg")
 theme_override_styles/fill = SubResource("fill")
 value = 0.0
 show_percentage = false
 
+[node name="MeterMark" type="TextureRect" parent="Root"]
+offset_left = 11.0
+offset_top = 7.0
+offset_right = 18.0
+offset_bottom = 14.0
+texture = ExtResource("5")
+stretch_mode = 5
+mouse_filter = 2
+
+[node name="MeterIcon" type="TextureRect" parent="Root"]
+offset_left = 320.0
+offset_top = 6.0
+offset_right = 329.0
+offset_bottom = 15.0
+texture = ExtResource("2")
+stretch_mode = 5
+mouse_filter = 2
+
 [node name="Stamina" type="ProgressBar" parent="Root"]
-offset_left = 6.0
-offset_top = 8.0
-offset_right = 66.0
-offset_bottom = 13.0
+offset_left = 14.0
+offset_top = 18.0
+offset_right = 74.0
+offset_bottom = 23.0
 theme_override_styles/background = SubResource("bg")
 theme_override_styles/fill = SubResource("stam_fill")
 value = 100.0

@@ -85,10 +85,15 @@ KEEP = {
     "shared/water.png", "shared/water_glints.png", "shared/bank_edge.png",
     "shared/ripple.png",
     # (water_0..2 were the striped tiles; shared/water.png replaced all three)
-    "wind_leaf/leaf.png", "wind_leaf/chime.png",
-    "village/ground_0.png", "village/tree.png",
+    "wind_leaf/leaf_0.png", "wind_leaf/leaf_1.png", "wind_leaf/leaf_2.png",
+    "wind_leaf/leaf_3.png",
+    "wind_leaf/leaf_sink_0.png", "wind_leaf/leaf_sink_1.png",
+    "wind_leaf/leaf_sink_2.png",
+    "wind_leaf/chime.png",
+    "village/ground_0.png", "village/tree.png", "village/treeline.png",
     "decor/reed.png", "decor/dragonfly.png", "decor/glint.png",
     "decor/foam.png", "decor/twig.png", "decor/driftleaf.png",
+    "decor/streak.png",
     "decor/dust.png",
     "ui/icon_flag.png", "ui/icon_clock.png", "ui/pip.png",
     "ui/vignette.png", "ui/alarm_frame.png", "ui/shadow_small.png",
@@ -234,6 +239,105 @@ def ripple():
     d.ellipse([4, 10, 27, 21], outline=P["foam"])
     d.ellipse([9, 13, 22, 18], outline=P["water_light"])
     save(img, "shared/ripple.png")
+
+
+def lotus_pads():
+    """The thing you stand on, which had been a bright green slab.
+
+    A lotus pad: a foreshortened disc with a wedge notch and veins radiating
+    from it. The notch is not decoration -- it gives the pad an orientation,
+    so the wobble that warns you it is about to sink actually reads as
+    rotation instead of as a shimmer.
+
+    Four float frames carry a highlight around the rim and breathe the pad a
+    pixel; three sink frames tip it under. Everything else about the warning
+    (colour shift, widening ripple, accelerating wobble) still comes from
+    leaf.gd -- the animation is a fourth redundant cue, not a replacement.
+    """
+    import math as _m
+    W, H = 32, 26
+    CX, CY, RX = 16.0, 13.0, 15.0
+
+    rim = (26, 116, 56, 255)
+    body = (52, 162, 80, 255)
+    lit = (104, 202, 100, 255)
+    vein = (38, 138, 66, 255)
+    hot = (198, 240, 148, 255)
+
+    def pad(ry, highlight_angle, submerge=0.0, alpha=1.0, name="x"):
+        img, _ = canvas(W, H)
+        for y in range(H):
+            for x in range(W):
+                dx, dy = (x + 0.5 - CX) / RX, (y + 0.5 - CY) / ry
+                d = _m.sqrt(dx * dx + dy * dy)
+                if d > 1.0:
+                    continue
+                # Angle in the pad's OWN space, not the screen's: the disc is
+                # foreshortened, so a wedge measured in raw pixels comes out
+                # far wider at the sides than intended.
+                ang = _m.atan2(dy, dx)
+                if abs(ang) < 0.17 and d > 0.10:          # the wedge notch
+                    continue
+                if d > 0.88:
+                    c = rim
+                else:
+                    # Veins radiate from the notch apex at the centre.
+                    spoke = abs(_m.sin(ang * 4.0))
+                    if spoke < 0.16 and d > 0.22:
+                        c = vein
+                    elif dx + dy < -0.45:
+                        c = lit
+                    else:
+                        c = body
+                # A highlight that travels round the rim frame to frame.
+                if d > 0.66 and abs(((ang - highlight_angle + _m.pi) % _m.tau)
+                                    - _m.pi) < 0.40:
+                    c = hot
+                if submerge > 0.0:
+                    water = (46, 100, 141)
+                    c = tuple(int(c[i] * (1.0 - submerge) + water[i] * submerge)
+                              for i in range(3)) + (c[3],)
+                img.putpixel((x, y), (c[0], c[1], c[2], int(c[3] * alpha)))
+        save(img, name)
+
+    # Float: the pad breathes a pixel and the highlight walks round it.
+    for f in range(4):
+        pad(10.0 + 0.6 * _m.sin(f / 4.0 * _m.tau),
+            -2.2 + f / 4.0 * _m.tau, name=f"wind_leaf/leaf_{f}.png")
+
+    # Sink: tipping under, flattening and taking the water's colour with it.
+    for f in range(3):
+        t = (f + 1) / 3.0
+        pad(10.0 * (1.0 - 0.55 * t), -2.2, submerge=0.55 * t,
+            alpha=1.0 - 0.45 * t, name=f"wind_leaf/leaf_sink_{f}.png")
+
+
+def treeline():
+    """Distant trees past the bank, as the slowest parallax layer.
+
+    Deliberately dark, low contrast and detail-free. It is scenery at a
+    distance and its whole job is to move slower than the bank in front of
+    it; anything legible here would compete with five lanes of gameplay.
+    Tiles vertically.
+    """
+    import math as _m
+    W, H = 24, 32
+    img, _ = canvas(W, H, (34, 58, 38, 255))
+    rng = random.Random(4600)
+    dark = (26, 46, 32)
+    mid = (40, 68, 44)
+    # Canopies placed on a vertical rhythm that divides H, so it tiles.
+    for i in range(4):
+        cy = i * (H / 4.0) + rng.uniform(-1.5, 1.5)
+        cx = rng.uniform(4.0, 19.0)
+        r = rng.uniform(4.5, 8.0)
+        tone = dark if rng.random() < 0.55 else mid
+        for y in range(H):
+            for x in range(W):
+                dy = min(abs(y - cy), abs(y - cy + H), abs(y - cy - H))
+                if _m.sqrt((x - cx) ** 2 + dy ** 2) <= r:
+                    img.putpixel((x, y), (*tone, 255))
+    save(img, "village/treeline.png")
 
 
 def chime():
@@ -511,6 +615,18 @@ def decor_props():
             d.point((x, 1 + rng.randrange(0, 3)), (*P["foam"][:3], a // 2))
     save(img, "decor/foam.png")
 
+    img, d = canvas(30, 3)                                  # speed streak
+    # Longer and thinner than the foam: at speed these are drawn stretched
+    # and in numbers, which is the 2D version of the speed lines a racing
+    # game draws when the world starts going past quickly.
+    for x in range(30):
+        t = 1.0 - abs(x - 14.5) / 14.5
+        a = int(190 * t ** 0.6)
+        d.point((x, 1), (*P["foam"][:3], a))
+        if 6 < x < 23:
+            d.point((x, 0), (*P["foam"][:3], a // 3))
+    save(img, "decor/streak.png")
+
     img, d = canvas(14, 6)                                  # twig
     d.line([(0, 4), (13, 2)], fill=(104, 78, 48, 255))
     d.line([(0, 5), (13, 3)], fill=(74, 54, 34, 255))
@@ -602,8 +718,8 @@ def decor_props():
 
 def main() -> None:
     water_tiles(); bank_edge(); ripple()
-    chime()
-    village_tiles(); tree()
+    lotus_pads(); chime()
+    village_tiles(); tree(); treeline()
     ui_bits(); hud_icons(); alarm_frame(); vignette(); scrim()
     decor_motes(); decor_props()
     made = sorted(p.relative_to(OUT).as_posix() for p in OUT.rglob("*.png"))

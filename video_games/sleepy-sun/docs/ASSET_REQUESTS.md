@@ -28,7 +28,8 @@ before it is all replaced:
 
 | Path | Size | Frames | Notes |
 |---|---|---|---|
-| `assets/game/wind_leaf/leaf.png` | 32×32 | 1 | The thing the whole game is about. Seen from above, floating. It is tinted toward red and rotated in code as it starts to sink, so draw it **neutral and flat-on** — no baked shadow, no baked tilt. |
+| `assets/game/wind_leaf/leaf_0..3.png` | 32×26 | 4 | The thing the whole game is about: a lotus pad, seen from above. **Keep the wedge notch** — it is what gives the pad an orientation, without which the wobble that warns you it is sinking reads as a shimmer rather than as rotation. The four frames are a float cycle; the game also speeds that cycle up while a pad is shaking. Draw them **neutral and flat-on**, no baked shadow and no baked tilt: the tint and the rotation are applied in code. |
+| `assets/game/wind_leaf/leaf_sink_0..2.png` | 32×26 | 3 | The pad going under: flattening and taking on the water's colour. Frame 2 is nearly gone. |
 | `assets/game/wind_leaf/chime.png` | 16×16 | 1 | A hanging river chime. Should read as metal and as *ringable* from a few feet back; it is the only pickup in the game. |
 | `assets/game/shared/water.png` | 64×64 | 1 | The river surface. **Must tile seamlessly in both directions** — check the wrap columns and rows, do not eye it. Two rules learned the hard way: no mark may span the full tile (continuous lines read as corrugated metal, not water), and there is no animation frame — the surface is a still base with `water_glints.png` drifting over it. |
 | `assets/game/shared/water_glints.png` | 64×64 | 1 | Mostly transparent. Sparse, soft-ended highlight streaks that drift over the base; this layer is where the water's movement comes from. |
@@ -52,10 +53,12 @@ scale is applied in `src/core/player.tscn`, not baked into the art.
 | Path | Size | Notes |
 |---|---|---|
 | `assets/game/village/ground_0.png` | 32×32 | the bank, tiled and scrolling |
+| `assets/game/village/treeline.png` | 24×32 | distant trees past each bank, and the slowest parallax layer. **Deliberately dark, flat and detail-free** — its whole job is to move slower than the bank in front of it, and anything legible here competes with five lanes of gameplay. Must tile vertically. |
 | `assets/game/village/tree.png` | 40×40 | Top-down, seen from above. It has now failed twice in opposite directions: first a near-black canopy that read as a stain on the grass, then one whose mid-tone was *exactly* the bank's green, so it vanished into the ground. It has to separate in value from `#4A7A3C` in both directions, and the cast shadow belongs in the sprite only because nothing else draws one. |
 | `assets/game/decor/reed.png` · `dragonfly.png` | small | bank and air. Both were redrawn once already for being too dark — at this size, anything near-black on the bank reads as a stain and anything grey over the water reads as dirt. |
 | `assets/game/decor/foam.png` · `twig.png` · `driftleaf.png` | small | what the current carries. These replaced lily pads, which grow in still water and read as wrong on a river however they move. |
 | `assets/game/decor/glint.png` | 6×4 | a soft highlight on the water. Replaced a hard plus-sign sparkle that read as a crosshair. |
+| `assets/game/decor/streak.png` | 30×3 | a speed line. Drawn stretched up to 1.9× and multiplied as the current rises; it does not need detail, only length. |
 | `assets/game/decor/dust.png` | 4×4 | the motes kicked up by a landing. Warm, not white — a near-white mote is invisible over both the water and a lit leaf, which is every surface this game has |
 | `assets/game/ui/icon_flag.png` · `icon_clock.png` | 9×9 | says what the meter bar is measuring |
 | `assets/game/ui/pip.png` · `panel.png` · `shadow_small.png` | small | |

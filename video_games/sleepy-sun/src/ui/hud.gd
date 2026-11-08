@@ -21,6 +21,7 @@ const METER_ICONS := {
 @onready var _multiplier: Label = $Root/Multiplier
 @onready var _meter: ProgressBar = $Root/Meter
 @onready var _meter_icon: TextureRect = $Root/MeterIcon
+@onready var _meter_mark: TextureRect = $Root/MeterMark
 @onready var _stamina: ProgressBar = $Root/Stamina
 @onready var _pips: HBoxContainer = $Root/Pips
 @onready var _toast: Label = $Root/Toast
@@ -85,9 +86,19 @@ func set_multiplier(value: int) -> void:
 
 
 ## `kind` picks the icon that sits beside the bar, so the bar never needs a word.
+## The crossing bar. It used to be 77x7 tucked under the score in the corner,
+## which is small enough that a player can finish a run without ever noticing
+## there was a progress meter at all. It is now a band across the top with a
+## marker riding the fill, because a goal you can watch yourself approaching
+## is one of the better ways to make a scene feel like it is going somewhere.
 func set_meter(ratio: float, kind: StringName = &"time") -> void:
+	var value := clampf(ratio, 0.0, 1.0)
 	_meter.visible = true
-	_meter.value = clampf(ratio, 0.0, 1.0) * 100.0
+	_meter.value = value * 100.0
+
+	_meter_mark.visible = true
+	_meter_mark.position.x = _meter.position.x - 3.0 + _meter.size.x * value
+
 	var path: String = METER_ICONS.get(kind, METER_ICONS[&"time"])
 	var icon := load(path)
 	if icon != null:
@@ -96,6 +107,7 @@ func set_meter(ratio: float, kind: StringName = &"time") -> void:
 
 
 func hide_meter() -> void:
+	_meter_mark.visible = false
 	_meter.visible = false
 	_meter_icon.visible = false
 
