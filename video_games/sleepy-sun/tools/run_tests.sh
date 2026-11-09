@@ -4,7 +4,9 @@
 #   tools/run_tests.sh                 # uses `godot` from PATH
 #   GODOT=/path/to/godot tools/run_tests.sh
 #
-# Needs Godot 4.6. Nothing here opens a window, so it works over SSH and in CI.
+# Needs Godot 4.7 -- the version the project is actually played on. Verifying
+# on 4.6 while the game ran on 4.7 is how a HUD bug survived three rounds of
+# "verified". Nothing here opens a window, so it works over SSH and in CI.
 set -uo pipefail
 
 GODOT="${GODOT:-godot}"

@@ -242,17 +242,19 @@ def ripple():
 
 
 def lotus_pads():
-    """The thing you stand on, which had been a bright green slab.
+    """The thing you stand on.
 
     A lotus pad: a foreshortened disc with a wedge notch and veins radiating
     from it. The notch is not decoration -- it gives the pad an orientation,
-    so the wobble that warns you it is about to sink actually reads as
-    rotation instead of as a shimmer.
+    so the wobble that warns you it is about to sink reads as rotation rather
+    than as a shimmer.
 
-    Four float frames carry a highlight around the rim and breathe the pad a
-    pixel; three sink frames tip it under. Everything else about the warning
-    (colour shift, widening ripple, accelerating wobble) still comes from
-    leaf.gd -- the animation is a fourth redundant cue, not a replacement.
+    The first version walked a highlight around the rim across the four frames.
+    At 4fps that is a full lap a second, which is a loading spinner, and it is
+    exactly what it looked like. The light now sits where every other lit thing
+    in this scene is lit from -- the top left -- and the animation moves the
+    *shape* instead: the pad breathes and its lit edge creeps a pixel. Nothing
+    travels around the rim any more, so nothing can read as a spinner.
     """
     import math as _m
     W, H = 32, 26
@@ -264,7 +266,7 @@ def lotus_pads():
     vein = (38, 138, 66, 255)
     hot = (198, 240, 148, 255)
 
-    def pad(ry, highlight_angle, submerge=0.0, alpha=1.0, name="x"):
+    def pad(ry, breath, submerge=0.0, alpha=1.0, name="x"):
         img, _ = canvas(W, H)
         for y in range(H):
             for x in range(W):
@@ -272,7 +274,7 @@ def lotus_pads():
                 d = _m.sqrt(dx * dx + dy * dy)
                 if d > 1.0:
                     continue
-                # Angle in the pad's OWN space, not the screen's: the disc is
+                # Angle in the pad's own space, not the screen's: the disc is
                 # foreshortened, so a wedge measured in raw pixels comes out
                 # far wider at the sides than intended.
                 ang = _m.atan2(dy, dx)
@@ -281,17 +283,16 @@ def lotus_pads():
                 if d > 0.88:
                     c = rim
                 else:
-                    # Veins radiate from the notch apex at the centre.
                     spoke = abs(_m.sin(ang * 4.0))
                     if spoke < 0.16 and d > 0.22:
                         c = vein
-                    elif dx + dy < -0.45:
+                    elif dx + dy < -0.45 + breath:
                         c = lit
                     else:
                         c = body
-                # A highlight that travels round the rim frame to frame.
-                if d > 0.66 and abs(((ang - highlight_angle + _m.pi) % _m.tau)
-                                    - _m.pi) < 0.40:
+                # A fixed glint, upper left, where the light is. It only
+                # breathes with the pad; it never travels.
+                if d > 0.52 and d < 0.92 and -2.5 < ang < -1.5:
                     c = hot
                 if submerge > 0.0:
                     water = (46, 100, 141)
@@ -300,15 +301,16 @@ def lotus_pads():
                 img.putpixel((x, y), (c[0], c[1], c[2], int(c[3] * alpha)))
         save(img, name)
 
-    # Float: the pad breathes a pixel and the highlight walks round it.
+    # Float: the pad breathes a pixel and its lit edge creeps, nothing more.
     for f in range(4):
-        pad(10.0 + 0.6 * _m.sin(f / 4.0 * _m.tau),
-            -2.2 + f / 4.0 * _m.tau, name=f"wind_leaf/leaf_{f}.png")
+        phase = f / 4.0 * _m.tau
+        pad(10.0 + 0.6 * _m.sin(phase), 0.07 * _m.sin(phase + 1.2),
+            name=f"wind_leaf/leaf_{f}.png")
 
     # Sink: tipping under, flattening and taking the water's colour with it.
     for f in range(3):
         t = (f + 1) / 3.0
-        pad(10.0 * (1.0 - 0.55 * t), -2.2, submerge=0.55 * t,
+        pad(10.0 * (1.0 - 0.55 * t), 0.0, submerge=0.55 * t,
             alpha=1.0 - 0.45 * t, name=f"wind_leaf/leaf_sink_{f}.png")
 
 

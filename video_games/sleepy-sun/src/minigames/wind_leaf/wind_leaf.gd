@@ -60,6 +60,13 @@ const BANDS: Array[Array] = [
 	[0.66, 0.90, 0.55, 2],
 ]
 
+## A wake is the thing that makes an object holding its screen position read
+## as moving THROUGH the water rather than anchored in it. The pads and the
+## player keep their place on screen, so without this the river slides past
+## them and they look moored. Spawn rate and reach both rise with the current.
+const WAKE_INTERVAL := 0.16
+const WAKE_LIFE := 0.5
+
 const CHIME_INTERVAL := 2.5
 const SCORE_ARRIVAL := 1500
 const SCORE_CHIME := 80
@@ -92,6 +99,7 @@ var _recovery_timer: float = 0.0
 
 var _shake_timer: float = 0.0
 var _chime_timer: float = 0.0
+var _wake_timer: float = 0.0
 
 var _chimes: int = 0
 var _splashes: int = 0
@@ -102,6 +110,8 @@ var _hop_cooldown: float = 0.0
 var _idle_facing_timer: float = 0.0
 
 var _leaf_scene := preload("res://src/minigames/wind_leaf/leaf.tscn")
+var _wake_texture := preload("res://assets/game/decor/foam.png")
+var _wake_root: Node2D
 var _chime_texture := preload("res://assets/game/wind_leaf/chime.png")
 
 
@@ -109,6 +119,9 @@ func _ready() -> void:
 	for lane in LANES:
 		var leaf: RiverLeaf = _leaf_scene.instantiate()
 		leaf.lane = lane
+		# A fifth of a cycle apart, so the bob reads as one swell crossing the
+		# river rather than five pads on their own timers.
+		leaf.wave_phase = float(lane) * TAU / float(LANES)
 		leaf.position = Vector2(LANE_X[lane], ROW_Y)
 		leaf.sank.connect(_on_leaf_sank)
 		_leaves_root.add_child(leaf)
@@ -148,6 +161,7 @@ func _process(delta: float) -> void:
 	_tick_chimes(delta)
 	_tick_recovery(delta)
 	_tick_facing(delta)
+	_tick_wakes(delta)
 	_check_footing()
 
 
@@ -181,11 +195,19 @@ func _advance_river(delta: float) -> void:
 	# and moving faster is three cues for the price of one.
 	var rush := clampf((speed - CURRENT_START) / (CURRENT_END - CURRENT_START),
 			0.0, 1.0)
+	# Weighted toward the banks: peripheral motion is where speed is read, and
+	# the middle of the river is where the player is reading pads.
 	for streak: Node2D in _streaks.get_children():
-		streak.scale = Vector2(lerpf(0.55, 1.9, rush), 1.0)
-		streak.modulate.a = lerpf(0.12, 0.6, rush)
+		var edge := clampf(absf(streak.position.x - 240.0) / 160.0, 0.0, 1.0)
+		streak.scale = Vector2(lerpf(0.55, 1.9, rush) * lerpf(0.65, 1.25, edge), 1.0)
+		streak.modulate.a = lerpf(0.10, 0.55, rush) * lerpf(0.55, 1.0, edge)
 
 	_camera.set_intensity(rush)
+
+	# The swell quickens with the river.
+	var swell := lerpf(1.8, 3.4, rush)
+	for leaf in _leaves:
+		leaf.wave_speed = swell
 
 	if _progress >= 1.0:
 		_begin_arrival()
@@ -303,6 +325,7 @@ func _on_hop_landed() -> void:
 	_hopping = false
 	_hop_cooldown = HOP_COOLDOWN
 	_player.land()
+	_camera.kick(0.28)
 	_check_footing()
 
 
@@ -336,7 +359,7 @@ func _fall_in() -> void:
 	_buffered_direction = 0
 	_buffer_timer = 0.0
 	Audio.sfx(&"splash")
-	Juice.shake(self, 2.5)
+	_camera.kick(1.0)
 	var lost := _chain
 	_chain = 0
 	_refresh_score()
@@ -460,6 +483,54 @@ func _tick_chimes(delta: float) -> void:
 			chime.queue_free()
 		elif not _in_water and chime.position.distance_to(_player.position) < 18.0:
 			_collect(chime)
+
+
+## Foam shed behind every pad and behind the player, streaming downstream and
+## fading. Cheap -- a handful alive at once -- and it is what tells the eye
+## that these things are travelling rather than moored in a river sliding past.
+func _tick_wakes(delta: float) -> void:
+	if _arriving:
+		return
+	var rush := _rush()
+	_wake_timer -= delta
+	if _wake_timer > 0.0:
+		return
+	_wake_timer = WAKE_INTERVAL / lerpf(1.0, 2.1, rush)
+
+	if _wake_root == null or not is_instance_valid(_wake_root):
+		_wake_root = Node2D.new()
+		_wake_root.name = "Wakes"
+		_wake_root.z_index = 3
+		add_child(_wake_root)
+
+	for leaf in _leaves:
+		if leaf.is_standable():
+			_shed_wake(leaf.position + Vector2(randf_range(-14.0, 14.0), 20.0), rush, 0.5)
+	if not _in_water:
+		_shed_wake(_player.position + Vector2(randf_range(-5.0, 5.0), 4.0), rush, 0.85)
+
+
+func _shed_wake(at: Vector2, rush: float, strength: float) -> void:
+	var wake := Sprite2D.new()
+	wake.texture = _wake_texture
+	wake.position = at
+	wake.scale = Vector2(lerpf(0.5, 1.1, rush), 0.8)
+	wake.modulate = Color(1, 1, 1, 0.42 * strength)
+	_wake_root.add_child(wake)
+
+	var travel := lerpf(22.0, 54.0, rush)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(wake, "position:y", at.y + travel, WAKE_LIFE)
+	tween.tween_property(wake, "modulate:a", 0.0, WAKE_LIFE)
+	tween.tween_property(wake, "scale:x", wake.scale.x * 1.6, WAKE_LIFE)
+	tween.chain().tween_callback(wake.queue_free)
+
+
+## 0 at the start of the crossing, 1 at the end. Everything speed-linked reads
+## this rather than recomputing the lerp.
+func _rush() -> float:
+	return clampf(_progress, 0.0, 1.0)
 
 
 ## Chimes drift with the river, a shade faster than the surface so they still

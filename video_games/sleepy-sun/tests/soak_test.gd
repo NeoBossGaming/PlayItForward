@@ -26,6 +26,7 @@ func _ready() -> void:
 	await _test_contract()
 	await _test_scrollers_agree()
 	await _test_parallax_order()
+	await _test_pads_ride_one_swell()
 	await _test_crossing()
 	await _test_drowning_is_not_escapable()
 
@@ -169,6 +170,46 @@ func _test_parallax_order() -> void:
 				"parallax out of order: %s (%.1f) should be slower than %s (%.1f)"
 				% [order[i], speeds[i], order[i + 1], speeds[i + 1]])
 	print("  parallax    %s" % [speeds])
+	game.free()
+	await _frames(2)
+
+
+## The pads bob on one swell, a fifth of a cycle apart. If they ever share a
+## phase they bob in unison and the river reads as five pads on one hinge; if
+## the phases are random, as they were, it reads as five pads twitching. The
+## wave only exists in the spacing.
+func _test_pads_ride_one_swell() -> void:
+	var game := (load(SCENE) as PackedScene).instantiate() as MiniGame
+	add_child(game)
+	await _frames(3)
+	game.begin()
+	await _frames(12)
+
+	var pads: Array = game.get_node("Leaves").get_children()
+	_check(pads.size() == 5, "expected 5 pads, found %d" % pads.size())
+
+	var heights: Array[float] = []
+	var phases: Array[float] = []
+	for pad in pads:
+		phases.append(pad.wave_phase)
+		heights.append((pad.get_node("Sprite") as Node2D).position.y)
+
+	for i in phases.size():
+		for j in range(i + 1, phases.size()):
+			_check(absf(phases[i] - phases[j]) > 0.4,
+					"pads %d and %d share a swell phase (%.2f) -- they will bob "
+					% [i, j, phases[i]] + "in unison instead of as a wave")
+
+	# And the phases have to show up as actual spread in where the pads sit.
+	var lo := heights[0]
+	var hi := heights[0]
+	for h in heights:
+		lo = minf(lo, h)
+		hi = maxf(hi, h)
+	_check(hi - lo > 1.5,
+			"the pads are level (spread %.2f px) -- the swell is not moving them"
+			% (hi - lo))
+	print("  swell       pad heights spread %.1f px across the row" % (hi - lo))
 	game.free()
 	await _frames(2)
 

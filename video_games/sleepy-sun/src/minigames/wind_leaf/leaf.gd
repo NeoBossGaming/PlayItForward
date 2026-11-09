@@ -16,6 +16,13 @@ const RISE_TIME := 0.45
 
 @export var lane: int = 0
 
+## Where this pad sits in the swell. Set from the lane so the five pads bob in
+## sequence and the eye reads one wave crossing the river, rather than five
+## pads twitching on their own timers -- which is what a random phase gave.
+var wave_phase: float = 0.0
+## Radians per second of that swell. The game raises it with the current.
+var wave_speed: float = 2.0
+
 @onready var _sprite: AnimatedSprite2D = $Sprite
 @onready var _ripple: Sprite2D = $Ripple
 
@@ -56,9 +63,17 @@ func _process(delta: float) -> void:
 		State.RISING:
 			_process_rising()
 		State.STABLE:
-			# Idle drift so a stable leaf never looks frozen next to a shaking one.
-			_sprite.rotation = sin(Time.get_ticks_msec() / 900.0 + _shake_seed) * 0.04
-			_sprite.position.y = sin(Time.get_ticks_msec() / 700.0 + _shake_seed) * 0.8
+			_ride_the_swell()
+
+
+## A pad afloat is never still. Vertical bob, a little sway and a slow roll,
+## all on one phase -- so when the five lanes are given phases a fifth of a
+## cycle apart, the swell visibly travels across the river.
+func _ride_the_swell() -> void:
+	var t := wave_phase + Time.get_ticks_msec() / 1000.0 * wave_speed
+	_sprite.position.y = sin(t) * 3.0
+	_sprite.position.x = sin(t * 0.5) * 1.4
+	_sprite.rotation = sin(t + 0.6) * 0.05
 
 
 func _process_shaking(delta: float) -> void:

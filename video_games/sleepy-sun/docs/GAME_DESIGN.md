@@ -51,6 +51,7 @@ cutscene with nothing on either side of it is just a delay.
 | Stretch | `canvas_items`, `keep`, **integer** | pixel-perfect at any size |
 | Texture filter | **Nearest** (project-wide) | it is pixel art |
 | Renderer | GL Compatibility | what a Pi 4/5 can drive |
+| Engine | **Godot 4.7** | and the tests must run on it, not on whatever is handy |
 | Player sprite | **1.5×** (≈18 × 43 px) | ~3.8 % of screen width at 480 wide |
 
 The resolution drop was the second attempt at making the player read. Scaling
@@ -225,13 +226,42 @@ same node.
 
 ### Selling speed
 
-Beyond the parallax: **streaks** in the open water stretch from 0.55× to 1.9×
-and fade up from 0.12 to 0.6 alpha as the current rises, **chimes arrive twice
-as often** by the end, and `src/core/game_camera.gd` adds a whole-pixel rumble
-and a 1.03 push-in. Racing games widen the field of view at speed; this one
-zooms *in*, because zooming out would shrink a character that has already been
-called too small twice. `max_zoom = 1.0` turns the push-in off; the measured
-pixel-fidelity cost is in that file's comment.
+The techniques here are the standard ones, and they were researched rather than
+guessed: **camera distance is the strongest lever** (widening the field of view,
+or equivalently moving the camera closer, is repeatedly cited as the simplest
+effective speed cue), **shake should be small and event-driven** rather than
+constant, **peripheral motion** is where speed is read, and **you fake speed
+rather than raising it**, because raising real velocity breaks balance. So
+`CROSSING_SECONDS` and the difficulty bands have never moved.
+
+Beyond the parallax: **streaks** stretch and brighten with the current and are
+**weighted toward the banks**, because peripheral motion is where speed is read
+and the middle of the river is where the player is reading pads. **Chimes
+arrive twice as often** by the end. `src/core/game_camera.gd` supplies a 1.06
+push-in; it zooms *in* rather than out because zooming out would shrink a
+character already called too small twice. `max_zoom = 1.0` turns it off and the
+measured pixel-fidelity cost is in that file.
+
+**The shake had to be rebuilt.** The first attempt was ±1 *game* pixel at 7 Hz
+and rounded, which at 3× screen scale snapped three screen pixels at a time,
+dozens of times a second, across the whole world. Neo called it an earthquake
+and he was right. Two things fix it: a third of a game pixel is exactly one
+screen pixel, so working in fractions and **never rounding** lands in the one-
+to-two screen pixels a light shake is supposed to be; and a constant sine is
+the wrong shape, so most of the shake now arrives as **bursts that decay**
+(`kick()` on a landing, a sinking pad, a splash) with only a trace continuous.
+Measured after: peak offset 1.15 screen px, largest per-frame step 0.45 px.
+`shake_scale = 0.0` turns all of it off, which constant shake should always
+allow.
+
+### The wake
+
+The pads and the player hold their screen position, so without something else
+the river slides past them and they read as moored rather than travelling. Each
+pad and the player shed **foam that streams downstream and fades**, more often
+and further as the current rises. It is the cue that says "this is moving
+through the water", and it is why the pads did not need to be rebuilt into a
+streaming row to stop looking anchored.
 
 The crossing meter also left the top-right corner, where at 77×7 px it was
 small enough to finish a run without noticing, and became a band across the
@@ -279,6 +309,17 @@ as rotation instead of as a shimmer. Four float frames carry a highlight round
 the rim; three sink frames tip it under. Pads start on a random frame, because
 five pads drawing the same frame at the same instant read as one object
 repeated five times.
+
+**The pads ride one swell.** Each is given a wave phase a fifth of a cycle from
+its neighbours, so the bob reads as a single swell crossing the river rather
+than five pads twitching on their own timers -- which is what a random phase
+gave. The soak suite asserts the phases stay distinct and that they show up as
+real spread in where the pads sit.
+
+**The glint does not travel.** It used to walk around the rim across the four
+frames, which at 4 fps is a full lap a second: a loading spinner, and that is
+exactly what it looked like. The light now sits top-left like everything else
+lit in this scene and the frames animate the *shape* instead.
 
 The float cycle also runs up to 3.2× faster while a pad is shaking. That is a
 *fourth* warning cue on top of the wobble, the colour shift and the widening

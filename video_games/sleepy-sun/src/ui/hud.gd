@@ -12,6 +12,19 @@ extends CanvasLayer
 ## Only the meters the shipping games actually use. The other four icons went
 ## with their minigames; naming a file that is not on disk is a crash waiting
 ## for whoever adds the next meter.
+## The crossing bar, as an explicit rectangle in viewport pixels.
+##
+## It used to be a ProgressBar laid out by anchors and the project theme, and
+## Neo reported it running off the screen on his machine -- which I could not
+## reproduce on either Godot 4.6 or 4.7, headless or windowed. Rather than keep
+## hunting a phantom, it is now two ColorRects positioned from this one
+## constant in code: no theme, no minimum size, no layout negotiation, nothing
+## that can differ between engine versions. It is also narrower than the slab
+## it replaced, which at 63% of the screen width read as overflowing whether it
+## technically was or not.
+const BAR := Rect2(96.0, 7.0, 216.0, 6.0)
+const BAR_ICON_GAP := 5.0
+
 const METER_ICONS := {
 	&"time": "res://assets/game/ui/icon_clock.png",
 	&"far bank": "res://assets/game/ui/icon_flag.png",
@@ -19,7 +32,8 @@ const METER_ICONS := {
 
 @onready var _score: Label = $Root/Score
 @onready var _multiplier: Label = $Root/Multiplier
-@onready var _meter: ProgressBar = $Root/Meter
+@onready var _meter_track: ColorRect = $Root/MeterTrack
+@onready var _meter_fill: ColorRect = $Root/MeterFill
 @onready var _meter_icon: TextureRect = $Root/MeterIcon
 @onready var _meter_mark: TextureRect = $Root/MeterMark
 @onready var _stamina: ProgressBar = $Root/Stamina
@@ -36,7 +50,20 @@ var _alarm_pulse: float = 0.0
 
 
 func _ready() -> void:
-	_meter.visible = false
+	# The bar's geometry lives in BAR, not in the scene, so it is laid out here
+	# and nowhere else.
+	_meter_track.position = BAR.position
+	_meter_track.size = BAR.size
+	_meter_fill.position = BAR.position
+	_meter_fill.size = Vector2(0.0, BAR.size.y)
+	_meter_icon.size = Vector2(9.0, 9.0)
+	_meter_icon.position = Vector2(BAR.end.x + BAR_ICON_GAP,
+			BAR.position.y + (BAR.size.y - 9.0) * 0.5)
+	_meter_mark.size = Vector2(7.0, 7.0)
+
+	_meter_track.visible = false
+	_meter_fill.visible = false
+	_meter_mark.visible = false
 	_meter_icon.visible = false
 	_stamina.visible = false
 	_pips.visible = false
@@ -93,11 +120,16 @@ func set_multiplier(value: int) -> void:
 ## is one of the better ways to make a scene feel like it is going somewhere.
 func set_meter(ratio: float, kind: StringName = &"time") -> void:
 	var value := clampf(ratio, 0.0, 1.0)
-	_meter.visible = true
-	_meter.value = value * 100.0
+	_meter_track.visible = true
+	_meter_fill.visible = true
+	# Width is driven straight from the constant, so the fill cannot outrun the
+	# track and the track cannot outrun the screen.
+	_meter_fill.size = Vector2(BAR.size.x * value, BAR.size.y)
 
 	_meter_mark.visible = true
-	_meter_mark.position.x = _meter.position.x - 3.0 + _meter.size.x * value
+	_meter_mark.position = Vector2(
+			BAR.position.x + BAR.size.x * value - _meter_mark.size.x * 0.5,
+			BAR.position.y + (BAR.size.y - _meter_mark.size.y) * 0.5)
 
 	var path: String = METER_ICONS.get(kind, METER_ICONS[&"time"])
 	var icon := load(path)
@@ -108,7 +140,8 @@ func set_meter(ratio: float, kind: StringName = &"time") -> void:
 
 func hide_meter() -> void:
 	_meter_mark.visible = false
-	_meter.visible = false
+	_meter_track.visible = false
+	_meter_fill.visible = false
 	_meter_icon.visible = false
 
 

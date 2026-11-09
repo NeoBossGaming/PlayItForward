@@ -1,7 +1,7 @@
 # Sleepy Sun
 
 The first adventure for the **Play It Forward** charity arcade cabinet, built in
-Godot 4.6 for a Raspberry Pi 4/5.
+Godot 4.7 for a Raspberry Pi 4/5.
 
 **Right now this project is one game.** Four earlier rounds built eight
 minigames and a whole cabinet shell around them; none of them got finished
