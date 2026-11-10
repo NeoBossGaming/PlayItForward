@@ -90,12 +90,14 @@ KEEP = {
     "wind_leaf/leaf_sink_0.png", "wind_leaf/leaf_sink_1.png",
     "wind_leaf/leaf_sink_2.png",
     "wind_leaf/chime.png",
+    "wind_leaf/log.png", "wind_leaf/heron.png", "wind_leaf/dive_shadow.png",
     "village/ground_0.png", "village/tree.png", "village/treeline.png",
     "decor/reed.png", "decor/dragonfly.png", "decor/glint.png",
     "decor/foam.png", "decor/twig.png", "decor/driftleaf.png",
     "decor/streak.png",
     "decor/dust.png",
     "ui/icon_flag.png", "ui/icon_clock.png", "ui/pip.png",
+    "ui/heart_full.png", "ui/heart_half.png", "ui/heart_empty.png",
     "ui/vignette.png", "ui/alarm_frame.png", "ui/shadow_small.png",
 }
 
@@ -312,6 +314,119 @@ def lotus_pads():
         t = (f + 1) / 3.0
         pad(10.0 * (1.0 - 0.55 * t), 0.0, submerge=0.55 * t,
             alpha=1.0 - 0.45 * t, name=f"wind_leaf/leaf_sink_{f}.png")
+
+
+def hazards():
+    """What the river throws at you, and what warns you it is coming.
+
+    The log is the hazard that teaches the jump, so it has to read as solid
+    and as *oncoming* from a long way off -- it is wide, bright against the
+    water, and lit along its top edge. The heron is the one jumping does not
+    save you from, so it must look nothing like the log: dark, vertical,
+    airborne.
+    """
+    import math as _m
+    rng = random.Random(4700)
+
+    # --- driftwood ------------------------------------------------------
+    W, H = 56, 18
+    img, d = canvas(W, H)
+    d.ellipse([0, 3, W - 1, H - 4], fill=(96, 70, 44, 255))
+    d.ellipse([0, 2, W - 1, H - 7], fill=(132, 98, 60, 255))
+    d.ellipse([2, 3, W - 3, H - 10], fill=(166, 128, 80, 255))
+    for _ in range(26):                                   # bark grain
+        x = rng.randrange(4, W - 6)
+        y = rng.randrange(5, H - 6)
+        d.line([(x, y), (x + rng.randrange(2, 6), y)], fill=(112, 82, 50, 255))
+    for cx in (3, W - 5):                                 # cut ends
+        d.ellipse([cx - 3, 4, cx + 3, H - 5], fill=(146, 112, 70, 255))
+        d.ellipse([cx - 2, 6, cx + 2, H - 7], fill=(108, 80, 50, 255))
+    d.polygon([(W // 2 - 6, 2), (W // 2 + 1, 0), (W // 2 + 4, 4)],
+              fill=(86, 112, 56, 255))                    # a sprig of moss
+    save(img, "wind_leaf/log.png")
+
+    # --- heron ----------------------------------------------------------
+    W, H = 28, 34
+    img, d = canvas(W, H)
+    body = (54, 62, 84, 255)
+    light = (96, 106, 134, 255)
+    d.polygon([(14, 6), (21, 20), (14, 30), (7, 20)], fill=body)   # body
+    d.polygon([(14, 8), (19, 20), (14, 26)], fill=light)
+    d.polygon([(7, 14), (0, 4), (4, 20)], fill=body)               # wings
+    d.polygon([(21, 14), (27, 4), (24, 20)], fill=body)
+    d.ellipse([11, 1, 17, 8], fill=light)                          # head
+    d.polygon([(14, 30), (12, 34), (16, 34)], fill=(226, 160, 70, 255))
+    d.point((13, 4), (24, 22, 34, 255))
+    save(img, "wind_leaf/heron.png")
+
+    # --- the mark that warns you ----------------------------------------
+    # Jumping does not save you from a dive, so THIS SPRITE IS THE DODGE. If
+    # it cannot be seen in time the hazard is simply unfair.
+    #
+    # It has now failed in both directions. A dark blob is invisible on dark
+    # water -- but the soft pale ring that replaced it was invisible too, for
+    # the opposite reason: the river surface is covered in pale horizontal
+    # glints at exactly that value, and the ring dissolved into them.
+    #
+    # So: hot orange-red, which nothing else in the scene uses (water blue,
+    # pads green, log brown); HARD edges, with a near-black outline on both
+    # sides so it separates from any background value rather than relying on
+    # being lighter; and reticle ticks outside it, because a plain circle on
+    # water reads as a ripple -- which the game already uses to mean something
+    # else -- while a reticle reads as a thing about to land here.
+    W = H = 40
+    img, _ = canvas(W, H)
+    px = img.load()
+    bright = (255, 92, 48)
+    outline = (26, 14, 10)
+    for y in range(H):
+        for x in range(W):
+            dx, dy = (x + 0.5 - W / 2) / (W / 2), (y + 0.5 - H / 2) / (H / 2)
+            d = _m.sqrt(dx * dx + dy * dy)
+            if d > 1.0:
+                continue
+            # Reticle ticks: four stubs on the axes, outside the ring.
+            if d > 0.86:
+                on_axis = abs(dx) < 0.16 or abs(dy) < 0.16
+                if on_axis:
+                    px[x, y] = bright + (235,)
+                continue
+            if d > 0.80:
+                px[x, y] = outline + (225,)
+            elif d > 0.60:
+                px[x, y] = bright + (255,)
+            elif d > 0.53:
+                px[x, y] = outline + (225,)
+            else:
+                # Barely-there wash, so the pad underneath stays readable.
+                px[x, y] = (60, 16, 10, 48)
+    save(img, "wind_leaf/dive_shadow.png")
+
+
+def heart_segments():
+    """Five of these are the health bar. Full, half and empty.
+
+    Drawn as blocky segments rather than literal hearts: at 11x9 a heart is
+    mush, and a segmented bar is what Neo asked for anyway.
+    """
+    W, H = 11, 9
+    shell = (34, 30, 48, 255)
+    edge = (92, 86, 118, 255)
+    full = (236, 84, 92, 255)
+    full_lit = (255, 142, 136, 255)
+
+    def seg(fill_to: float, name: str):
+        img, d = canvas(W, H)
+        d.rectangle([0, 0, W - 1, H - 1], fill=shell, outline=edge)
+        cut = int(round((W - 2) * fill_to))
+        if cut > 0:
+            d.rectangle([1, 1, cut, H - 2], fill=full)
+            d.rectangle([1, 1, cut, 2], fill=full_lit)
+        save(img, f"ui/{name}.png")
+
+    seg(1.0, "heart_full")
+    seg(0.5, "heart_half")
+    seg(0.0, "heart_empty")
 
 
 def treeline():
@@ -720,9 +835,9 @@ def decor_props():
 
 def main() -> None:
     water_tiles(); bank_edge(); ripple()
-    lotus_pads(); chime()
+    lotus_pads(); chime(); hazards()
     village_tiles(); tree(); treeline()
-    ui_bits(); hud_icons(); alarm_frame(); vignette(); scrim()
+    ui_bits(); hud_icons(); heart_segments(); alarm_frame(); vignette(); scrim()
     decor_motes(); decor_props()
     made = sorted(p.relative_to(OUT).as_posix() for p in OUT.rglob("*.png"))
     print(f"assets/game now holds {len(made)} sprites")

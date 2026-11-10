@@ -25,6 +25,25 @@ extends CanvasLayer
 const BAR := Rect2(96.0, 7.0, 216.0, 6.0)
 const BAR_ICON_GAP := 5.0
 
+## The health bar, laid out from one constant for the same reason the meter is:
+## five segments at a fixed size and a fixed gap, positioned absolutely, with
+## no container doing arithmetic on our behalf. Top-left, because the score
+## already owns the top-right and that is where an arcade player looks for it.
+##
+## The art is 11x9 and is drawn at 2x, so each segment lands on whole viewport
+## pixels and therefore on whole screen pixels at every integer window scale.
+const LIFE_ORIGIN := Vector2(10.0, 6.0)
+const LIFE_SEGMENT := Vector2(22.0, 18.0)
+const LIFE_GAP := 3.0
+## Breathing room between the segments and the plate behind them.
+const LIFE_PAD := 3.0
+
+const LIFE_TEXTURES := {
+	0: preload("res://assets/game/ui/heart_empty.png"),
+	1: preload("res://assets/game/ui/heart_half.png"),
+	2: preload("res://assets/game/ui/heart_full.png"),
+}
+
 const METER_ICONS := {
 	&"time": "res://assets/game/ui/icon_clock.png",
 	&"far bank": "res://assets/game/ui/icon_flag.png",
@@ -41,12 +60,16 @@ const METER_ICONS := {
 @onready var _toast: Label = $Root/Toast
 @onready var _prompt: Label = $Root/Prompt
 @onready var _alarm: TextureRect = $Root/Alarm
+@onready var _lives: Control = $Root/Lives
+@onready var _timer: Label = $Root/Timer
 
 var _shown_score: float = 0.0
 var _target_score: int = 0
 var _toast_tween: Tween
 var _multiplier_value: int = 1
 var _alarm_pulse: float = 0.0
+var _life_segments: Array[TextureRect] = []
+var _shown_halves: int = -1
 
 
 func _ready() -> void:
@@ -60,6 +83,7 @@ func _ready() -> void:
 	_meter_icon.position = Vector2(BAR.end.x + BAR_ICON_GAP,
 			BAR.position.y + (BAR.size.y - 9.0) * 0.5)
 	_meter_mark.size = Vector2(7.0, 7.0)
+	_build_lives()
 
 	_meter_track.visible = false
 	_meter_fill.visible = false
@@ -71,6 +95,8 @@ func _ready() -> void:
 	_prompt.modulate.a = 0.0
 	_multiplier.visible = false
 	_alarm.modulate.a = 0.0
+	_lives.visible = false
+	_timer.visible = false
 
 
 func _process(delta: float) -> void:
@@ -143,6 +169,85 @@ func hide_meter() -> void:
 	_meter_track.visible = false
 	_meter_fill.visible = false
 	_meter_icon.visible = false
+
+
+## --- lives -------------------------------------------------------------------
+
+## Five segments and a plate behind them, all placed from the constants above.
+## Built once; `set_lives` only ever swaps textures, so there is nothing to go
+## wrong on the frame a life is lost.
+func _build_lives() -> void:
+	var span := LIFE_SEGMENT.x * 5.0 + LIFE_GAP * 4.0
+	_lives.position = LIFE_ORIGIN - Vector2.ONE * LIFE_PAD
+	_lives.size = Vector2(span, LIFE_SEGMENT.y) + Vector2.ONE * LIFE_PAD * 2.0
+
+	var plate := ColorRect.new()
+	plate.name = "Plate"
+	plate.color = Color(0.07, 0.06, 0.12, 0.72)
+	plate.size = _lives.size
+	plate.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_lives.add_child(plate)
+
+	for i in 5:
+		var segment := TextureRect.new()
+		segment.texture = LIFE_TEXTURES[2]
+		segment.stretch_mode = TextureRect.STRETCH_SCALE
+		segment.position = Vector2(LIFE_PAD + float(i) * (LIFE_SEGMENT.x + LIFE_GAP),
+				LIFE_PAD)
+		segment.size = LIFE_SEGMENT
+		segment.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		_lives.add_child(segment)
+		_life_segments.append(segment)
+
+
+## `halves` counts half-lives, so a segment can show full, half or empty. It is
+## the losing of one that has to read, not the number itself: the segment that
+## changed flashes and punches out, which is the only animation on the bar.
+func set_lives(halves: int, max_halves: int = 10) -> void:
+	_lives.visible = true
+	var total := maxi(max_halves, 2)
+	var left := clampi(halves, 0, total)
+	var previous := _shown_halves
+	_shown_halves = left
+
+	for i in _life_segments.size():
+		var segment := _life_segments[i]
+		segment.visible = i * 2 < total
+		var fill := clampi(left - i * 2, 0, 2)
+		segment.texture = LIFE_TEXTURES[fill]
+		# Only the last segment with anything in it gets to look urgent.
+		var critical := left <= 2 and fill > 0
+		segment.modulate = Color(1, 0.55, 0.5) if critical else Color.WHITE
+
+	if previous < 0 or left >= previous:
+		return
+	# The segment that just changed -- the one holding the lowest remaining
+	# half -- is the one worth drawing the eye to.
+	var hit := clampi((maxi(left, 1) - 1) / 2, 0, _life_segments.size() - 1)
+	var segment := _life_segments[hit]
+	segment.pivot_offset = segment.size * 0.5
+	segment.scale = Vector2(1.5, 1.5)
+	create_tween().tween_property(segment, "scale", Vector2.ONE, 0.22) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+
+
+func hide_lives() -> void:
+	_lives.visible = false
+
+
+## --- survival clock ----------------------------------------------------------
+
+## Counts up, not down, because in an endless game the number IS the score's
+## other half. Small and under the score rather than across the top: it is a
+## thing you check between hops, not something to watch.
+func set_timer(seconds: float) -> void:
+	_timer.visible = true
+	var whole := int(seconds)
+	_timer.text = "%d:%02d" % [whole / 60, whole % 60]
+
+
+func hide_timer() -> void:
+	_timer.visible = false
 
 
 ## A row of dots for sequence progress -- Echo Hollow's "stone 2 of 5" without

@@ -1,4 +1,4 @@
-[gd_scene load_steps=23 format=3]
+[gd_scene load_steps=21 format=3]
 
 [ext_resource type="Script" path="res://src/minigames/wind_leaf/wind_leaf.gd" id="1"]
 [ext_resource type="PackedScene" path="res://src/core/player.tscn" id="2"]
@@ -20,16 +20,6 @@
 [ext_resource type="Texture2D" path="res://assets/game/decor/foam.png" id="d_foam"]
 [ext_resource type="Texture2D" path="res://assets/game/decor/twig.png" id="d_twig"]
 [ext_resource type="Texture2D" path="res://assets/game/decor/driftleaf.png" id="d_driftleaf"]
-
-[sub_resource type="Gradient" id="shore_grad"]
-offsets = PackedFloat32Array(0, 0.55, 0.75, 1)
-colors = PackedColorArray(0.29, 0.42, 0.25, 1, 0.29, 0.42, 0.25, 1, 0.77, 0.66, 0.46, 1, 0.35, 0.5, 0.6, 1)
-
-[sub_resource type="GradientTexture2D" id="shore"]
-gradient = SubResource("shore_grad")
-width = 504
-height = 150
-fill_to = Vector2(0, 1)
 
 [node name="WindLeaf" type="Node2D"]
 script = ExtResource("1")
@@ -231,11 +221,6 @@ texture = ExtResource("d_reed")
 position = Vector2(430, 196)
 texture = ExtResource("d_reed")
 
-[node name="FarBank" type="Sprite2D" parent="World"]
-position = Vector2(240, -60)
-texture = SubResource("shore")
-visible = false
-
 [node name="Dragonflies" type="Node2D" parent="World"]
 z_index = 30
 script = ExtResource("d_decor")
@@ -253,6 +238,9 @@ script = ExtResource("4c")
 [node name="Chimes" type="Node2D" parent="."]
 
 [node name="Leaves" type="Node2D" parent="."]
+
+[node name="Hazards" type="Node2D" parent="."]
+z_index = 25
 
 [node name="Player" parent="." instance=ExtResource("2")]
 position = Vector2(240, 174)

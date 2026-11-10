@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/minigames/wind_leaf/hazard.gd" id="1"]
+
+; Deliberately bare: the hazard builds its own sprites in _ready() because what
+; it needs depends on `kind`, which the spawner sets before the node enters the
+; tree. A log is one sprite; a heron is a sprite plus the ring that warns you.
+[node name="Hazard" type="Node2D"]
+z_index = 25
+script = ExtResource("1")

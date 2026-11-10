@@ -21,7 +21,7 @@ The constraints that shape every decision:
 | Constraint | Consequence |
 |---|---|
 | It sits unattended in a public space | Playable by someone who has never seen it, with no instructions |
-| The player has already paid | **No fail state.** A game over thirty seconds in is a machine that took money and gave nothing |
+| The player has already paid | **No fail state** — *amended for Riverleap, see §5.* A game over thirty seconds in is a machine that took money and gave nothing. Riverleap now has five lives, chosen deliberately, with a gentle first minute as the compromise |
 | One stick, one button | Every verb has to fit that |
 | Raspberry Pi 4/5 | 480 × 270 internal, GL Compatibility renderer |
 | The money is a donation | The cabinet says so when the run ends |
@@ -133,37 +133,119 @@ choosing between games. Both keys are inert outside a debug build.
 
 ## 5. Riverleap (`wind_leaf`) — *hop*
 
-Five drifting leaves; cross the river. A leaf's life is
-`STABLE → SHAKING → SINKING → GONE → RISING`, and leaves always come back, so
-the row can never be wiped out.
+Five drifting leaves on a river that never ends. **Ride it for as long as you
+can hold on.** A leaf's life is `STABLE → SHAKING → SINKING → GONE → RISING`,
+and leaves always come back, so the row can never be wiped out.
 
-**The shake is the game**, so it is telegraphed three redundant ways at once —
-an accelerating wobble, a shift toward red, and a widening ripple. Redundant
-because it has to read on a scuffed screen, from a few feet back, to someone who
-may not separate red from green.
+There is no far bank. The run ends when the river has taken all five lives.
 
-**The director never corners you**: before a leaf is chosen to shake it checks
-that a lane reachable in one hop will still be safe.
+### Why it has a fail state at all
 
-| Progress | Shake interval | Telegraph | At once |
+This reverses §1's no-fail-state rule, knowingly. Stripped of decoration the
+old 62-second crossing was **one binary choice — left or right — repeated for a
+minute**, with nothing for a good player to reach for; it is the weakness the
+previous version of this section flagged and asked to be answered by playing.
+It was played, and the answer was *"still not high octane enough… so pro
+players can actually enjoy this game too."*
+
+The compromise is the **shape** of the curve rather than the absence of a
+ceiling: the first minute is gentle enough that a stranger who has not worked
+the controls out still gets a real go for their credit, and only then does it
+turn steep.
+
+### One number drives everything
+
+`intensity_at(seconds)` in `wind_leaf.gd` — shallow for a minute, then steep,
+approaching but never reaching 1:
+
+```
+gentle := 0.30 * min(t / 60, 1)
+steep  := 0.70 * (1 - exp(-max(t - 60, 0) / 90))
+```
+
+≈0.15 at 30 s, 0.30 at 60 s, 0.64 at 120 s, 0.82 at 180 s. Everything speed- or
+difficulty-linked reads this one value and nothing else:
+
+| | t=0 | t=60 | late |
 |---|---|---|---|
-| 0–33 % | 2.40 s | 1.10 s | 1 |
-| 33–66 % | 1.60 s | 0.80 s | 1–2 |
-| 66–100 % | 0.90 s | 0.55 s | 2 |
+| current | **68 px/s** | 120 | → 240 |
+| shake interval | 2.6 s | 1.7 s | 0.40 s |
+| shake telegraph | 1.15 s | 0.85 s | 0.30 s |
+| pads shaking at once | 1 | 1–2 | 3 |
+| log interval (from 35 s) | — | 4.5 s | 1.1 s |
+| heron interval (from 100 s) | — | — | 2.4 s |
+| survival pay | 20/s | ~30/s | 85/s |
 
-Hops take 0.26 s plus a 0.10 s cooldown — enough weight that the river cannot be
-crossed by drumming the stick, small enough not to feel sticky. A 0.16 s input
-buffer means a press during a hop is honoured on landing.
+### Three things to read, wanting three different reactions
 
-**Chimes chain.** Each is +80 × a multiplier that steps up every two chimes to
-×5. Splashing costs 150 points **and** the chain, so going in the water hurts
-twice.
+If every threat collapses into one button pressed on a rhythm there is no game,
+so each of these is answered differently:
+
+| | Reaction |
+|---|---|
+| **a pad shaking** | hop off it |
+| **a driftwood log** (from 35 s) | **jump** — it passes underneath you |
+| **a diving heron** (from 100 s) | jumping will **not** save you; get out of the lane |
+
+**The shake is telegraphed three redundant ways at once** — an accelerating
+wobble, a shift toward red, and a widening ripple — because it has to read on a
+scuffed screen, from a few feet back, to someone who may not separate red from
+green. The heron's warning is a **ring that tightens on its mark**, not a dark
+blob: a dark blob on dark water is exactly the thing nobody sees coming.
+
+### Controls: moving costs two inputs
+
+- **`act` alone** → jump in place, airborne ~0.32 s. Its only purpose is the
+  hang time, which is how a log passes under you.
+- **`act` while holding a direction** → hop to that lane, 0.26 s plus a 0.10 s
+  cooldown. Enough weight that the river cannot be crossed by drumming the
+  stick, small enough not to feel sticky. A 0.16 s input buffer means a press
+  during a hop is honoured on landing.
+- **A direction alone does nothing.** This is the change that makes everything
+  else harder, and the gentle first minute exists to absorb it.
+
+### The director never corners you
+
+The oldest guarantee in the game, and now the easiest to break: **two**
+directors place things, and each one checking the rule alone is not enough — a
+heron on one lane plus two pads shaking on the others leaves the player
+choosing between drowning and being hit. So both ask the same question,
+`_lane_available()`: the pad holds *and* nothing is diving on it.
+
+A log does **not** disqualify a lane. A lane with a log sweeping down it is
+still somewhere you can stand, because you can jump a log — that is the entire
+reason jumping in place is a verb. A dive takes its lane away from everyone, so
+it is only allowed when the player is still left a lane they can reach in one
+hop and actually stand on.
+
+### Lives and scoring
+
+Five lives, tracked internally in **halves**: a hazard takes 2, going in the
+water takes 1. Water staying a half keeps the original forgiveness for the
+mistake beginners make constantly, and reserves the real cost for the things
+you are meant to be dodging. Losing one brings a flash, a camera kick, the
+chain, and a 1.1 s mercy window so a single log cannot cost three lives.
+
+Score is two halves:
+
+- **Chimes** — +80 × a chain multiplier stepping up every three chimes to ×5.
+  Splashing costs 150 **and** the chain, so water hurts twice.
+- **Survival** — paid per second and **scaled by intensity**, 20/s early rising
+  to 85/s late. The last thirty seconds of a good run are worth more than the
+  first two minutes, which is what gives a skilled player something to chase.
+
+**Open question, not solved here:** an endless game produces unbounded scores.
+Measured runs land between ~5,000 and ~19,000, against the **2,500–4,500** band
+the eight games were tuned into for a shared high-score table. `par_score` stays
+as a nominal 1,800 for the shell's sake; settle it when the card draw returns.
 
 ### The river
 
 Everything scrolls, in one direction, at a fraction of one number:
-`CURRENT_START` → `CURRENT_END` in `wind_leaf.gd`, now **34 → 88 px/s** across
-the crossing. `LAYER_SPEEDS` in the same file is the whole parallax stack:
+`CURRENT_START` → `CURRENT_END` in `wind_leaf.gd`, now **68 → 240 px/s** —
+opening at double the old river's 34, because "an aggressive river, not just a
+calm one" was the literal ask. `LAYER_SPEEDS` in the same file is the whole
+parallax stack:
 
 | Layer | × current |
 |---|---|
@@ -326,24 +408,43 @@ The float cycle also runs up to 3.2× faster while a pad is shaking. That is a
 ripple — all four stay, because this is the only thing the game ever asks the
 player to read in a hurry.
 
-### Known weakness, to be answered by playing
+### The weakness that was answered, and what is left of it
 
-Stripped of decoration this is **one binary choice — left or right — repeated
-for a full minute**. The telegraph work is good and the director is fair; none
-of that changes the fact that the player makes roughly the same decision forty
-times. Candidates, in rough order of cost:
+This section used to read: *"stripped of decoration this is one binary choice —
+left or right — repeated for a full minute,"* with five candidate answers and
+the note that nothing was committed until it had been played. It was played.
+The endless redesign took **three** of the five: intensify rather than fill
+(the curve), a second verb (jump in place), and threats that are not pads
+(logs, herons). Two are still open and still unclaimed:
 
-1. **Shorten and intensify** — 62 s → ~35 s, with late-game pressure arriving
-   much earlier. Removes the thin seconds rather than trying to fill them.
-2. **Make chimes the game, not the sprinkles.** If they spawned in chosen lanes
+1. **Make chimes the game, not the sprinkles.** If they spawned in chosen lanes
    and the chain required consecutive pickups, every hop becomes *routing* —
-   which lane do I want to be in three seconds from now — instead of "is this
-   one red yet".
-3. **A second axis**: leaves ahead as well as beside.
-4. **A charged hop**: hold for a two-lane leap with a commitment beat.
-5. **Leaf variety**: one that sinks on landing, one that springs you two lanes.
+   which lane do I want to be in three seconds from now — rather than a
+   reaction. This is the strongest remaining idea, and it is the one that would
+   reward planning instead of reflexes.
+2. **Leaf variety**: one that sinks on landing, one that springs you two lanes.
 
-Nothing here is committed. The order of work is: play it, then decide.
+### How hard it actually is
+
+Measured by the soak bot, which reacts in 3 frames with perfect information,
+run against a copy of itself slowed to human reaction lag. Every trial, at
+every lag, recorded **zero** frames where the player had no reachable lane to
+stand on — the never-corner guarantee holds over ~20 minutes of play.
+
+| Bot reaction lag | Survives | Score |
+|---|---|---|
+| 50 ms (frame-perfect) | **never dies** (capped at 7 min) | — |
+| 133 ms (expert, anticipating) | 196–242 s | 12k–19k |
+| 216 ms (average human) | 109–139 s | 5k–7k |
+| 300 ms (slow) | 122–131 s | 6k–7k |
+| no input at all | ~73 s | ~2.7k |
+
+Two things worth reading off that table. **A perfect reactor never dying is not
+a bug** — it is exactly what a strict never-corner guarantee promises, and it
+means the skill ceiling is set by human reaction rather than by a wall. And
+**past about 200 ms the lag stops mattering**, because the limiter becomes the
+game's own pace rather than the player's reflexes; that is the knee the curve
+should be tuned against if it needs tuning.
 
 ---
 
@@ -353,14 +454,34 @@ Nothing here is committed. The order of work is: play it, then decide.
 tools/run_tests.sh          # or GODOT=/path/to/godot tools/run_tests.sh
 ```
 
-One suite now, `tests/soak_test.gd`, and it proves the property most worth
-protecting: **the game can actually be finished.** It drives Riverleap with
-scripted input until the crossing ends on its own rather than forcing
-`finish()`. A minigame that cannot be completed still looks fine in the editor
-and still survives a short run. It also carries the regressions this game has
-already had, because a bug that got through once will get through again.
+One suite now, `tests/soak_test.gd`. It used to prove that the game could be
+**finished**; Riverleap is endless, so that property no longer exists and four
+others took its place:
 
-Two notes that cost real time to learn:
+- **The opening is survivable** — a competent bot must last ≥ 45 s. This is
+  "gentle first minute" turned into an assertion, and it is what fails if a
+  later tuning pass makes the opening brutal.
+- **A run does end** — a bot that never touches the controls must lose all five
+  lives and report exactly once. Losing is the endless loop's only exit.
+- **Hazards can be reacted to** — measured on standalone hazards at the worst
+  case the game can produce: a log at the fastest the river ever runs must be on
+  screen ≥ 0.40 s before it strikes, and a heron's ring must be up for its
+  **full** telegraph. A hazard that cannot be dodged is the single worst thing
+  this redesign could ship and it is invisible in a screenshot.
+- **The player is never cornered** — asserted every frame of a driven run,
+  computed in the test from the pads and hazards rather than asked of the game,
+  so a bug in the game's own version of that question cannot hide behind it.
+
+Plus the curve's shape, and the regressions this game has already had, because
+a bug that got through once will get through again.
+
+Three notes that cost real time to learn:
+
+- **The bot has to hold the stick a frame before it presses the button.**
+  `_unhandled_input` reads the direction with `Input.is_action_pressed` at the
+  instant the `act` event arrives, so a hold and a press on the same frame comes
+  out as a jump in place and the bot never leaves its lane — a suite that passes
+  while testing nothing.
 
 - **Synthetic input must be a parsed `InputEventAction`.** `Input.action_press()`
   only sets the polled state and never reaches `_unhandled_input`, so the hop —

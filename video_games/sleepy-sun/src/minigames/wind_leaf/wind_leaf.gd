@@ -1,23 +1,46 @@
 extends MiniGame
-## Riverleap -- hop between five drifting leaves and reach the far bank.
+## Riverleap -- ride an endless river for as long as you can hold on.
 ##
-## The leaves carry the player downstream, so the camera rides with them: the
-## leaf row holds a fixed screen position while the banks scroll past and the
-## far shore slides in at the end. Leaves that shake are about to sink; leaves
-## always come back, so the row can never be wiped out.
+## There is no far bank any more. The river never ends: it just gets angrier,
+## and the run is over when it has taken all five of your lives. Score comes
+## from chimes and from how long you lasted, and the per-second rate climbs
+## with the danger, so the last thirty seconds of a good run are worth more
+## than the first two minutes.
 ##
-## No fail state. Going in the water costs about a second and a half and some
-## points, then the river puts you back on a leaf. See docs/GAME_DESIGN.md #7.1.
+## **This breaks the cabinet's no-fail-state rule on purpose** (design doc #1),
+## because without a way to lose there is nothing for a good player to chase.
+## The compromise is the shape of the difficulty curve: the first minute is
+## gentle enough that a stranger who has not worked out the controls still gets
+## a real go for their credit, and only then does it turn steep.
+##
+## Three things to read, and they want three different reactions:
+##   * a pad shaking  -- hop off it
+##   * a log          -- jump; it passes underneath you
+##   * a heron diving -- jumping will not save you, get out of the lane
+##
+## See docs/GAME_DESIGN.md #5.
 
 const LANES := 5
 const LANE_X: Array[float] = [106.0, 173.0, 240.0, 307.0, 374.0]
 const ROW_Y := 174.0
 
-const CROSSING_SECONDS := 62.0
-## How fast the shore passes, start to end of the crossing -- about 2.5x, so
-## the river is plainly quicker by the end instead of imperceptibly so.
-const CURRENT_START := 34.0
-const CURRENT_END := 88.0
+## --- the difficulty curve ----------------------------------------------------
+##
+## One number, `_intensity`, drives the current, the pads and the hazards. It
+## is shaped to the decision above: shallow for the first minute, then steep,
+## approaching but never reaching 1.
+##
+##   t=30s -> 0.15   t=60s -> 0.30   t=120s -> 0.64   t=180s -> 0.82
+##
+## Beginner 45-60s, a decent player 2-3 minutes, an expert longer.
+const GENTLE_SECONDS := 60.0
+const GENTLE_CEILING := 0.30
+const STEEP_TAU := 90.0
+
+## The shore's speed. The start is double what the crossing used to run at --
+## an aggressive river rather than a calm one -- and it keeps climbing.
+const CURRENT_START := 68.0
+const CURRENT_END := 240.0
 
 ## Every scrolling layer is a fraction of the current, so the whole scene is
 ## one parallax stack driven by one number. Different speeds in the SAME
@@ -39,6 +62,9 @@ const LAYER_SPEEDS := {
 	"World/BankPropsRight": 1.0,
 }
 const HOP_TIME := 0.26
+## A jump that goes nowhere. Slightly longer than a hop so the hang time is
+## usable as a dodge, which is the only reason it exists.
+const JUMP_TIME := 0.32
 ## A short beat after landing before another hop can start, so the river cannot
 ## be crossed by drumming the stick. Small on purpose -- it should read as
 ## weight, not as the controls being sticky.
@@ -52,13 +78,36 @@ const FACE_UPSTREAM_AFTER := 0.5
 const RECOVERY_TIME := 1.4
 const RESPAWN_DELAY := 2.2
 
-## Difficulty bands by fraction of the river crossed:
-## [progress_from, shake_interval, telegraph, max_simultaneous]
-const BANDS: Array[Array] = [
-	[0.00, 2.40, 1.10, 1],
-	[0.33, 1.60, 0.80, 2],
-	[0.66, 0.90, 0.55, 2],
-]
+## Pads, as continuous functions of intensity rather than three fixed bands.
+const SHAKE_INTERVAL := Vector2(2.6, 0.40)
+const SHAKE_TELEGRAPH := Vector2(1.15, 0.30)
+const SHAKE_AT_ONCE := Vector2(1.0, 3.0)
+
+## --- hazards -----------------------------------------------------------------
+##
+## Both arrive late enough that the opening is purely pad-hopping: long enough
+## to learn that jump moves you and jump-with-a-direction moves you sideways,
+## before anything is thrown at you.
+const LOG_FROM_SECONDS := 35.0
+const LOG_INTERVAL := Vector2(4.5, 1.1)
+## Logs travel a shade faster than the river, so they close on you rather than
+## hanging alongside -- and so the jump has to be timed, not held.
+const LOG_SPEED_FACTOR := 1.15
+
+const HERON_FROM_SECONDS := 100.0
+const HERON_INTERVAL := Vector2(5.5, 2.4)
+const HERON_TELEGRAPH := Vector2(0.95, 0.50)
+
+## --- lives -------------------------------------------------------------------
+##
+## Tracked in halves. A hazard takes a whole life; going in the water takes
+## half, which keeps the original forgiveness for the mistake beginners make
+## constantly and reserves the real cost for the things you are dodging.
+const MAX_LIFE_HALVES := 10
+const DAMAGE_HAZARD := 2
+const DAMAGE_WATER := 1
+## Seconds of mercy after taking a hit, so one log cannot cost three lives.
+const INVULNERABLE_TIME := 1.1
 
 ## A wake is the thing that makes an object holding its screen position read
 ## as moving THROUGH the water rather than anchored in it. The pads and the
@@ -68,10 +117,12 @@ const WAKE_INTERVAL := 0.16
 const WAKE_LIFE := 0.5
 
 const CHIME_INTERVAL := 2.5
-const SCORE_ARRIVAL := 1500
 const SCORE_CHIME := 80
 const SCORE_SPLASH := -150
-const SCORE_TIME_BONUS := 600
+## Survival pays per second, and the rate climbs with the danger. This is what
+## gives a skilled player something to chase: the tail of a long run is worth
+## far more than its opening.
+const SCORE_PER_SECOND := Vector2(20.0, 85.0)
 ## Chimes collected back to back without a splash multiply. Going in the water
 ## therefore costs twice: the points, and the chain you were building.
 const CHIME_CHAIN_STEP := 3
@@ -81,18 +132,25 @@ const CHIME_CHAIN_MAX := 5
 @onready var _hud: HUD = $HUD
 @onready var _leaves_root: Node2D = $Leaves
 @onready var _chimes_root: Node2D = $Chimes
-@onready var _far_bank: Sprite2D = $World/FarBank
+@onready var _hazards_root: Node2D = $Hazards
 
 @onready var _camera: GameCamera = $Camera
 @onready var _streaks: ScrollingProps = $World/Streaks
 
 var _leaves: Array[RiverLeaf] = []
 var _lane: int = 2
-var _progress: float = 0.0
+## 0 at the start, approaching 1. Everything difficulty- or speed-linked reads
+## this and nothing else.
+var _intensity: float = 0.0
 
 var _hopping: bool = false
+var _airborne: bool = false
 var _in_water: bool = false
-var _arriving: bool = false
+var _ending: bool = false
+var _life_halves: int = MAX_LIFE_HALVES
+var _invulnerable: float = 0.0
+var _survived: float = 0.0
+var _survival_score: float = 0.0
 var _buffered_direction: int = 0
 var _buffer_timer: float = 0.0
 var _recovery_timer: float = 0.0
@@ -100,8 +158,12 @@ var _recovery_timer: float = 0.0
 var _shake_timer: float = 0.0
 var _chime_timer: float = 0.0
 var _wake_timer: float = 0.0
+var _log_timer: float = 0.0
+var _heron_timer: float = 0.0
+var _hazards: Array[RiverHazard] = []
 
 var _chimes: int = 0
+var _dodged: int = 0
 var _splashes: int = 0
 var _chain: int = 0
 var _best_chain: int = 0
@@ -110,6 +172,7 @@ var _hop_cooldown: float = 0.0
 var _idle_facing_timer: float = 0.0
 
 var _leaf_scene := preload("res://src/minigames/wind_leaf/leaf.tscn")
+var _hazard_scene := preload("res://src/minigames/wind_leaf/hazard.tscn")
 var _wake_texture := preload("res://assets/game/decor/foam.png")
 var _wake_root: Node2D
 var _chime_texture := preload("res://assets/game/wind_leaf/chime.png")
@@ -131,9 +194,9 @@ func _ready() -> void:
 	_player.position = Vector2(LANE_X[_lane], ROW_Y)
 	_player.set_facing(&"up")
 
-	_far_bank.visible = false
 	_hud.reset_score(0)
-	_hud.set_meter(0.0, &"far bank")
+	_hud.hide_meter()
+	_hud.set_lives(_life_halves, MAX_LIFE_HALVES)
 
 	# No shell in front of it for now, so the game starts itself and loops on
 	# its own -- but only when it really is the scene being played. The soak
@@ -147,7 +210,9 @@ func _ready() -> void:
 
 func begin() -> void:
 	super.begin()
-	_hud.toast("CROSS THE RIVER", Color(0.8, 0.95, 1.0), 1.4)
+	_hud.toast("HOLD ON", Color(0.8, 0.95, 1.0), 1.4)
+	_log_timer = LOG_FROM_SECONDS
+	_heron_timer = HERON_FROM_SECONDS
 
 
 func _process(delta: float) -> void:
@@ -158,34 +223,53 @@ func _process(delta: float) -> void:
 	_advance_river(delta)
 	_tick_buffer(delta)
 	_tick_director(delta)
+	_tick_hazards(delta)
 	_tick_chimes(delta)
 	_tick_recovery(delta)
 	_tick_facing(delta)
 	_tick_wakes(delta)
+	_tick_survival(delta)
 	_check_footing()
 
 
+## One button. Pressed alone it jumps on the spot, which is how you let a log
+## pass underneath; pressed while leaning on the stick it carries you to the
+## next pad. A direction on its own no longer does anything -- moving costs two
+## inputs now, which is most of why this is harder than it was.
 func _unhandled_input(event: InputEvent) -> void:
-	if not running or _in_water or _arriving:
+	if not running or _in_water or _ending:
 		return
-	if event.is_action_pressed(&"move_left"):
-		_queue_hop(-1)
-	elif event.is_action_pressed(&"move_right"):
-		_queue_hop(1)
+	if not event.is_action_pressed(&"act"):
+		return
+	var direction := 0
+	if Input.is_action_pressed(&"move_left"):
+		direction -= 1
+	if Input.is_action_pressed(&"move_right"):
+		direction += 1
+	_queue_hop(direction)
 
 
 # --- river -------------------------------------------------------------------
 
-func _advance_river(delta: float) -> void:
-	if _arriving:
+## Shallow for the first minute, then steep, approaching but never reaching 1.
+## Written out rather than tabled because it is the single number the whole
+## game's difficulty hangs off, and it should be readable in one glance.
+static func intensity_at(seconds: float) -> float:
+	var gentle := GENTLE_CEILING * clampf(seconds / GENTLE_SECONDS, 0.0, 1.0)
+	var steep := (1.0 - GENTLE_CEILING) \
+			* (1.0 - exp(-maxf(seconds - GENTLE_SECONDS, 0.0) / STEEP_TAU))
+	return gentle + steep
+
+
+func _advance_river(_delta: float) -> void:
+	if _ending:
 		return
-	_progress = minf(_progress + delta / CROSSING_SECONDS, 1.0)
-	_hud.set_meter(_progress, &"far bank")
+	_intensity = intensity_at(elapsed)
 
 	# One current, every layer a fraction of it. Nothing in the scene sets its
 	# own speed any more -- two scrollers disagreeing is how the grass ended up
 	# crawling backwards past the trees standing on it.
-	var speed := lerpf(CURRENT_START, CURRENT_END, _progress)
+	var speed := current_speed()
 	for path in LAYER_SPEEDS:
 		var layer := get_node_or_null(NodePath(path))
 		if layer != null:
@@ -193,8 +277,7 @@ func _advance_river(delta: float) -> void:
 
 	# Streaks stretch and multiply with the current. More of them, longer,
 	# and moving faster is three cues for the price of one.
-	var rush := clampf((speed - CURRENT_START) / (CURRENT_END - CURRENT_START),
-			0.0, 1.0)
+	var rush := _intensity
 	# Weighted toward the banks: peripheral motion is where speed is read, and
 	# the middle of the river is where the player is reading pads.
 	for streak: Node2D in _streaks.get_children():
@@ -209,58 +292,87 @@ func _advance_river(delta: float) -> void:
 	for leaf in _leaves:
 		leaf.wave_speed = swell
 
-	if _progress >= 1.0:
-		_begin_arrival()
+
+func current_speed() -> float:
+	return lerpf(CURRENT_START, CURRENT_END, _intensity)
 
 
-func _begin_arrival() -> void:
-	if _arriving:
+## --- lives and the end ------------------------------------------------------
+
+func _tick_survival(delta: float) -> void:
+	if _ending:
 		return
-	_arriving = true
-	_hud.toast("THE FAR BANK!", Color(1, 0.9, 0.5), 1.2)
-
-	_far_bank.visible = true
-	_far_bank.position = Vector2(240, -60)
-	var tween := create_tween()
-	tween.tween_property(_far_bank, "position:y", 72.0, 2.0) \
-			.set_trans(Tween.TRANS_SINE).set_ease(Tween.EASE_OUT)
-	tween.tween_callback(_land_ashore)
-
-
-func _land_ashore() -> void:
-	var tween := create_tween()
-	tween.tween_property(_player, "position",
-			Vector2(LANE_X[_lane], 92.0), 0.45).set_trans(Tween.TRANS_SINE)
-	tween.tween_callback(_score_run)
+	_survived += delta
+	_invulnerable = maxf(_invulnerable - delta, 0.0)
+	# The rate climbs with the danger, so a long run's tail is where the score
+	# actually comes from.
+	_survival_score += lerpf(SCORE_PER_SECOND.x, SCORE_PER_SECOND.y,
+			_intensity) * delta
+	_refresh_score()
+	_hud.set_timer(_survived)
 
 
-## The end of a run, standing in for the results screen while the shell is
-## parked: read what happened, then go again.
+## `halves` is 1 for going in the water, 2 for being hit. Returns true if it
+## landed -- during the mercy window after a hit it does not.
+func _take_damage(halves: int, reason: String) -> bool:
+	if _ending or _invulnerable > 0.0:
+		return false
+	_life_halves = maxi(_life_halves - halves, 0)
+	_invulnerable = INVULNERABLE_TIME
+	_hud.set_lives(_life_halves, MAX_LIFE_HALVES)
+	_hud.set_alarm(1.0 if _life_halves <= 2 else 0.0)
+	_camera.kick(1.0 if halves >= DAMAGE_HAZARD else 0.6)
+	Juice.flash(_player.anim, Color(1, 0.5, 0.5), 0.22)
+
+	var lost := _chain
+	_chain = 0
+	pop_on_player(SCORE_SPLASH, reason if lost < CHIME_CHAIN_STEP else "CHAIN LOST")
+	_refresh_score()
+
+	if _life_halves <= 0:
+		_end_run()
+	return true
+
+
+## The river never runs out, so this is the only way a run ends.
+func _end_run() -> void:
+	if _ending:
+		return
+	_ending = true
+	_hud.toast("THE RIVER TAKES YOU", Color(1, 0.55, 0.45), 1.6)
+	Audio.sfx(&"complete", 0.6)
+	_player.freeze()
+	await Wait.on(self, 1.3)
+	if _finished:
+		return
+	var total := _score + int(_survival_score)
+	_hud.set_score(maxi(total, 0))
+	finish(total, {
+		"chimes": _chimes,
+		"splashes": _splashes,
+		"chain": _best_chain,
+		"survived": int(_survived),
+		"dodged": _dodged,
+	})
+
+
+## Stands in for the shell while it is parked: results, then straight back in.
+## How long you lasted leads, because in an endless game that is the thing you
+## are actually competing on and the number you will try to beat next credit.
 func _on_run_finished(result: MiniGameResult) -> void:
 	var best := Save.best()
 	Save.submit(result.score)
 	var card := RunCard.new()
 	add_child(card)
 	card.replay.connect(func() -> void: get_tree().reload_current_scene())
+	var held := int(result.stats.get("survived", 0))
 	card.show_run("RIVERLEAP", result.score, [
+		["held on", "%d:%02d" % [held / 60, held % 60]],
 		["chimes", "%d" % int(result.stats.get("chimes", 0))],
 		["best chain", "x%d" % maxi(int(result.stats.get("chain", 0)), 1)],
+		["dodged", "%d" % int(result.stats.get("dodged", 0))],
 		["splashes", "%d" % int(result.stats.get("splashes", 0))],
-		["crossing", "%.0fs" % result.duration],
 	], best)
-
-
-func _score_run() -> void:
-	Audio.sfx(&"complete")
-	# Rewards finishing quickly, but the clock only starts mattering once the
-	# crossing itself is done -- there is no way to lose by being slow.
-	var pace := clampf(CROSSING_SECONDS * 1.35 / maxf(elapsed, 1.0), 0.0, 1.0)
-	var score := SCORE_ARRIVAL \
-			+ _score \
-			+ _splashes * SCORE_SPLASH \
-			+ int(SCORE_TIME_BONUS * pace)
-	_hud.set_score(maxi(score, 0))
-	finish(score, {"chimes": _chimes, "splashes": _splashes, "chain": _best_chain})
 
 
 # --- hopping -----------------------------------------------------------------
@@ -282,26 +394,51 @@ func _tick_buffer(delta: float) -> void:
 
 
 func _consume_buffer() -> void:
-	# _unhandled_input already refuses to queue a hop in the water, but the
-	# buffer drains from _process, so a direction pressed in the 0.16s before
-	# falling used to fire anyway and lift the player straight back out. That
-	# made drowning optional as long as you were holding a direction.
-	if _in_water or _arriving or _hop_cooldown > 0.0:
+	# _unhandled_input already refuses to act in the water, but the buffer
+	# drains from _process, so a press in the 0.16s before falling used to fire
+	# anyway and lift the player straight back out. That made drowning optional
+	# as long as you were holding a direction.
+	if _in_water or _ending or _hop_cooldown > 0.0:
 		return
-	if _buffered_direction == 0 or _buffer_timer <= 0.0:
+	if _buffer_timer <= 0.0:
 		return
-	var target := _lane + _buffered_direction
+	var direction := _buffered_direction
 	_buffered_direction = 0
 	_buffer_timer = 0.0
-	if target < 0 or target >= LANES:
+
+	# A jump with no direction, or into the bank, goes straight up. It still
+	# gets you off the water for a moment, which is the point of it.
+	var target := _lane + direction
+	if direction == 0 or target < 0 or target >= LANES:
+		_jump_in_place()
 		return
 	_hop_to(target)
+
+
+## Straight up and down. The only reason this exists is the hang time: a log
+## passes underneath you, and nothing else in the game gives you that.
+func _jump_in_place() -> void:
+	_hopping = true
+	_airborne = true
+	_idle_facing_timer = FACE_UPSTREAM_AFTER
+	Audio.sfx(&"hop", randf_range(1.15, 1.3))
+	_player.start_jump(0)
+
+	var from := _player.position
+	var tween := create_tween()
+	tween.tween_method(
+		func(t: float) -> void:
+			_player.position = from + Vector2(0, -sin(t * PI) * HOP_HEIGHT * 1.15)
+			_player.set_jump_progress(t, 0),
+		0.0, 1.0, JUMP_TIME)
+	tween.tween_callback(_on_hop_landed)
 
 
 func _hop_to(target_lane: int) -> void:
 	var direction := 1 if target_lane > _lane else -1
 	_player.set_facing(&"left" if direction < 0 else &"right")
 	_hopping = true
+	_airborne = true
 	_lane = target_lane
 	_idle_facing_timer = FACE_UPSTREAM_AFTER
 	Audio.sfx(&"hop", randf_range(0.95, 1.1))
@@ -323,6 +460,7 @@ func _hop_to(target_lane: int) -> void:
 
 func _on_hop_landed() -> void:
 	_hopping = false
+	_airborne = false
 	_hop_cooldown = HOP_COOLDOWN
 	_player.land()
 	_camera.kick(0.28)
@@ -333,7 +471,7 @@ func _on_hop_landed() -> void:
 ## the player having stopped paying attention to the far bank. A beat after the
 ## last hop they turn back upstream, which is where they are actually going.
 func _tick_facing(delta: float) -> void:
-	if _hopping or _in_water or _arriving:
+	if _hopping or _in_water or _ending:
 		return
 	if _idle_facing_timer <= 0.0:
 		return
@@ -345,7 +483,7 @@ func _tick_facing(delta: float) -> void:
 ## The player is only ever unsupported for the instant a leaf goes out from
 ## under them, or when they land where a leaf used to be.
 func _check_footing() -> void:
-	if _in_water or _hopping or _arriving or not running:
+	if _in_water or _hopping or _ending or not running:
 		return
 	if not _leaves[_lane].is_standable():
 		_fall_in()
@@ -359,11 +497,12 @@ func _fall_in() -> void:
 	_buffered_direction = 0
 	_buffer_timer = 0.0
 	Audio.sfx(&"splash")
-	_camera.kick(1.0)
-	var lost := _chain
-	_chain = 0
-	_refresh_score()
-	pop_on_player(SCORE_SPLASH, "CHAIN LOST" if lost >= CHIME_CHAIN_STEP else "SPLASH")
+	if not _take_damage(DAMAGE_WATER, "SPLASH"):
+		# Inside the mercy window after a hit: still a splash, still costs the
+		# points, just not another slice of the health bar.
+		_chain = 0
+		_refresh_score()
+		pop_on_player(SCORE_SPLASH, "SPLASH")
 	_player.cancel_jump()
 	_player.anim.modulate = Color(0.7, 0.85, 1.0, 0.85)
 	_player.anim.play(&"idle_down")
@@ -404,29 +543,151 @@ func _nearest_safe_lane(from_lane: int) -> int:
 	return -1
 
 
+# --- hazards -----------------------------------------------------------------
+
+func _tick_hazards(delta: float) -> void:
+	if _ending:
+		return
+
+	_log_timer -= delta
+	if elapsed >= LOG_FROM_SECONDS and _log_timer <= 0.0:
+		_log_timer = lerpf(LOG_INTERVAL.x, LOG_INTERVAL.y, _intensity) \
+				* randf_range(0.8, 1.2)
+		_spawn_log()
+
+	_heron_timer -= delta
+	if elapsed >= HERON_FROM_SECONDS and _heron_timer <= 0.0:
+		_heron_timer = lerpf(HERON_INTERVAL.x, HERON_INTERVAL.y, _intensity) \
+				* randf_range(0.8, 1.2)
+		_spawn_heron()
+
+	for hazard in _hazards.duplicate():
+		if not is_instance_valid(hazard):
+			_hazards.erase(hazard)
+			continue
+		if not hazard.is_striking():
+			continue
+		hazard.mark_resolved()
+		if hazard.lane != _lane:
+			_dodged += 1
+			continue
+		# A log passes under a jump. A dive does not -- that is the whole
+		# reason the two exist, and why one button has two meanings.
+		if hazard.is_dodgeable_by_jumping() and _airborne:
+			_dodged += 1
+			Audio.sfx(&"hop", 1.4)
+			continue
+		_take_damage(DAMAGE_HAZARD,
+				"LOG" if hazard.kind == RiverHazard.Kind.LOG else "HERON")
+
+
+## Riverleap's oldest guarantee is that the director never corners you. There
+## are two directors placing things now -- pads and hazards -- and each one
+## checking the rule on its own is not enough: a heron on one lane plus two
+## pads shaking on the others leaves the player choosing between drowning and
+## being hit. So both ask the same question, and this is it.
+##
+## A lane is available if the pad holds AND nothing is diving on it. A log does
+## NOT disqualify a lane: a lane with a log sweeping down it is still somewhere
+## you can stand, because you can jump a log. That is the entire reason jumping
+## in place is a verb.
+func _lane_available(lane: int) -> bool:
+	if lane < 0 or lane >= LANES:
+		return false
+	return _leaves[lane].is_safe() and not _lane_dived_on(lane)
+
+
+## Only the hazards that jumping does not save you from take a lane away.
+func _lane_dived_on(lane: int) -> bool:
+	for hazard in _hazards:
+		if is_instance_valid(hazard) and hazard.lane == lane \
+				and not hazard.is_dodgeable_by_jumping():
+			return true
+	return false
+
+
+## Any hazard at all, jumpable or not. This one exists to stop two hazards
+## stacking in a single lane, which reads as one unfair hazard rather than two
+## fair ones.
+func _lane_threatened(lane: int) -> bool:
+	for hazard in _hazards:
+		if is_instance_valid(hazard) and hazard.lane == lane:
+			return true
+	return false
+
+
+func _spawn_hazard(kind: RiverHazard.Kind, lane: int) -> void:
+	var hazard: RiverHazard = _hazard_scene.instantiate()
+	hazard.kind = kind
+	hazard.lane = lane
+	hazard.row_y = ROW_Y
+	hazard.speed = current_speed() * LOG_SPEED_FACTOR
+	hazard.telegraph = lerpf(HERON_TELEGRAPH.x, HERON_TELEGRAPH.y, _intensity)
+	hazard.position = Vector2(LANE_X[lane],
+			-40.0 if kind == RiverHazard.Kind.LOG else ROW_Y)
+	hazard.spent.connect(func(h: RiverHazard) -> void: _hazards.erase(h))
+	_hazards_root.add_child(hazard)
+	_hazards.append(hazard)
+
+
+func _spawn_log() -> void:
+	var lane := _pick_hazard_lane(true)
+	if lane < 0:
+		return
+	_spawn_hazard(RiverHazard.Kind.LOG, lane)
+
+
+func _spawn_heron() -> void:
+	var lane := _pick_hazard_lane(false)
+	if lane < 0:
+		return
+	_spawn_hazard(RiverHazard.Kind.HERON, lane)
+
+
+## `dodgeable` is the whole of the difference between the two hazards here.
+##
+## A log may go anywhere unoccupied, the player's own lane included: it is
+## always fair, because jumping clears it. A dive takes its lane away from
+## everyone, so it is only allowed if the player is still left with a lane they
+## can reach in one hop and actually stand on -- wherever the dive goes, not
+## just when it goes on top of them. Getting that wrong is how the game becomes
+## unwinnable by luck, which is worse than it being hard.
+func _pick_hazard_lane(dodgeable: bool) -> int:
+	var options: Array[int] = []
+	for lane in LANES:
+		options.append(lane)
+	options.shuffle()
+	for lane in options:
+		if _lane_threatened(lane):
+			continue
+		if dodgeable:
+			return lane
+		var escapes := 0
+		for neighbour in [_lane - 1, _lane, _lane + 1]:
+			if neighbour == lane:
+				continue
+			if _lane_available(neighbour):
+				escapes += 1
+		if escapes > 0:
+			return lane
+	return -1
+
+
 # --- the director ------------------------------------------------------------
 
-func _band() -> Array:
-	var chosen: Array = BANDS[0]
-	for band in BANDS:
-		if _progress >= float(band[0]):
-			chosen = band
-	return chosen
-
-
 func _tick_director(delta: float) -> void:
-	if _arriving:
+	if _ending:
 		return
 	_shake_timer -= delta
 	if _shake_timer > 0.0:
 		return
 
-	var band := _band()
-	_shake_timer = float(band[1]) * randf_range(0.85, 1.15)
-	var telegraph := float(band[2])
-	var wanted: int = randi_range(1, int(band[3]))
+	_shake_timer = lerpf(SHAKE_INTERVAL.x, SHAKE_INTERVAL.y, _intensity) \
+			* randf_range(0.85, 1.15)
+	var telegraph := lerpf(SHAKE_TELEGRAPH.x, SHAKE_TELEGRAPH.y, _intensity)
+	var ceiling := int(round(lerpf(SHAKE_AT_ONCE.x, SHAKE_AT_ONCE.y, _intensity)))
 
-	for i in wanted:
+	for i in randi_range(1, maxi(ceiling, 1)):
 		var lane := _pick_shake_lane()
 		if lane < 0:
 			return
@@ -448,29 +709,32 @@ func _pick_shake_lane() -> int:
 	return candidates[randi() % candidates.size()]
 
 
+## Asks _lane_available rather than is_safe, so a lane a heron has claimed does
+## not count as an escape. Checking only the pad is how the two directors used
+## to corner the player between them.
 func _leaves_escape_route(shaking_lane: int) -> bool:
 	for offset: int in [-1, 0, 1]:
 		var lane := _lane + offset
-		if lane < 0 or lane >= LANES or lane == shaking_lane:
+		if lane == shaking_lane:
 			continue
-		if _leaves[lane].is_safe():
+		if _lane_available(lane):
 			return true
 	return false
 
 
 func _on_leaf_sank(lane: int) -> void:
-	if lane == _lane and not _in_water and not _hopping and not _arriving:
+	if lane == _lane and not _in_water and not _hopping and not _ending:
 		_fall_in()
 
 
 # --- chimes ------------------------------------------------------------------
 
 func _tick_chimes(delta: float) -> void:
-	if not _arriving:
+	if not _ending:
 		_chime_timer -= delta
 		if _chime_timer <= 0.0:
 			# Up to twice as often by the end of the crossing.
-			var rate := lerpf(1.0, 0.5, _progress)
+			var rate := lerpf(1.0, 0.5, _intensity)
 			_chime_timer = CHIME_INTERVAL * rate * randf_range(0.8, 1.3)
 			_spawn_chime()
 
@@ -489,7 +753,7 @@ func _tick_chimes(delta: float) -> void:
 ## fading. Cheap -- a handful alive at once -- and it is what tells the eye
 ## that these things are travelling rather than moored in a river sliding past.
 func _tick_wakes(delta: float) -> void:
-	if _arriving:
+	if _ending:
 		return
 	var rush := _rush()
 	_wake_timer -= delta
@@ -530,13 +794,13 @@ func _shed_wake(at: Vector2, rush: float, strength: float) -> void:
 ## 0 at the start of the crossing, 1 at the end. Everything speed-linked reads
 ## this rather than recomputing the lerp.
 func _rush() -> float:
-	return clampf(_progress, 0.0, 1.0)
+	return clampf(_intensity, 0.0, 1.0)
 
 
 ## Chimes drift with the river, a shade faster than the surface so they still
 ## close on the player rather than hanging alongside.
 func _chime_speed() -> float:
-	return lerpf(CURRENT_START, CURRENT_END, _progress) * 0.85
+	return current_speed() * 0.85
 
 
 func _spawn_chime() -> void:
