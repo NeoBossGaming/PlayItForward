@@ -1,21 +1,28 @@
 class_name RiverHazard
 extends Node2D
-## Something the river throws at you. Two kinds, and they deliberately want
-## opposite reactions -- otherwise every threat collapses into one button
+## Something that comes at you over the river. Two kinds, and they deliberately
+## want opposite reactions -- otherwise every threat collapses into one button
 ## pressed on a rhythm.
 ##
-##   LOG   -- driftwood sweeping down a lane. Jump and it passes underneath.
-##   HERON -- a dive onto a lane. Jumping does NOT save you; get out of the way.
+##   HORNET -- flies down a lane at you. Jump and it passes underneath.
+##   HERON  -- a dive onto a lane. Jumping does NOT save you; get out of the way.
+##
+## **Both of them fly, and that is load-bearing.** The jumpable hazard used to
+## be a driftwood log sweeping down the lane, which meant a solid object
+## passing straight over the lily pads: nonsense to look at, and a constant
+## fight over draw order. Nothing in the air touches the pads, so the ordering
+## stops being a problem to manage and becomes the statement of the rule --
+## jump and you are drawn above it, stay down and it is drawn above you.
 ##
 ## The hazard knows when it is crossing the player's row. It does not know
 ## whether that is a hit -- wind_leaf.gd owns that, because only it knows where
 ## the player is and whether they are off the water.
 
-enum Kind { LOG, HERON }
+enum Kind { HORNET, HERON }
 
 signal spent(hazard: RiverHazard)
 
-const LOG_TEXTURE := preload("res://assets/game/wind_leaf/log.png")
+const HORNET_TEXTURE := preload("res://assets/game/wind_leaf/hornet.png")
 const HERON_TEXTURE := preload("res://assets/game/wind_leaf/heron.png")
 const SHADOW_TEXTURE := preload("res://assets/game/wind_leaf/dive_shadow.png")
 
@@ -26,26 +33,35 @@ const STRIKE_BAND := 16.0
 const DIVE_FROM := 86.0
 const DIVE_TIME := 0.22
 
-var kind: Kind = Kind.LOG
+var kind: Kind = Kind.HORNET
 var lane: int = 0
 var row_y: float = 174.0
-## Pixels per second, for a log. The heron uses `telegraph` instead.
-var speed: float = 140.0
+## Pixels per second, for a hornet. The heron uses `telegraph` instead.
+##
+## A hornet flies, so this is ITS airspeed and has nothing to do with how fast
+## the river is running. That is not a detail: tying it to the current meant
+## that once the river reached 480 px/s the hornet arrived in about a third of
+## a second, which is less warning than a person can act on. Something in the
+## air has no reason to care how fast the water moves, so the warning stays
+## inside human reaction time however wild the river gets.
+var speed: float = 300.0
 ## Seconds the heron's shadow grows before it strikes.
 var telegraph: float = 0.9
 
 var _sprite: Sprite2D
 var _shadow: Sprite2D
+var _lane_x: float = 0.0
 var _clock: float = 0.0
 var _resolved: bool = false
 var _striking: bool = false
 
 
 func _ready() -> void:
-	if kind == Kind.LOG:
+	_lane_x = position.x
+	if kind == Kind.HORNET:
 		_sprite = Sprite2D.new()
 		_sprite.name = "Body"
-		_sprite.texture = LOG_TEXTURE
+		_sprite.texture = HORNET_TEXTURE
 		add_child(_sprite)
 	else:
 		_shadow = Sprite2D.new()
@@ -66,8 +82,8 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	_clock += delta
-	if kind == Kind.LOG:
-		_tick_log(delta)
+	if kind == Kind.HORNET:
+		_tick_hornet(delta)
 	else:
 		_tick_heron(delta)
 
@@ -77,19 +93,25 @@ func is_striking() -> bool:
 	return _striking
 
 
-## A log can be jumped. A dive cannot -- that is the whole difference between
-## the two, and the reason jumping in place is worth having as its own verb.
+## A hornet can be jumped. A dive cannot -- that is the whole difference
+## between the two, and the reason jumping in place is worth having as a verb.
 func is_dodgeable_by_jumping() -> bool:
-	return kind == Kind.LOG
+	return kind == Kind.HORNET
 
 
 func mark_resolved() -> void:
 	_resolved = true
 
 
-func _tick_log(delta: float) -> void:
+func _tick_hornet(delta: float) -> void:
 	position.y += speed * delta
-	_sprite.rotation = sin(_clock * 1.7) * 0.07
+	# A weave rather than a wobble. An insect holding a dead straight line
+	# reads as a thrown object; the drift is what makes it alive, and it is
+	# small enough not to change which lane it is in.
+	position.x = _lane_x + sin(_clock * 11.0) * 2.5
+	_sprite.rotation = sin(_clock * 9.0) * 0.12
+	# Wingbeat: too fast to resolve, which is the point -- it reads as a blur.
+	_sprite.scale.x = 1.0 + sin(_clock * 46.0) * 0.12
 	_striking = not _resolved and absf(position.y - row_y) <= STRIKE_BAND
 	if position.y > row_y + 140.0:
 		spent.emit(self)

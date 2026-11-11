@@ -24,10 +24,11 @@ const MAX_SECONDS := 240.0
 ## "Gentle first minute", turned into a number. A beginner should get about
 ## this long out of their credit even while still working the controls out.
 const OPENING_FLOOR := 45.0
-## The fastest a log ever travels: CURRENT_END x LOG_SPEED_FACTOR.
-const FASTEST_LOG := 240.0 * 1.15
-## The least warning a log may give at that speed before it is on you.
-const LOG_LEAD_FLOOR := 0.40
+## The fastest a hornet ever flies: the top of HORNET_SPEED. It is an airspeed,
+## not the river's, which is exactly why it stays reactable at any current.
+const FASTEST_HORNET := 360.0
+## The least warning it may give at that speed before it is on you.
+const HORNET_LEAD_FLOOR := 0.40
 
 var _failures: PackedStringArray = []
 var _checks: int = 0
@@ -41,6 +42,8 @@ func _ready() -> void:
 	await _test_pads_ride_one_swell()
 	await _test_the_curve()
 	await _test_hazards_are_dodgeable()
+	await _test_jumping_puts_you_over_a_hornet()
+	await _test_a_hit_knocks_you_into_the_water()
 	await _test_the_opening_is_survivable()
 	await _test_a_run_must_end()
 	await _test_drowning_is_not_escapable()
@@ -264,12 +267,21 @@ func _test_the_curve() -> void:
 	var opening: float = game.current_speed()
 	game.set("_intensity", 1.0)
 	var late: float = game.current_speed()
-	_check(opening >= 68.0,
-			"the river opens at %.0f px/s -- it should start at double the old 34"
-			% opening)
-	_check(late > opening * 3.0,
-			"the river only reaches %.0f px/s from %.0f -- it has to keep climbing"
-			% [late, opening])
+	_check(opening >= 204.0,
+			"the river opens at %.0f px/s -- it should start at three times the "
+			% opening + "68 it ran at before, which is the whole 'aggressive "
+			+ "from the first second' change")
+	# Measured as the speed ADDED, not as a ratio. The ratio fell when the
+	# opening tripled, which says nothing about whether the river still builds
+	# -- and a ratio test would have demanded an unreadable 600+ px/s ceiling
+	# to keep itself happy.
+	_check(late - opening >= 250.0,
+			"the river only gains %.0f px/s across a run (%.0f to %.0f) -- it has "
+			% [late - opening, opening, late] + "to keep climbing, not just "
+			+ "start fast")
+	_check(late <= 520.0,
+			"the river reaches %.0f px/s, past the point where the water strobes "
+			% late + "rather than flows at this resolution")
 	print("  curve       %.0f -> %.0f px/s, intensity %.2f at 60s"
 			% [opening, late, at_minute])
 	game.free()
@@ -279,17 +291,17 @@ func _test_the_curve() -> void:
 # --- hazards -----------------------------------------------------------------
 
 ## The assertion this whole round hangs on. Both hazards are measured
-## standalone and **at the worst case the game can produce** -- a log at the
-## fastest the river ever runs, a heron on its shortest telegraph -- because if
+## standalone and **at the worst case the game can produce** -- a hornet at its
+## top airspeed, a heron on its shortest telegraph -- because if
 ## they are reactable there they are reactable everywhere.
 func _test_hazards_are_dodgeable() -> void:
-	var driftwood := (load(HAZARD) as PackedScene).instantiate() as RiverHazard
-	driftwood.kind = RiverHazard.Kind.LOG
-	driftwood.lane = 2
-	driftwood.row_y = 174.0
-	driftwood.speed = FASTEST_LOG
-	driftwood.position = Vector2(240.0, -40.0)
-	add_child(driftwood)
+	var hornet_hazard := (load(HAZARD) as PackedScene).instantiate() as RiverHazard
+	hornet_hazard.kind = RiverHazard.Kind.HORNET
+	hornet_hazard.lane = 2
+	hornet_hazard.row_y = 174.0
+	hornet_hazard.speed = FASTEST_HORNET
+	hornet_hazard.position = Vector2(240.0, -60.0)
+	add_child(hornet_hazard)
 
 	var seen_at := -1.0
 	var struck_at := -1.0
@@ -297,25 +309,25 @@ func _test_hazards_are_dodgeable() -> void:
 	while clock < 4.0:
 		await _frames(1)
 		clock += get_process_delta_time()
-		if not is_instance_valid(driftwood):
+		if not is_instance_valid(hornet_hazard):
 			break
 		# On screen, rather than merely existing: it spawns above the viewport.
-		if seen_at < 0.0 and driftwood.position.y > 0.0:
+		if seen_at < 0.0 and hornet_hazard.position.y > 0.0:
 			seen_at = clock
-		if driftwood.is_striking():
+		if hornet_hazard.is_striking():
 			struck_at = clock
 			break
 
 	_check(struck_at > 0.0 and seen_at > 0.0,
-			"a log never reached the player's row within 4s")
+			"a hornet never reached the player's row within 4s")
 	if struck_at > 0.0 and seen_at > 0.0:
 		var lead := struck_at - seen_at
-		_check(lead >= LOG_LEAD_FLOOR,
-				"a log at full speed is only on screen %.2fs before it hits -- "
-				% lead + "under %.2fs there is nothing to react to" % LOG_LEAD_FLOOR)
-		print("  log         %.2fs of warning at %.0f px/s" % [lead, FASTEST_LOG])
-	if is_instance_valid(driftwood):
-		driftwood.free()
+		_check(lead >= HORNET_LEAD_FLOOR,
+				"a hornet at full speed is only on screen %.2fs before it hits -- "
+				% lead + "under %.2fs there is nothing to react to" % HORNET_LEAD_FLOOR)
+		print("  hornet      %.2fs of warning at %.0f px/s" % [lead, FASTEST_HORNET])
+	if is_instance_valid(hornet_hazard):
+		hornet_hazard.free()
 	await _frames(2)
 
 	# The heron's shortest telegraph, which is what it uses late on.
@@ -356,6 +368,115 @@ func _test_hazards_are_dodgeable() -> void:
 		print("  heron       %.2fs of warning on a %.2fs telegraph" % [lead, shortest])
 	if is_instance_valid(heron):
 		heron.free()
+	await _frames(2)
+
+
+## Both hazards fly so that the draw order can simply BE the rule: jump and you
+## are drawn over the hornet, stay down and it is drawn over you. That rule
+## shipped backwards once and the whole suite passed through it, because the
+## constants in wind_leaf.gd were right -- it was the SCENE that broke them.
+## Godot makes a child's z_index relative to its parent, and both the Hazards
+## container and the hazard's own root set 25, so hazards resolved to 50 and
+## sailed over the airborne player at 30.
+##
+## So this test resolves the real tree rather than reading the constants back.
+## A constants check would have passed on the broken build.
+func _test_jumping_puts_you_over_a_hornet() -> void:
+	var game := (load(SCENE) as PackedScene).instantiate() as MiniGame
+	add_child(game)
+	await _frames(3)
+	game.begin()
+	await _frames(2)
+
+	game.call("_spawn_hazard", RiverHazard.Kind.HORNET, int(game.get("_lane")))
+	await _frames(2)
+	var hazards: Array = game.get_node("Hazards").get_children()
+	_check(hazards.size() > 0, "no hornet spawned to test the draw order against")
+	if hazards.is_empty():
+		game.free()
+		return
+	var hazard_z := _effective_z(hazards[0])
+	var player: Node2D = game.get_node("Player")
+
+	game.call("_set_airborne", false)
+	var grounded := _effective_z(player)
+	game.call("_set_airborne", true)
+	var airborne := _effective_z(player)
+
+	_check(airborne > hazard_z,
+			"a jumping player draws at z %d and the hornet at z %d -- jump over "
+			% [airborne, hazard_z] + "something and you must be drawn ON TOP of "
+			+ "it, or clearing it looks like being hit by it")
+	_check(grounded < hazard_z,
+			"a standing player draws at z %d and the hornet at z %d -- it has to "
+			% [grounded, hazard_z] + "pass over you when you fail to jump, "
+			+ "because that is what hitting you looks like")
+	if airborne > hazard_z and grounded < hazard_z:
+		print("  draw order  grounded %d < hornet %d < airborne %d"
+				% [grounded, hazard_z, airborne])
+	game.call("_set_airborne", false)
+	game.free()
+	await _frames(2)
+
+
+## What Godot will actually sort by: z_index accumulates up the parent chain
+## for as long as the nodes are relative, which is the default and the thing
+## that made this bug invisible.
+func _effective_z(node: CanvasItem) -> int:
+	var total := node.z_index
+	var parent := node.get_parent()
+	while node.z_as_relative and parent is CanvasItem:
+		node = parent as CanvasItem
+		total += node.z_index
+		parent = node.get_parent()
+	return total
+
+
+## Getting hit is not just losing a life where you stand: it throws you off the
+## pad and you go in the water as well. Asserted rather than eyeballed, because
+## "did she actually get knocked off?" is a question about state over time and
+## a screenshot of one frame cannot answer it.
+##
+## It must also cost exactly ONE life. The drowning that follows the hit would
+## normally charge its own half, and the mercy window is the only thing
+## stopping a single hornet taking two bites -- which is easy to break and
+## invisible until someone counts their hearts.
+func _test_a_hit_knocks_you_into_the_water() -> void:
+	var game := (load(SCENE) as PackedScene).instantiate() as MiniGame
+	add_child(game)
+	await _frames(3)
+	game.begin()
+	await _frames(4)
+
+	var before: int = game.get("_life_halves")
+	var lane: int = game.get("_lane")
+	# Drop a hornet right on the row, in the player's lane, while they are
+	# standing on it -- the exact case the knockback exists for.
+	game.call("_spawn_hazard", RiverHazard.Kind.HORNET, lane)
+	var hazards: Array = game.get_node("Hazards").get_children()
+	_check(hazards.size() > 0, "no hornet spawned for the knockback test")
+	if hazards.is_empty():
+		game.free()
+		return
+	hazards[0].position.y = 174.0
+
+	var wet := false
+	for i in 90:
+		await _frames(1)
+		if bool(game.get("_in_water")):
+			wet = true
+			break
+	var after: int = game.get("_life_halves")
+
+	_check(wet, "a hornet hit left the player standing on the pad -- being hit "
+			+ "has to knock you off it and into the river")
+	_check(before - after == 2,
+			"a hornet hit cost %d half-lives, expected 2 -- the splash that "
+			% (before - after) + "follows a hit must be free, or one hornet "
+			+ "takes two bites out of the same mistake")
+	if wet and before - after == 2:
+		print("  knockback   hit -> thrown into the water, one life, not two")
+	game.free()
 	await _frames(2)
 
 
@@ -490,7 +611,7 @@ func _bot_step(game: MiniGame) -> void:
 
 
 ## What a decent player does, in priority order: leave a lane something is
-## diving on or whose pad is going, then deal with a log -- step around it if
+## diving on or whose pad is going, then deal with a hornet -- step around it if
 ## there is room, jump it if there is not.
 ##
 ## Deliberately not optimal. It only has to show that the opening is clearable
@@ -508,10 +629,10 @@ func _bot_decide(game: MiniGame) -> int:
 		# Cornered. Leaving the water for a moment beats standing in it.
 		return 0
 
-	if _log_closing(hazards, lane):
+	if _hornet_closing(hazards, lane):
 		for offset: int in [-1, 1]:
 			if _usable(pads, hazards, lane + offset) \
-					and not _lane_has_log(hazards, lane + offset):
+					and not _lane_has_hornet(hazards, lane + offset):
 				return offset
 		return 0
 
@@ -529,15 +650,15 @@ func _usable(pads: Array, hazards: Array, lane: int) -> bool:
 	for hazard in hazards:
 		if not is_instance_valid(hazard):
 			continue
-		# A log does not make a lane unusable -- you can jump a log. A dive does.
+		# A hornet does not make a lane unusable -- you can jump it. A dive does.
 		if hazard.lane == lane and not hazard.is_dodgeable_by_jumping():
 			return false
 	return true
 
 
-## True when a log in this lane is close enough to act on. The window is sized
-## off the log's own speed, so it means the same thing at 78 px/s and at 276.
-func _log_closing(hazards: Array, lane: int) -> bool:
+## True when a hornet in this lane is close enough to act on. The window is
+## sized off its own airspeed, so it means the same thing at 260 and at 420.
+func _hornet_closing(hazards: Array, lane: int) -> bool:
 	for hazard in hazards:
 		if not is_instance_valid(hazard) or hazard.lane != lane:
 			continue
@@ -550,7 +671,7 @@ func _log_closing(hazards: Array, lane: int) -> bool:
 	return false
 
 
-func _lane_has_log(hazards: Array, lane: int) -> bool:
+func _lane_has_hornet(hazards: Array, lane: int) -> bool:
 	for hazard in hazards:
 		if is_instance_valid(hazard) and hazard.lane == lane \
 				and hazard.is_dodgeable_by_jumping():

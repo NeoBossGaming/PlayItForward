@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://c38jcxhq8g8f3"
-path="res://.godot/imported/log.png-e83c7f4a2637f6501a934843cf69c93a.ctex"
+uid="uid://beum506l62i5y"
+path="res://.godot/imported/jump_down_1.png-3ff4ecc9bc8e5a509d1dc7f2bf81df8e.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://assets/game/wind_leaf/log.png"
-dest_files=["res://.godot/imported/log.png-e83c7f4a2637f6501a934843cf69c93a.ctex"]
+source_file="res://assets/game/player/jump_down_1.png"
+dest_files=["res://.godot/imported/jump_down_1.png-3ff4ecc9bc8e5a509d1dc7f2bf81df8e.ctex"]
 
 [params]
 

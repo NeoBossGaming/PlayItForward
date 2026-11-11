@@ -4,7 +4,12 @@
 
 ; Deliberately bare: the hazard builds its own sprites in _ready() because what
 ; it needs depends on `kind`, which the spawner sets before the node enters the
-; tree. A log is one sprite; a heron is a sprite plus the ring that warns you.
+; tree. A hornet is one sprite; a heron is a sprite plus the ring that warns you.
+;
+; NO z_index here, on purpose. Godot makes a child's z_index RELATIVE to its
+; parent, and the Hazards node in wind_leaf.tscn already sets 25 -- so setting
+; it again here stacked to an effective 50 and drew hazards over the airborne
+; player, inverting the one rule both hazards exist to express. The layer
+; belongs to the container; a hazard is whatever its container says it is.
 [node name="Hazard" type="Node2D"]
-z_index = 25
 script = ExtResource("1")

@@ -22,8 +22,19 @@ extends Camera2D
 ## Measured cost, rather than assumed: at 480x270 upscaled 3x, no zoom other
 ## than 1.0 keeps one game pixel on exactly three screen pixels. Sampling
 ## vertical colour runs, 24% were off the 3x grid with no camera at all (from
-## sprites at fractional positions), 32% at zoom 1.0 and 34% at 1.03.
-@export var max_zoom: float = 1.06
+## sprites at fractional positions), 32% at zoom 1.0 and 34% at 1.03. Raised
+## from 1.06 to 1.13 when the river went to three times its speed: at that
+## pace a six-percent push-in is not detectable, and the pixel grid is already
+## impure enough that the extra cost is small.
+@export var max_zoom: float = 1.13
+
+## How much further a gust shoves the camera in, on top of max_zoom, and how
+## fast that falls away. The push-in is the effect that actually sells speed,
+## but a zoom that only creeps upward with the current is invisible while it
+## happens -- you cannot see a change that slow. A gust gives it an edge: the
+## wind tears past and the world lurches at you for a fifth of a second.
+@export var gust_zoom: float = 0.05
+@export var gust_decay: float = 0.22
 
 ## Scales everything that shakes. 0.0 is a clean, still camera -- worth having
 ## as one number, because constant shake is a real accessibility problem.
@@ -40,6 +51,7 @@ extends Camera2D
 var _intensity: float = 0.0
 var _target: float = 0.0
 var _trauma: float = 0.0
+var _gust: float = 0.0
 var _clock: float = 0.0
 var _home: Vector2
 
@@ -59,12 +71,23 @@ func kick(amount: float = 0.5) -> void:
 	_trauma = clampf(_trauma + amount, 0.0, 1.0)
 
 
+## Wind just ripped past. 0 is nothing, 1 is the hardest shove. Deliberately
+## separate from kick(): this moves the ZOOM and not the position, because the
+## thing it has to read as is forward speed, and a camera that shook instead
+## would read as an impact -- which is what went wrong the last time this scene
+## tried to express speed.
+func gust(amount: float = 0.5) -> void:
+	_gust = clampf(_gust + amount, 0.0, 1.0)
+
+
 func _process(delta: float) -> void:
 	_clock += delta
 	_intensity = move_toward(_intensity, _target, ease_speed * delta)
 	_trauma = maxf(_trauma - delta / maxf(burst_decay, 0.01), 0.0)
+	_gust = maxf(_gust - delta / maxf(gust_decay, 0.01), 0.0)
 
-	var z := lerpf(1.0, max_zoom, _intensity)
+	# Squared for the same reason the shake is: it should snap in and ease out.
+	var z := lerpf(1.0, max_zoom, _intensity) + gust_zoom * _gust * _gust
 	zoom = Vector2(z, z)
 
 	# Squaring the trauma is the usual trick: a burst falls off fast at first,

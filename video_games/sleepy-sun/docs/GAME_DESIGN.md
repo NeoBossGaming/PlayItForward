@@ -168,11 +168,11 @@ difficulty-linked reads this one value and nothing else:
 
 | | t=0 | t=60 | late |
 |---|---|---|---|
-| current | **68 px/s** | 120 | → 240 |
+| current | **204 px/s** | 290 | → 480 |
 | shake interval | 2.6 s | 1.7 s | 0.40 s |
 | shake telegraph | 1.15 s | 0.85 s | 0.30 s |
 | pads shaking at once | 1 | 1–2 | 3 |
-| log interval (from 35 s) | — | 4.5 s | 1.1 s |
+| hornet interval (from 35 s) | — | 4.5 s | 1.1 s |
 | heron interval (from 100 s) | — | — | 2.4 s |
 | survival pay | 20/s | ~30/s | 85/s |
 
@@ -184,8 +184,39 @@ so each of these is answered differently:
 | | Reaction |
 |---|---|
 | **a pad shaking** | hop off it |
-| **a driftwood log** (from 35 s) | **jump** — it passes underneath you |
+| **a river hornet** (from 35 s) | **jump** — it passes underneath you |
 | **a diving heron** (from 100 s) | jumping will **not** save you; get out of the lane |
+
+### Both hazards fly, and that is load-bearing
+
+The jumpable hazard was a driftwood log for one round. It was wrong twice over:
+a 56 px solid sweeping down a lane passed straight **over** the lily pads,
+which is nonsense to look at, and it made draw order a permanent fight.
+
+Putting it in the air removes the problem rather than disguising it. Nothing
+above the water touches the pads, so the ordering stops being something to
+manage and becomes the statement of the rule:
+
+| | drawn |
+|---|---|
+| jumping | **player over the hazard** — clearing it looks like clearing it |
+| grounded | **hazard over the player** — which is what being hit looks like |
+
+Two traps live here, and both have already been sprung:
+
+- **Godot's `z_index` on a child is relative to its parent.** `hazard.tscn`
+  carried its own `z_index = 25` on top of the `Hazards` container's 25, so
+  hazards resolved to **50** and drew over the airborne player — the rule
+  shipped inverted while the whole suite passed, because the constants in
+  `wind_leaf.gd` were right and only the scene was wrong. The layer belongs to
+  the container; a hazard carries none of its own.
+- **A hornet flies at its own airspeed, not the river's.** That is not
+  tidiness. Tied to the current, a hazard at 480 px/s arrives in 0.38 s, under
+  the reaction floor the suite enforces — it was rejected on exactly that. A
+  flying thing has no reason to care how fast the water runs, so the warning
+  stays inside human reaction time however wild the river gets. It is
+  therefore *slower* than the late river, which is correct: it holds its line
+  while the current tears past beneath it.
 
 **The shake is telegraphed three redundant ways at once** — an accelerating
 wobble, a shift toward red, and a widening ripple — because it has to read on a
@@ -196,13 +227,17 @@ blob: a dark blob on dark water is exactly the thing nobody sees coming.
 ### Controls: moving costs two inputs
 
 - **`act` alone** → jump in place, airborne ~0.32 s. Its only purpose is the
-  hang time, which is how a log passes under you.
+  hang time, which is how a hornet passes under you.
 - **`act` while holding a direction** → hop to that lane, 0.26 s plus a 0.10 s
   cooldown. Enough weight that the river cannot be crossed by drumming the
   stick, small enough not to feel sticky. A 0.16 s input buffer means a press
   during a hop is honoured on landing.
-- **A direction alone does nothing.** This is the change that makes everything
-  else harder, and the gentle first minute exists to absorb it.
+- **A direction alone moves nothing — but it still turns you.** The character
+  faces wherever the stick points, hop or no hop. Without that she stared
+  upstream while the player was plainly asking to go left, and the controls
+  felt unhooked from the character even though they were working correctly.
+  Mechanically, moving still costs two inputs: that is the change that makes
+  everything else harder, and the gentle first minute exists to absorb it.
 
 ### The director never corners you
 
@@ -212,8 +247,8 @@ heron on one lane plus two pads shaking on the others leaves the player
 choosing between drowning and being hit. So both ask the same question,
 `_lane_available()`: the pad holds *and* nothing is diving on it.
 
-A log does **not** disqualify a lane. A lane with a log sweeping down it is
-still somewhere you can stand, because you can jump a log — that is the entire
+A hornet does **not** disqualify a lane. A lane with a hornet coming down it is
+still somewhere you can stand, because you can jump it — that is the entire
 reason jumping in place is a verb. A dive takes its lane away from everyone, so
 it is only allowed when the player is still left a lane they can reach in one
 hop and actually stand on.
@@ -224,7 +259,7 @@ Five lives, tracked internally in **halves**: a hazard takes 2, going in the
 water takes 1. Water staying a half keeps the original forgiveness for the
 mistake beginners make constantly, and reserves the real cost for the things
 you are meant to be dodging. Losing one brings a flash, a camera kick, the
-chain, and a 1.1 s mercy window so a single log cannot cost three lives.
+chain, and a 1.1 s mercy window so a single hornet cannot cost three lives.
 
 Score is two halves:
 
@@ -431,20 +466,29 @@ run against a copy of itself slowed to human reaction lag. Every trial, at
 every lag, recorded **zero** frames where the player had no reachable lane to
 stand on — the never-corner guarantee holds over ~20 minutes of play.
 
+Re-measured after the river went to 204 → 480 px/s. **Two trials per lag**, so
+read these as a band rather than a figure — the spread within one lag is wider
+than the gap between some of them.
+
 | Bot reaction lag | Survives | Score |
 |---|---|---|
 | 50 ms (frame-perfect) | **never dies** (capped at 7 min) | — |
-| 133 ms (expert, anticipating) | 196–242 s | 12k–19k |
-| 216 ms (average human) | 109–139 s | 5k–7k |
-| 300 ms (slow) | 122–131 s | 6k–7k |
-| no input at all | ~73 s | ~2.7k |
+| 133 ms (expert, anticipating) | 140–216 s | 7k–16k |
+| 216 ms (average human) | 148–163 s | 8k–11k |
+| 300 ms (slow) | 86–98 s | ~4.5k |
+| no input at all | ~76 s | ~2.9k |
+
+The tripled speed bit hardest at the **slow** end (122–131 s → 86–98 s) and at
+the expert end; the middle band moved within its own noise. That shape is what
+was wanted — the floor for someone fumbling the controls is still over a
+minute, while the ceiling came down.
 
 Two things worth reading off that table. **A perfect reactor never dying is not
 a bug** — it is exactly what a strict never-corner guarantee promises, and it
 means the skill ceiling is set by human reaction rather than by a wall. And
-**past about 200 ms the lag stops mattering**, because the limiter becomes the
-game's own pace rather than the player's reflexes; that is the knee the curve
-should be tuned against if it needs tuning.
+**every trial at every lag recorded zero cornered frames**, before and after
+the speed change, which is the number that actually matters: the game got much
+faster without ever becoming unfair.
 
 ---
 
@@ -455,7 +499,7 @@ tools/run_tests.sh          # or GODOT=/path/to/godot tools/run_tests.sh
 ```
 
 One suite now, `tests/soak_test.gd`. It used to prove that the game could be
-**finished**; Riverleap is endless, so that property no longer exists and four
+**finished**; Riverleap is endless, so that property no longer exists and six
 others took its place:
 
 - **The opening is survivable** — a competent bot must last ≥ 45 s. This is
@@ -464,19 +508,34 @@ others took its place:
 - **A run does end** — a bot that never touches the controls must lose all five
   lives and report exactly once. Losing is the endless loop's only exit.
 - **Hazards can be reacted to** — measured on standalone hazards at the worst
-  case the game can produce: a log at the fastest the river ever runs must be on
+  case the game can produce: a hornet at its top airspeed must be on
   screen ≥ 0.40 s before it strikes, and a heron's ring must be up for its
   **full** telegraph. A hazard that cannot be dodged is the single worst thing
   this redesign could ship and it is invisible in a screenshot.
 - **The player is never cornered** — asserted every frame of a driven run,
   computed in the test from the pads and hazards rather than asked of the game,
   so a bug in the game's own version of that question cannot hide behind it.
+- **Jumping puts you over the hazard** — and standing puts it over you. The
+  test resolves **effective** z by walking the parent chain, because that rule
+  shipped inverted once while the constants it is built from were all correct:
+  only the scene was wrong, and a constants check passes happily on the broken
+  build. Verified by re-breaking it and watching this fail.
+- **A hit knocks you into the water, and costs one life, not two.** Whether
+  someone was thrown off a pad is a question about state over time, which a
+  screenshot of one frame cannot answer — and the mercy window that stops the
+  following splash charging again is easy to break and invisible until a
+  player counts their hearts.
 
 Plus the curve's shape, and the regressions this game has already had, because
 a bug that got through once will get through again.
 
 Three notes that cost real time to learn:
 
+- **A screenshot is not a substitute for an assertion, and vice versa.** This
+  round needed both, in opposite directions. The inverted draw order was
+  invisible to 65 passing checks and obvious in one capture; the knockback
+  looked broken in six captures and was proved correct by one assertion. Use
+  the picture for *what it looks like* and the test for *what happened*.
 - **The bot has to hold the stick a frame before it presses the button.**
   `_unhandled_input` reads the direction with `Input.is_action_pressed` at the
   instant the `act` event arrives, so a hold and a press on the same frame comes

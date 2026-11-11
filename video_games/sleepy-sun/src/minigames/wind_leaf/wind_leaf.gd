@@ -37,10 +37,14 @@ const GENTLE_SECONDS := 60.0
 const GENTLE_CEILING := 0.30
 const STEEP_TAU := 90.0
 
-## The shore's speed. The start is double what the crossing used to run at --
-## an aggressive river rather than a calm one -- and it keeps climbing.
-const CURRENT_START := 68.0
-const CURRENT_END := 240.0
+## The shore's speed. The opening is now THREE TIMES what it was last round
+## (68) and six times the original crossing's 34: a river that is already
+## trying to kill you when the game starts, rather than one that works up to
+## it. 480 is close to the readable ceiling at this resolution -- past about
+## 500 px/s the water strobes rather than flows, since nearest-neighbour
+## sampling at 3x screen scale cannot show a tile moving ten pixels a frame.
+const CURRENT_START := 204.0
+const CURRENT_END := 480.0
 
 ## Every scrolling layer is a fraction of the current, so the whole scene is
 ## one parallax stack driven by one number. Different speeds in the SAME
@@ -88,11 +92,23 @@ const SHAKE_AT_ONCE := Vector2(1.0, 3.0)
 ## Both arrive late enough that the opening is purely pad-hopping: long enough
 ## to learn that jump moves you and jump-with-a-direction moves you sideways,
 ## before anything is thrown at you.
-const LOG_FROM_SECONDS := 35.0
-const LOG_INTERVAL := Vector2(4.5, 1.1)
-## Logs travel a shade faster than the river, so they close on you rather than
-## hanging alongside -- and so the jump has to be timed, not held.
-const LOG_SPEED_FACTOR := 1.15
+const HORNET_FROM_SECONDS := 35.0
+const HORNET_INTERVAL := Vector2(4.5, 1.1)
+## A hornet's airspeed, which has nothing to do with the river's. It flies, so
+## it has no reason to care how fast the water is moving -- and tying it to the
+## current was a real problem rather than a tidiness one: at 480 px/s a
+## river-borne hazard arrives in about a third of a second, which is less
+## warning than a person can act on. Decoupled, the warning stays inside human
+## reaction time however fast the river gets.
+## Capped at 360 because the suite measures the warning and rejected 420: at
+## that airspeed it crosses the screen in 0.38s, under the 0.40s reaction
+## floor. Being slower than the late river is correct rather than a
+## compromise -- it is flying over the water, not being carried by it, so it
+## should read as holding its own line while the current tears past beneath.
+const HORNET_SPEED := Vector2(240.0, 360.0)
+## Far enough above the row to be seen and read before it arrives. At the
+## fastest this is still ~0.55s of approach.
+const HORNET_FROM_Y := -60.0
 
 const HERON_FROM_SECONDS := 100.0
 const HERON_INTERVAL := Vector2(5.5, 2.4)
@@ -103,6 +119,17 @@ const HERON_TELEGRAPH := Vector2(0.95, 0.50)
 ## Tracked in halves. A hazard takes a whole life; going in the water takes
 ## half, which keeps the original forgiveness for the mistake beginners make
 ## constantly and reserves the real cost for the things you are dodging.
+## --- draw order --------------------------------------------------------------
+##
+## The whole reason both hazards fly is that this ordering can then simply BE
+## the rule, rather than something to manage around a log ploughing through
+## the lily pads. Jump and you pass over the hornet, so you are drawn over it.
+## Stay down and it passes over you, so it is drawn over you -- which is also
+## what hitting you looks like.
+const Z_PLAYER := 20
+const Z_HAZARD := 25        ## matches the Hazards node in the scene
+const Z_PLAYER_AIRBORNE := 30
+
 const MAX_LIFE_HALVES := 10
 const DAMAGE_HAZARD := 2
 const DAMAGE_WATER := 1
@@ -115,6 +142,20 @@ const INVULNERABLE_TIME := 1.1
 ## them and they look moored. Spawn rate and reach both rise with the current.
 const WAKE_INTERVAL := 0.16
 const WAKE_LIFE := 0.5
+
+## --- wind --------------------------------------------------------------------
+##
+## The river tells you how fast you are going, but it is below you and the eye
+## treats it as ground. Wind is the cue that works at the front of the frame:
+## streaks tearing past IN THE AIR, between the camera and everything else.
+##
+## They arrive in gusts rather than continuously. A constant stream becomes
+## wallpaper within seconds -- the eye adapts and stops reading it as speed at
+## all -- where a gust that builds and passes keeps re-announcing it, and gives
+## the camera something to punch against.
+const GUST_INTERVAL := Vector2(2.2, 0.55)
+const GUST_STREAKS := Vector2(5.0, 16.0)
+const GUST_LIFE := 0.42
 
 const CHIME_INTERVAL := 2.5
 const SCORE_CHIME := 80
@@ -158,7 +199,7 @@ var _recovery_timer: float = 0.0
 var _shake_timer: float = 0.0
 var _chime_timer: float = 0.0
 var _wake_timer: float = 0.0
-var _log_timer: float = 0.0
+var _hornet_timer: float = 0.0
 var _heron_timer: float = 0.0
 var _hazards: Array[RiverHazard] = []
 
@@ -175,6 +216,9 @@ var _leaf_scene := preload("res://src/minigames/wind_leaf/leaf.tscn")
 var _hazard_scene := preload("res://src/minigames/wind_leaf/hazard.tscn")
 var _wake_texture := preload("res://assets/game/decor/foam.png")
 var _wake_root: Node2D
+var _wind_root: Node2D
+var _gust_timer: float = 0.0
+var _streak_texture := preload("res://assets/game/decor/streak.png")
 var _chime_texture := preload("res://assets/game/wind_leaf/chime.png")
 
 
@@ -193,6 +237,7 @@ func _ready() -> void:
 	_player.freeze()
 	_player.position = Vector2(LANE_X[_lane], ROW_Y)
 	_player.set_facing(&"up")
+	_player.z_index = Z_PLAYER
 
 	_hud.reset_score(0)
 	_hud.hide_meter()
@@ -211,7 +256,7 @@ func _ready() -> void:
 func begin() -> void:
 	super.begin()
 	_hud.toast("HOLD ON", Color(0.8, 0.95, 1.0), 1.4)
-	_log_timer = LOG_FROM_SECONDS
+	_hornet_timer = HORNET_FROM_SECONDS
 	_heron_timer = HERON_FROM_SECONDS
 
 
@@ -226,8 +271,10 @@ func _process(delta: float) -> void:
 	_tick_hazards(delta)
 	_tick_chimes(delta)
 	_tick_recovery(delta)
+	_tick_aim(delta)
 	_tick_facing(delta)
 	_tick_wakes(delta)
+	_tick_wind(delta)
 	_tick_survival(delta)
 	_check_footing()
 
@@ -322,6 +369,8 @@ func _take_damage(halves: int, reason: String) -> bool:
 	_hud.set_lives(_life_halves, MAX_LIFE_HALVES)
 	_hud.set_alarm(1.0 if _life_halves <= 2 else 0.0)
 	_camera.kick(1.0 if halves >= DAMAGE_HAZARD else 0.6)
+	if halves >= DAMAGE_HAZARD:
+		Audio.sfx(&"hit")
 	Juice.flash(_player.anim, Color(1, 0.5, 0.5), 0.22)
 
 	var lost := _chain
@@ -419,7 +468,7 @@ func _consume_buffer() -> void:
 ## passes underneath you, and nothing else in the game gives you that.
 func _jump_in_place() -> void:
 	_hopping = true
-	_airborne = true
+	_set_airborne(true)
 	_idle_facing_timer = FACE_UPSTREAM_AFTER
 	Audio.sfx(&"hop", randf_range(1.15, 1.3))
 	_player.start_jump(0)
@@ -438,7 +487,7 @@ func _hop_to(target_lane: int) -> void:
 	var direction := 1 if target_lane > _lane else -1
 	_player.set_facing(&"left" if direction < 0 else &"right")
 	_hopping = true
-	_airborne = true
+	_set_airborne(true)
 	_lane = target_lane
 	_idle_facing_timer = FACE_UPSTREAM_AFTER
 	Audio.sfx(&"hop", randf_range(0.95, 1.1))
@@ -458,13 +507,39 @@ func _hop_to(target_lane: int) -> void:
 	tween.tween_callback(_on_hop_landed)
 
 
+## Being off the ground is two facts at once: hazards can pass under you, and
+## you are drawn above them. Keeping them in one function means they can never
+## disagree -- a player drawn over a hornet that still hit them would read as
+## the game cheating.
+func _set_airborne(value: bool) -> void:
+	_airborne = value
+	_player.z_index = Z_PLAYER_AIRBORNE if value else Z_PLAYER
+
+
 func _on_hop_landed() -> void:
 	_hopping = false
-	_airborne = false
+	_set_airborne(false)
 	_hop_cooldown = HOP_COOLDOWN
 	_player.land()
 	_camera.kick(0.28)
 	_check_footing()
+
+
+## Point the stick and the character looks that way, whether or not you then
+## press the button. Since the controls changed, a direction on its own does
+## nothing mechanically -- which left the character staring upstream while the
+## player was clearly asking to go left, and made the controls feel unhooked
+## from the character even though they were working.
+func _tick_aim(_delta: float) -> void:
+	if _hopping or _in_water or _ending:
+		return
+	var axis := Input.get_axis(&"move_left", &"move_right")
+	if is_zero_approx(axis):
+		return
+	_player.set_facing(&"left" if axis < 0.0 else &"right")
+	# Hold them facing that way while the stick is held, then let the usual
+	# beat pass before they turn back upstream.
+	_idle_facing_timer = FACE_UPSTREAM_AFTER
 
 
 ## Left after a hop, the character stays side-on indefinitely, which reads as
@@ -508,6 +583,33 @@ func _fall_in() -> void:
 	_player.anim.play(&"idle_down")
 
 
+## Thrown off the pad and into the river. `push` is which way the hit came
+## from, so the player is flung away from it rather than in a fixed direction.
+func _knock_into_water(push: float) -> void:
+	if _in_water or _ending:
+		return
+	var away := -1.0 if push > 0.0 else 1.0
+	_hopping = false
+	_set_airborne(false)
+	_player.cancel_jump()
+	# Any hop in flight would fight the knockback and put the player neatly
+	# back on a pad, which would read as the hit not having landed.
+	_buffered_direction = 0
+	_buffer_timer = 0.0
+
+	var from := _player.position
+	var to := from + Vector2(away * 26.0, 14.0)
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(_player, "position", to, 0.22) \
+			.set_trans(Tween.TRANS_QUAD).set_ease(Tween.EASE_OUT)
+	tween.tween_property(_player.anim, "rotation", away * 1.1, 0.22)
+	tween.chain().tween_callback(func() -> void:
+		_player.anim.rotation = 0.0
+		if not _ending:
+			_fall_in())
+
+
 func _tick_recovery(delta: float) -> void:
 	if not _in_water:
 		return
@@ -549,11 +651,11 @@ func _tick_hazards(delta: float) -> void:
 	if _ending:
 		return
 
-	_log_timer -= delta
-	if elapsed >= LOG_FROM_SECONDS and _log_timer <= 0.0:
-		_log_timer = lerpf(LOG_INTERVAL.x, LOG_INTERVAL.y, _intensity) \
+	_hornet_timer -= delta
+	if elapsed >= HORNET_FROM_SECONDS and _hornet_timer <= 0.0:
+		_hornet_timer = lerpf(HORNET_INTERVAL.x, HORNET_INTERVAL.y, _intensity) \
 				* randf_range(0.8, 1.2)
-		_spawn_log()
+		_spawn_hornet()
 
 	_heron_timer -= delta
 	if elapsed >= HERON_FROM_SECONDS and _heron_timer <= 0.0:
@@ -571,14 +673,19 @@ func _tick_hazards(delta: float) -> void:
 		if hazard.lane != _lane:
 			_dodged += 1
 			continue
-		# A log passes under a jump. A dive does not -- that is the whole
+		# A hornet passes under a jump. A dive does not -- that is the whole
 		# reason the two exist, and why one button has two meanings.
 		if hazard.is_dodgeable_by_jumping() and _airborne:
 			_dodged += 1
 			Audio.sfx(&"hop", 1.4)
 			continue
 		_take_damage(DAMAGE_HAZARD,
-				"LOG" if hazard.kind == RiverHazard.Kind.LOG else "HERON")
+				"HORNET" if hazard.kind == RiverHazard.Kind.HORNET else "HERON")
+		# Being hit throws you off the pad. It is the expensive mistake, so it
+		# should look like one: you do not simply lose a life standing still,
+		# you go in the water as well. The splash itself is free -- the mercy
+		# window means _fall_in cannot charge a second time for the same hit.
+		_knock_into_water(hazard.position.x - _player.position.x)
 
 
 ## Riverleap's oldest guarantee is that the director never corners you. There
@@ -621,20 +728,20 @@ func _spawn_hazard(kind: RiverHazard.Kind, lane: int) -> void:
 	hazard.kind = kind
 	hazard.lane = lane
 	hazard.row_y = ROW_Y
-	hazard.speed = current_speed() * LOG_SPEED_FACTOR
+	hazard.speed = lerpf(HORNET_SPEED.x, HORNET_SPEED.y, _intensity)
 	hazard.telegraph = lerpf(HERON_TELEGRAPH.x, HERON_TELEGRAPH.y, _intensity)
 	hazard.position = Vector2(LANE_X[lane],
-			-40.0 if kind == RiverHazard.Kind.LOG else ROW_Y)
+			HORNET_FROM_Y if kind == RiverHazard.Kind.HORNET else ROW_Y)
 	hazard.spent.connect(func(h: RiverHazard) -> void: _hazards.erase(h))
 	_hazards_root.add_child(hazard)
 	_hazards.append(hazard)
 
 
-func _spawn_log() -> void:
+func _spawn_hornet() -> void:
 	var lane := _pick_hazard_lane(true)
 	if lane < 0:
 		return
-	_spawn_hazard(RiverHazard.Kind.LOG, lane)
+	_spawn_hazard(RiverHazard.Kind.HORNET, lane)
 
 
 func _spawn_heron() -> void:
@@ -789,6 +896,58 @@ func _shed_wake(at: Vector2, rush: float, strength: float) -> void:
 	tween.tween_property(wake, "modulate:a", 0.0, WAKE_LIFE)
 	tween.tween_property(wake, "scale:x", wake.scale.x * 1.6, WAKE_LIFE)
 	tween.chain().tween_callback(wake.queue_free)
+
+
+## A gust: a handful of streaks torn across the frame at once, in front of
+## everything, with the camera pushing in as it passes. Built on the same
+## spawn-a-sprite-and-tween pattern as the wake, which is cheap and already
+## proven in this scene.
+func _tick_wind(delta: float) -> void:
+	if _ending:
+		return
+	_gust_timer -= delta
+	if _gust_timer > 0.0:
+		return
+	_gust_timer = lerpf(GUST_INTERVAL.x, GUST_INTERVAL.y, _intensity) \
+			* randf_range(0.7, 1.3)
+
+	if _wind_root == null or not is_instance_valid(_wind_root):
+		_wind_root = Node2D.new()
+		_wind_root.name = "Wind"
+		# In front of the player and the hazards: this is air between the
+		# camera and the scene, and it only reads as that if it occludes.
+		_wind_root.z_index = 40
+		add_child(_wind_root)
+
+	var count := int(lerpf(GUST_STREAKS.x, GUST_STREAKS.y, _intensity))
+	# A gust blows one way at a time, so they shear together rather than
+	# crossing each other, which reads as snow.
+	var shear := randf_range(-0.5, 0.5)
+	for i in count:
+		_shed_gust(shear, float(i) / float(maxi(count, 1)))
+	_camera.gust(lerpf(0.25, 0.75, _intensity))
+	Audio.sfx(&"shake", randf_range(0.35, 0.5))
+
+
+func _shed_gust(shear: float, stagger: float) -> void:
+	var streak := Sprite2D.new()
+	streak.texture = _streak_texture
+	streak.position = Vector2(randf_range(-20.0, 500.0), randf_range(-30.0, 300.0))
+	# Long, thin and nearly transparent. Anything solid enough to look at is
+	# something the player tries to read as a hazard.
+	streak.rotation = PI * 0.5 + shear
+	streak.scale = Vector2(lerpf(1.4, 3.6, _intensity), 0.7)
+	streak.modulate = Color(0.88, 0.95, 1.0, 0.0)
+	_wind_root.add_child(streak)
+
+	var travel := Vector2(sin(shear), cos(shear)) * lerpf(180.0, 460.0, _intensity)
+	var tween := create_tween()
+	tween.tween_interval(stagger * GUST_LIFE * 0.5)
+	tween.set_parallel(true)
+	tween.tween_property(streak, "modulate:a", randf_range(0.25, 0.5), GUST_LIFE * 0.3)
+	tween.tween_property(streak, "position", streak.position + travel, GUST_LIFE)
+	tween.chain().tween_property(streak, "modulate:a", 0.0, GUST_LIFE * 0.4)
+	tween.chain().tween_callback(streak.queue_free)
 
 
 ## 0 at the start of the crossing, 1 at the end. Everything speed-linked reads

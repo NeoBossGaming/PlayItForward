@@ -15,6 +15,11 @@ enum Wave { SINE, SQUARE, TRIANGLE, NOISE }
 const LIBRARY := {
 	&"hop":      [520.0, 0.10, Wave.TRIANGLE, 0.35, 1.6],
 	&"splash":   [180.0, 0.35, Wave.NOISE,    0.30, 0.5],
+	# Taking a hit. Deliberately the harshest thing in the library and pitched
+	# below everything else: it is the expensive mistake, and it has to be
+	# distinguishable from `splash` at a glance, because a hit knocks you into
+	# the water and the two sounds land about a fifth of a second apart.
+	&"hit":      [90.0,  0.26, Wave.SQUARE,   0.38, 0.35],
 	&"pickup":   [880.0, 0.14, Wave.SINE,     0.35, 1.9],
 	&"shake":    [140.0, 0.18, Wave.TRIANGLE, 0.22, 0.9],
 	&"step":     [220.0, 0.06, Wave.SQUARE,   0.14, 1.0],

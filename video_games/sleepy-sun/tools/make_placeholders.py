@@ -82,6 +82,9 @@ def canvas(w: int, h: int, fill=CLEAR) -> tuple[Image.Image, ImageDraw.ImageDraw
 KEEP = {
     "player/idle_down.png", "player/idle_left.png", "player/idle_right.png",
     "player/idle_up.png",
+    # Jump poses, derived from the idle frames -- see player_jump_frames().
+    *(f"player/jump_{d}_{i}.png"
+      for d in ("down", "up", "left", "right") for i in (0, 1, 2)),
     "shared/water.png", "shared/water_glints.png", "shared/bank_edge.png",
     "shared/ripple.png",
     # (water_0..2 were the striped tiles; shared/water.png replaced all three)
@@ -90,7 +93,7 @@ KEEP = {
     "wind_leaf/leaf_sink_0.png", "wind_leaf/leaf_sink_1.png",
     "wind_leaf/leaf_sink_2.png",
     "wind_leaf/chime.png",
-    "wind_leaf/log.png", "wind_leaf/heron.png", "wind_leaf/dive_shadow.png",
+    "wind_leaf/hornet.png", "wind_leaf/heron.png", "wind_leaf/dive_shadow.png",
     "village/ground_0.png", "village/tree.png", "village/treeline.png",
     "decor/reed.png", "decor/dragonfly.png", "decor/glint.png",
     "decor/foam.png", "decor/twig.png", "decor/driftleaf.png",
@@ -319,31 +322,55 @@ def lotus_pads():
 def hazards():
     """What the river throws at you, and what warns you it is coming.
 
-    The log is the hazard that teaches the jump, so it has to read as solid
-    and as *oncoming* from a long way off -- it is wide, bright against the
-    water, and lit along its top edge. The heron is the one jumping does not
-    save you from, so it must look nothing like the log: dark, vertical,
-    airborne.
+    Both hazards FLY. That is not decoration, it is the fix for a design bug:
+    the jumpable hazard used to be a driftwood log sweeping down a lane, which
+    meant a 56px solid passing straight over the lily pads -- nonsense to look
+    at, and a layering fight to implement. Something in the air never touches
+    the pads at all, and the draw order becomes a statement of the rule rather
+    than a problem to manage: jump and you are drawn over it, stay down and it
+    is drawn over you, because it hits you.
+
+    They must be unmistakable from each other, because they want opposite
+    reactions -- you jump the hornet, and jumping does nothing against the
+    heron. So they share no cue: the hornet is small, striped and hot yellow;
+    the heron is large, plain and dark blue-grey. Stripes appear nowhere else
+    in the game.
     """
     import math as _m
     rng = random.Random(4700)
 
-    # --- driftwood ------------------------------------------------------
-    W, H = 56, 18
+    # --- river hornet ---------------------------------------------------
+    # Flying head-on down the river at you, so it is drawn from BEHIND and
+    # above: a fat striped abdomen, wings swept out either side. Seen head-on
+    # it stays wide and legible while it closes, where a side-on insect would
+    # be a thin smear.
+    #
+    # Not a bird, deliberately. The heron already owns "bird", and the two
+    # must be told apart in the half second there is to react.
+    W, H = 26, 20
     img, d = canvas(W, H)
-    d.ellipse([0, 3, W - 1, H - 4], fill=(96, 70, 44, 255))
-    d.ellipse([0, 2, W - 1, H - 7], fill=(132, 98, 60, 255))
-    d.ellipse([2, 3, W - 3, H - 10], fill=(166, 128, 80, 255))
-    for _ in range(26):                                   # bark grain
-        x = rng.randrange(4, W - 6)
-        y = rng.randrange(5, H - 6)
-        d.line([(x, y), (x + rng.randrange(2, 6), y)], fill=(112, 82, 50, 255))
-    for cx in (3, W - 5):                                 # cut ends
-        d.ellipse([cx - 3, 4, cx + 3, H - 5], fill=(146, 112, 70, 255))
-        d.ellipse([cx - 2, 6, cx + 2, H - 7], fill=(108, 80, 50, 255))
-    d.polygon([(W // 2 - 6, 2), (W // 2 + 1, 0), (W // 2 + 4, 4)],
-              fill=(86, 112, 56, 255))                    # a sprig of moss
-    save(img, "wind_leaf/log.png")
+    dark = (38, 30, 16, 255)
+    amber = (248, 196, 48, 255)
+    cx = W // 2
+
+    # Wings first, so the body sits on top of them. Pale and barely there --
+    # a blur, not a shape.
+    d.polygon([(cx - 3, 8), (0, 2), (2, 11)], fill=(226, 236, 248, 150))
+    d.polygon([(cx + 3, 8), (W - 1, 2), (W - 3, 11)], fill=(226, 236, 248, 150))
+
+    d.ellipse([cx - 6, 5, cx + 5, H - 2], fill=amber)      # abdomen
+    # Two bands, not three, and one pixel each. At this size a heavier stripe
+    # turns the whole insect dark, and dark is what it must not be -- it has
+    # to carry over water that is already dark.
+    for band in (11, 15):
+        d.rectangle([cx - 6, band, cx + 5, band], fill=dark)
+    d.ellipse([cx - 4, 1, cx + 3, 7], fill=dark)           # thorax and head
+    d.point((cx - 2, 3), (255, 92, 48, 255))               # two hot eyes
+    d.point((cx + 1, 3), (255, 92, 48, 255))
+    d.line([(cx - 3, 1), (cx - 5, 0)], fill=dark)          # antennae
+    d.line([(cx + 2, 1), (cx + 4, 0)], fill=dark)
+    d.polygon([(cx - 1, H - 2), (cx, H - 1), (cx + 1, H - 2)], fill=dark)
+    save(img, "wind_leaf/hornet.png")
 
     # --- heron ----------------------------------------------------------
     W, H = 28, 34
@@ -427,6 +454,136 @@ def heart_segments():
     seg(1.0, "heart_full")
     seg(0.5, "heart_half")
     seg(0.0, "heart_empty")
+
+
+def player_jump_frames():
+    """Jump poses, derived from the hand-drawn player rather than invented.
+
+    The jump used to be *faked*: `walk_right` frame 1, paused and mirrored,
+    with squash and stretch applied in code. That was a workaround for there
+    being no drawn frames, and it showed -- the character slid through the air
+    mid-stride, and the mirroring existed only because the two walk sets are
+    not mirrors of each other.
+
+    These are real frames, but they are NOT drawn from scratch. The player art
+    is hand-drawn with its own palette and shading; an invented character would
+    read as a different person. So each pose cuts the existing idle frame into
+    bands -- everything above the skirt hem, and the legs below it -- and
+    MOVES them. Not resamples: the first attempt scaled the bands and the legs
+    simply dissolved, because at this size they are four pixels tall and there
+    is nothing there to resample. Translation keeps every pixel exactly as it
+    was drawn, which is the whole point of deriving these rather than drawing
+    new ones.
+
+    Three frames, the minimum that reads as a jump:
+
+        0  crouch    body sunk into the legs           -- the push off
+        1  airborne  legs tucked up and split apart    -- the hang
+        2  land      body sunk deepest, stance widest  -- the impact
+
+    The airborne frame deliberately leaves empty pixels under the feet: the
+    sprite's origin is at the character's feet, so a gap there is what reads
+    as being off the ground.
+    """
+    from PIL import Image
+
+    def leg_top(img):
+        """The skirt hem is the widest row low on the figure; legs start under
+        it. Found rather than hard-coded, because it sits at a different row
+        in the front-on and side-on sets."""
+        px = img.load()
+        lower = []
+        for y in range(img.height // 2, img.height):
+            n = sum(1 for x in range(img.width) if px[x, y][3] > 0)
+            if n:
+                lower.append((n, y))
+        if not lower:
+            return img.height - 4
+        return min(max(lower)[1] + 1, img.height - 1)
+
+    def bounds(img):
+        px = img.load()
+        ys = [y for y in range(img.height)
+              if any(px[x, y][3] > 0 for x in range(img.width))]
+        return (ys[0], ys[-1]) if ys else (0, img.height - 1)
+
+    def flare_hem(body, rows, amount):
+        """Widen the bottom rows of the body band -- the skirt hem.
+
+        This is the cue that actually sells the pose. At 32x32 the skirt is
+        most of the silhouette and the legs are nearly hidden behind it, so
+        moving the legs around barely registers; a skirt lifting as the
+        character leaves the ground registers immediately, and it is what a
+        skirt really does.
+        """
+        if amount <= 0 or body.height <= rows:
+            return body
+        W = body.width
+        out = body.copy()
+        hem = body.crop((0, body.height - rows, W, body.height))
+        wide = hem.resize((W + amount * 2, rows), Image.NEAREST)
+        out.alpha_composite(Image.new("RGBA", (W, rows), (0, 0, 0, 0)),
+                            (0, body.height - rows))
+        out.alpha_composite(wide.crop((amount, 0, amount + W, rows)),
+                            (0, body.height - rows))
+        return out
+
+    def pose(src, body_dy, legs_dy, split, lift, squash, flare=0):
+        img = Image.open(src).convert("RGBA")
+        W, H = img.size
+        top, bottom = bounds(img)
+        cut = leg_top(img)
+
+        body = img.crop((0, top, W, cut))
+        legs = img.crop((0, cut, W, bottom + 1))
+
+        # The body is ~24px tall, so it survives losing a row or two; this is
+        # what makes a crouch read as compressed rather than merely lowered.
+        if squash and body.height > squash + 2:
+            body = body.resize((W, body.height - squash), Image.NEAREST)
+        body = flare_hem(body, 4, flare)
+
+        out = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+        legs_y = cut + legs_dy - lift
+        body_y = (cut - body.height) + body_dy - lift
+
+        px = legs.load()
+        xs = [x for x in range(W)
+              if any(px[x, y][3] > 0 for y in range(legs.height))]
+        if split and xs:
+            # Legs apart: cut the leg block down the middle and push the halves
+            # outward. At this size one or two pixels of separation is the
+            # difference between "airborne" and "standing still in the air".
+            mid = (min(xs) + max(xs)) // 2 + 1
+            out.alpha_composite(legs.crop((0, 0, mid, legs.height)),
+                                (-split, legs_y))
+            out.alpha_composite(legs.crop((mid, 0, W, legs.height)),
+                                (mid + split, legs_y))
+        else:
+            out.alpha_composite(legs, (0, legs_y))
+        out.alpha_composite(body, (0, body_y))
+        return out
+
+    # legs_dy is measured from the body's hem, so anything negative pulls the
+    # legs up BEHIND the skirt and they vanish -- which is exactly what the
+    # first version did. It read as the character having no legs at all, and
+    # with the code-side stretch on top the whole figure became a smear. The
+    # legs have to stay visible; the airborne read comes from lifting the whole
+    # figure off the bottom of the cell and splitting the feet, not from
+    # hiding them.
+    #
+    #        body_dy legs_dy split lift squash flare
+    POSES = {
+        0: (2, 0, 0, 0, 2, 0),    # crouch: body sunk into the legs
+        1: (0, 0, 2, 3, 0, 2),    # airborne: lifted clear, feet apart, hem up
+        2: (3, 0, 1, 0, 3, 1),    # land: deepest fold, widest stance
+    }
+    for facing in ("down", "up", "left", "right"):
+        src = OUT / "player" / f"idle_{facing}.png"
+        if not src.exists():
+            continue
+        for index, args in POSES.items():
+            save(pose(src, *args), f"player/jump_{facing}_{index}.png")
 
 
 def treeline():
@@ -838,6 +995,7 @@ def main() -> None:
     lotus_pads(); chime(); hazards()
     village_tiles(); tree(); treeline()
     ui_bits(); hud_icons(); heart_segments(); alarm_frame(); vignette(); scrim()
+    player_jump_frames()
     decor_motes(); decor_props()
     made = sorted(p.relative_to(OUT).as_posix() for p in OUT.rglob("*.png"))
     print(f"assets/game now holds {len(made)} sprites")

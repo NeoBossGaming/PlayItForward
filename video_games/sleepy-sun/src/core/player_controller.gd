@@ -46,15 +46,24 @@ const DIRECTIONS := {
 ##
 ## A game that moves the player by tween (Riverleap hops between leaves) used to
 ## leave the sprite in its idle pose, so the character slid through the air
-## standing still. There are no drawn jump frames and inventing some would not
-## match the hand-drawn set, so the jump is posed instead: squash on the way
-## out, stretch through the rise, a lean into the direction of travel, and a
-## hard squash on landing. The landing squash is the part that sells the weight.
+## standing still. For a while the fix was a POSE -- one paused walk frame,
+## mirrored -- because there were no drawn jump frames.
+##
+## There are now: `jump_<facing>_0..2`, crouch / airborne / land, derived from
+## the idle art so they keep the hand-drawn palette (see player_jump_frames()
+## in tools/make_placeholders.py). The code-side squash, stretch and lean stay,
+## because three frames alone cannot carry a quarter-second arc -- the frames
+## give the pose, the scaling gives the weight. The landing squash is still the
+## part that sells it.
 
 ## Radians the sprite leans into the hop at full tilt.
 const JUMP_LEAN := 0.21
 ## How far the sprite stretches along its travel, as a fraction of normal.
-const JUMP_STRETCH := 0.17
+## Cut from 0.17 once real jump frames existed: the frames now carry the pose,
+## so the scaling only has to add weight. Left at 0.17 it fought them -- a
+## narrower, taller sprite on top of an already-lifted pose read as the
+## character being stretched rather than jumping.
+const JUMP_STRETCH := 0.08
 ## How far it squashes on impact. Bigger than the stretch on purpose -- landings
 ## read as heavier than take-offs.
 const LAND_SQUASH := 0.28
@@ -80,6 +89,7 @@ const _PUFF: Texture2D = preload("res://assets/game/decor/dust.png")
 
 var _rest_scale := Vector2.ONE
 var _rest_shadow := Vector2.ONE
+var _landing_timer: float = 0.0
 
 
 func _ready() -> void:
@@ -137,27 +147,35 @@ func _recover_stamina(delta: float) -> void:
 
 ## --- jumping -----------------------------------------------------------------
 
-## Call once as the hop leaves the ground. `direction` is -1, 0 or 1 for the
-## lean. The clip is paused on a mid-stride frame: a tucked, legs-apart pose
-## reads as airborne where a looping walk reads as running on the spot.
-##
-## It always poses from the SAME clip and mirrors it, because the two side
-## walk sets are not mirrors of each other -- `walk_right_*` strides, and
-## `walk_left_*` keeps the legs together in all four frames. Posing from
-## `walk_<facing>` therefore gave a stride hopping one way and none hopping
-## the other, which is exactly what it looked like.
-const JUMP_CLIP := &"walk_right"
-const JUMP_FRAME := 1
+## How long the landing frame is held before the walk/idle picker takes over.
+## Short: it is a beat of weight, not a pose to stand in.
+const LAND_FRAME_TIME := 0.13
+## Fraction of the arc spent in the crouch frame before the airborne one.
+const CROUCH_UNTIL := 0.16
 
+## Call once as the hop leaves the ground. `direction` is -1, 0 or 1 for the
+## lean. There are real frames per facing now, so nothing is mirrored and
+## nothing is posed from a walk clip.
 func start_jump(direction: int = 0) -> void:
 	jumping = true
-	if anim.sprite_frames != null and anim.sprite_frames.has_animation(JUMP_CLIP):
-		anim.play(JUMP_CLIP)
-		anim.frame = JUMP_FRAME
-	anim.pause()
-	anim.flip_h = direction < 0
+	anim.flip_h = false
+	_play_jump_frame(0)
 	_puff(2, 0.45)
 	set_jump_progress(0.0, direction)
+
+
+## The jump clips are driven by the arc rather than by their own playback, so
+## the pose always matches where the character actually is. Falls back to the
+## idle clip if a facing has no jump set, so a half-finished art pass cannot
+## crash the game.
+func _play_jump_frame(index: int) -> void:
+	var clip := StringName("jump_" + facing)
+	if anim.sprite_frames == null or not anim.sprite_frames.has_animation(clip):
+		return
+	if anim.animation != clip:
+		anim.play(clip)
+	anim.pause()
+	anim.frame = clampi(index, 0, anim.sprite_frames.get_frame_count(clip) - 1)
 
 
 ## Call every frame of the hop with `t` running 0 -> 1.
@@ -166,6 +184,7 @@ func set_jump_progress(t: float, direction: int = 0) -> void:
 		return
 	var height := sin(clampf(t, 0.0, 1.0) * PI)     # 0 at both ends, 1 at apex
 	var vertical := cos(clampf(t, 0.0, 1.0) * PI)   # +1 rising, -1 falling
+	_play_jump_frame(0 if t < CROUCH_UNTIL else 1)
 
 	# Stretched while climbing and while dropping, neutral at the apex, which is
 	# where a real body is least deformed.
@@ -190,6 +209,11 @@ func land() -> void:
 	shadow.modulate.a = 0.75
 	_puff(3, 0.7)
 
+	# Hold the landing frame for a beat. Without this the picker snaps back to
+	# idle on the very next physics tick and the third frame is never seen.
+	_play_jump_frame(2)
+	_landing_timer = LAND_FRAME_TIME
+
 	anim.scale = Vector2(_rest_scale.x * (1.0 + LAND_SQUASH),
 			_rest_scale.y * (1.0 - LAND_SQUASH))
 	create_tween().tween_property(anim, "scale", _rest_scale, LAND_RECOVER) \
@@ -200,6 +224,7 @@ func land() -> void:
 ## rather than on a leaf. Safe to call when not jumping.
 func cancel_jump() -> void:
 	jumping = false
+	_landing_timer = 0.0
 	anim.rotation = 0.0
 	anim.flip_h = false
 	anim.scale = _rest_scale
@@ -229,10 +254,16 @@ func _puff(count: int, strength: float) -> void:
 
 
 func _update_animation() -> void:
-	# A posed jump owns the sprite outright; letting the picker run would reset
-	# the frame and unpause the clip every physics tick.
+	# The jump owns the sprite outright; letting the picker run would reset the
+	# frame and unpause the clip every physics tick. The landing frame holds
+	# the same claim for a beat after touchdown.
 	if jumping:
 		return
+	if _landing_timer > 0.0:
+		_landing_timer -= get_physics_process_delta_time()
+		if _landing_timer > 0.0:
+			return
+		anim.play()
 	# The jump pose mirrors the sprite; nothing else ever should, so clear it
 	# here too rather than trusting every exit from the pose to tidy up.
 	anim.flip_h = false
