@@ -1,6 +1,6 @@
 # Art still to draw
 
-The project is stripped to one minigame, so this list is short. Everything here
+The project is down to two minigames, so this list is short. Everything here
 currently ships as a **generated placeholder** and the game is fully playable
 today. Replacing one is a straight file swap: same path, same dimensions, no
 code change.
@@ -53,6 +53,24 @@ squash applied to the walk frames. No jump sprites are needed. If you redraw the
 player, keep the 32 × 32 canvas with the feet on the bottom edge — the 1.5×
 scale is applied in `src/core/player.tscn`, not baked into the art.
 
+## Priority 2.5 — Acorn Storm
+
+Two sprites here carry the whole game, and they are the two marks. Everything
+else is scenery.
+
+| Path | Size | Notes |
+|---|---|---|
+| `assets/game/acorn_storm/mark_danger.png` | 34×34 | **One half of the most load-bearing pair in the game.** It is painted on the ground where an acorn will land and it tightens as the acorn falls, so it is both the warning and the clock. Hot orange-red (`#FF5C30`), an **open ring** with a hard near-black outline on both sides, and reticle ticks outside it. Every one of those choices is a lesson from Riverleap's dive marker, which was redrawn twice: a dark blob vanished on a dark background, a soft pale ring vanished on a pale one, and a plain circle read as a ripple. |
+| `assets/game/acorn_storm/mark_good.png` | 34×34 | The other half, and it must differ from the ring **by shape before colour**: a *filled* gold disc with a bright rim. Check the pair in greyscale — an outline and a solid are still not the same thing with the colour taken out, which is the only version of this test that means anything on a scuffed cabinet screen or for a colourblind player. Its first draft faded toward the middle and came out a pale sage blob over the grass; it needs to be opaque enough to read as a promise, not a smudge. |
+| `assets/game/acorn_storm/acorn.png` · `sunfruit.png` | 18×18 | What falls. They are drawn at 1.45× at the canopy and 0.9× at the ground, so perspective is applied in code — draw them flat-on. **They must be separable in peripheral vision**, because the player is looking at the ground marks while these are in the air: the acorn is brown and angular with a flat cap, the sunfruit is round and bright with a highlight. |
+| `assets/game/acorn_storm/canopy.png` | 512×76 | The roof the storm comes out of. **Deliberately does not tile** — it is one band wider than the 480 screen so it can sway without running out of art, and the 112-wide tiling version it replaced put four copies of one silhouette across the top. Solid at the top, ragged along the bottom edge; the raggedness should come from overlapping leaf clumps, not from a fade or a dither, both of which were tried and read as haze and as static. No pinholes of sky inside the mass. |
+| `assets/game/acorn_storm/clearing.png` | 160×160 | The ground, tiled. 160 rather than 32 for the reason the river's water is 192: a small tile across a wide field is a visible grid that no amount of detail inside one tile hides. Texture it with **short grass strokes**, not blobs — the first version used wide flat hard-edged ellipses and tiled across the screen it read as a pond covered in lily pads. Strokes also have no shape large enough for the eye to match across the tile seam, which killed the grid as a side effect. |
+| `assets/game/acorn_storm/canopy_shade.png` | 224×224 | Dappled light through the leaves, at low contrast, drifting with the wind. **Keep it 224, not 160.** A different tile size from the ground, moving at a different rate, is the entire anti-repetition mechanism; match them and the grid comes back. Keep it **light**: at its first strength it turned the whole clearing into a dark green soup that the player and both ground marks had to fight to be seen against, and the marks are the game. |
+| `assets/game/acorn_storm/burst.png` | 24×24 | A soft white disc, tinted in code, for a catch and for a hit. Deliberately neither mark's shape: the moment something resolves should not look like the moment something is warned about. |
+| `assets/game/acorn_storm/squirrel.png` | 16×14 | Pops out of the canopy above where an acorn is coming from, for about half a second. The ground mark says where it will land; this says where it came from. |
+| `assets/game/acorn_storm/rock.png` | 22×16 | Scenery in the clearing. Purely decorative — nothing collides with it. |
+| `assets/game/ui/icon_leaf.png` | 9×9 | Sits beside the vitality bar so the bar never needs a word. It replaced a two-leaf sprout that, at nine pixels, looked like an aerial. |
+
 ## Priority 3 — scenery and UI
 
 | Path | Size | Notes |
@@ -79,5 +97,9 @@ scale is applied in `src/core/player.tscn`, not baked into the art.
   2P is about twice the width of a normal face, so columns are tight everywhere;
   and **Pixelify Sans is unreadable below 11 px**. All text goes through
   `src/ui/game_theme.tres` — change it there, not per label.
-- **Art for the seven parked games is not deleted**, it is in `main` at
-  `876d449`. It comes back with its game, one at a time.
+- **Art for the six parked games is not deleted**, it is in `main` at
+  `876d449`. It comes back with its game, one at a time. Acorn Storm's own art
+  was *not* restorable that way — the sprites it had then were an impact ring
+  and two 18×18 pickups, and the game it is now needed a canopy, a clearing,
+  two distinguishable ground marks and a shade layer that none of that covered.
+  Expect the same of the next one: the code comes back, the art is redrawn.

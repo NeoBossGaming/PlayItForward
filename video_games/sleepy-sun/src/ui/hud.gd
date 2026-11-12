@@ -47,6 +47,7 @@ const LIFE_TEXTURES := {
 const METER_ICONS := {
 	&"time": "res://assets/game/ui/icon_clock.png",
 	&"far bank": "res://assets/game/ui/icon_flag.png",
+	&"vitality": "res://assets/game/ui/icon_leaf.png",
 }
 
 @onready var _score: Label = $Root/Score
@@ -144,8 +145,15 @@ func set_multiplier(value: int) -> void:
 ## there was a progress meter at all. It is now a band across the top with a
 ## marker riding the fill, because a goal you can watch yourself approaching
 ## is one of the better ways to make a scene feel like it is going somewhere.
-func set_meter(ratio: float, kind: StringName = &"time") -> void:
+## `colour` tints the fill. Default leaves whatever the scene set, which is
+## what a progress meter wants; a HEALTH bar wants to change colour as it
+## empties, because a falling bar that stays the same green says how much is
+## left but never says that it is nearly gone.
+func set_meter(ratio: float, kind: StringName = &"time",
+		colour: Color = Color(0, 0, 0, 0)) -> void:
 	var value := clampf(ratio, 0.0, 1.0)
+	if colour.a > 0.0:
+		_meter_fill.color = colour
 	_meter_track.visible = true
 	_meter_fill.visible = true
 	# Width is driven straight from the constant, so the fill cannot outrun the

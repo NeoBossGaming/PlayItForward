@@ -1,0 +1,101 @@
+[gd_scene load_steps=12 format=3]
+
+[ext_resource type="Script" path="res://src/minigames/acorn_storm/acorn_storm.gd" id="1"]
+[ext_resource type="PackedScene" path="res://src/core/player.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://src/ui/hud.tscn" id="3"]
+[ext_resource type="Script" path="res://src/core/scrolling_texture.gd" id="4"]
+[ext_resource type="Script" path="res://src/core/game_camera.gd" id="5"]
+[ext_resource type="Script" path="res://src/core/decor.gd" id="6"]
+[ext_resource type="Texture2D" path="res://assets/game/acorn_storm/clearing.png" id="7"]
+[ext_resource type="Texture2D" path="res://assets/game/acorn_storm/canopy_shade.png" id="8"]
+[ext_resource type="Texture2D" path="res://assets/game/acorn_storm/canopy.png" id="9"]
+[ext_resource type="Texture2D" path="res://assets/game/acorn_storm/rock.png" id="10"]
+[ext_resource type="Texture2D" path="res://assets/game/decor/driftleaf.png" id="11"]
+
+[node name="AcornStorm" type="Node2D"]
+script = ExtResource("1")
+id = &"acorn_storm"
+par_score = 2600
+
+[node name="World" type="Node2D" parent="."]
+
+; --- the clearing ------------------------------------------------------------
+; The ground does not move: the player is standing on it. Everything that
+; moves here is wind -- the shade travelling through the leaves, the leaves
+; themselves, and the canopy swaying overhead.
+[node name="Ground" type="Sprite2D" parent="World"]
+position = Vector2(240, 135)
+texture = ExtResource("7")
+script = ExtResource("4")
+area = Vector2i(504, 318)
+
+; Dappled light through the canopy, drifting with the wind. Also the
+; anti-tiling layer: 224px against the ground's 160, on a different rate, so
+; the two periods never line up. A bigger ground tile on its own would only
+; have made the grid bigger -- the river taught that the expensive way.
+[node name="Shade" type="Sprite2D" parent="World"]
+position = Vector2(240, 135)
+z_index = 1
+texture = ExtResource("8")
+script = ExtResource("4")
+area = Vector2i(504, 318)
+scroll = Vector2(-5, 2)
+
+[node name="Rocks" type="Node2D" parent="World"]
+z_index = 2
+
+[node name="RockA" type="Sprite2D" parent="World/Rocks"]
+position = Vector2(74, 228)
+texture = ExtResource("10")
+
+[node name="RockB" type="Sprite2D" parent="World/Rocks"]
+position = Vector2(412, 122)
+texture = ExtResource("10")
+scale = Vector2(0.8, 0.8)
+
+[node name="RockC" type="Sprite2D" parent="World/Rocks"]
+position = Vector2(338, 252)
+texture = ExtResource("10")
+scale = Vector2(1.2, 1.2)
+
+; Torn leaves blowing across the clearing. Speed is driven from the gale, so
+; this is the one layer that says how hard the wind is at ground level.
+[node name="Leaves" type="Node2D" parent="World"]
+z_index = 45
+script = ExtResource("6")
+texture = ExtResource("11")
+count = 16
+drift = Vector2(-18, 22)
+area = Rect2(-20, -10, 520, 290)
+tint = Color(1, 1, 1, 0.75)
+sway = 26.0
+spin = true
+
+; --- the canopy --------------------------------------------------------------
+; One band, 512 wide for a 480 screen so it can sway without running out of
+; art, and deliberately NOT tiled: four copies of one silhouette across the
+; top is the exact grid this project keeps having to kill, and a band wider
+; than the screen has no period to find.
+;
+; Above the falling bodies, because things come OUT of it.
+[node name="Canopy" type="Sprite2D" parent="World"]
+position = Vector2(240, 38)
+z_index = 50
+texture = ExtResource("9")
+
+[node name="Squirrels" type="Node2D" parent="World"]
+z_index = 48
+
+[node name="Camera" type="Camera2D" parent="."]
+position = Vector2(240, 135)
+script = ExtResource("5")
+
+; No z_index. Each faller sets its own mark and body layers, and a value here
+; would be ADDED to both -- which is how Riverleap once drew a hazard over an
+; airborne player and inverted its own rule.
+[node name="Fallers" type="Node2D" parent="."]
+
+[node name="Player" parent="." instance=ExtResource("2")]
+position = Vector2(240, 172)
+
+[node name="HUD" parent="." instance=ExtResource("3")]

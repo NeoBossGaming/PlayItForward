@@ -83,6 +83,13 @@ KEEP = {
     "player/idle_down.png", "player/idle_left.png", "player/idle_right.png",
     "player/idle_up.png",
     "ui/stick.png", "ui/button.png", "ui/arrow.png",
+    # --- Acorn Storm ---
+    "acorn_storm/acorn.png", "acorn_storm/sunfruit.png",
+    "acorn_storm/mark_danger.png", "acorn_storm/mark_good.png",
+    "acorn_storm/clearing.png", "acorn_storm/canopy_shade.png",
+    "acorn_storm/rock.png", "acorn_storm/squirrel.png",
+    "acorn_storm/canopy.png", "acorn_storm/burst.png",
+    "ui/icon_leaf.png",
     # Jump poses, derived from the idle frames -- see player_jump_frames().
     *(f"player/jump_{d}_{i}.png"
       for d in ("down", "up", "left", "right") for i in (0, 1, 2)),
@@ -695,6 +702,282 @@ def control_pictograms():
     save(img, "ui/arrow.png")
 
 
+def acorn_storm_art():
+    """The clearing, and the two things that fall into it.
+
+    The marks on the ground are the important part. Riverleap's dive marker
+    had to be redrawn twice to learn that a soft pale ring vanishes into a busy
+    background, and that colour on its own is not a cue you can rely on -- not
+    on a scuffed cabinet screen and not for a colourblind player.
+
+    So the two marks here differ by SHAPE first and colour second:
+
+        danger -- a hard-edged ring with reticle ticks, hot orange-red, open
+                  in the middle so you can see what is under it
+        good   -- a filled soft disc with a bright rim, gold
+
+    One is an outline, one is a solid. That reads at a glance even in
+    greyscale, which is the test worth applying.
+    """
+    import math as _m
+    rng = random.Random(5100)
+
+    # --- the danger mark --------------------------------------------------
+    W = H = 34
+    img, d = canvas(W, H)
+    px = img.load()
+    hot = (255, 92, 48)
+    edge = (26, 14, 10)
+    for y in range(H):
+        for x in range(W):
+            dx, dy = (x + 0.5 - W / 2) / (W / 2), (y + 0.5 - H / 2) / (H / 2)
+            dist = _m.sqrt(dx * dx + dy * dy)
+            if dist > 1.0:
+                continue
+            if dist > 0.86:
+                if abs(dx) < 0.16 or abs(dy) < 0.16:      # reticle ticks
+                    px[x, y] = hot + (235,)
+            elif dist > 0.78:
+                px[x, y] = edge + (225,)
+            elif dist > 0.56:
+                px[x, y] = hot + (255,)
+            elif dist > 0.48:
+                px[x, y] = edge + (225,)
+    save(img, "acorn_storm/mark_danger.png")
+
+    # --- the good mark ----------------------------------------------------
+    # Solid where the other is hollow. Even with the colour stripped out, a
+    # filled disc and an open ring are not the same shape.
+    img, d = canvas(W, H)
+    px = img.load()
+    gold = (255, 206, 92)
+    gold_rim = (255, 240, 190)
+    for y in range(H):
+        for x in range(W):
+            dx, dy = (x + 0.5 - W / 2) / (W / 2), (y + 0.5 - H / 2) / (H / 2)
+            dist = _m.sqrt(dx * dx + dy * dy)
+            if dist > 0.86:
+                continue
+            if dist > 0.74:
+                px[x, y] = gold_rim + (250,)
+            else:
+                # Opaque enough to actually read as gold. The first version
+                # faded to about half alpha over green grass and came out a
+                # pale sage blob -- legible as a shape, useless as a promise
+                # that something good lands here.
+                px[x, y] = gold + (int(235 - 70 * dist),)
+    save(img, "acorn_storm/mark_good.png")
+
+    # --- acorn ------------------------------------------------------------
+    W = H = 18
+    img, d = canvas(W, H)
+    d.ellipse([3, 6, 14, 17], fill=(176, 122, 62, 255))
+    d.ellipse([5, 8, 11, 13], fill=(206, 156, 92, 255))
+    d.rectangle([2, 2, 15, 8], fill=(96, 66, 40, 255))
+    d.rectangle([3, 3, 14, 5], fill=(122, 86, 52, 255))
+    d.rectangle([8, 0, 9, 3], fill=(72, 50, 30, 255))
+    save(img, "acorn_storm/acorn.png")
+
+    # --- sunfruit ---------------------------------------------------------
+    # Bright and round against a brown, angular acorn: the pair has to be
+    # separable in peripheral vision while you are watching something else.
+    img, d = canvas(W, H)
+    d.ellipse([2, 3, 15, 16], fill=P["sun_dark"])
+    d.ellipse([3, 4, 13, 14], fill=P["sun"])
+    d.ellipse([5, 6, 9, 10], fill=(255, 248, 218, 255))
+    d.line([(9, 3), (11, 0)], fill=P["hedge"])
+    d.polygon([(9, 2), (13, 1), (10, 4)], fill=(96, 150, 70, 255))
+    save(img, "acorn_storm/sunfruit.png")
+
+    # --- the clearing floor -----------------------------------------------
+    # 160px, not 32. The river taught this the hard way: a small tile across a
+    # wide field is a visible grid no amount of detail inside one tile hides.
+    #
+    # Texture is BLADES, not blobs. The first version laid down wide flat
+    # ellipses, and tiled across the screen it read as a pond covered in lily
+    # pads rather than as grass -- big hard-edged ovals are what a lily pad
+    # looks like from above, which this project has unfortunately drawn before
+    # and knows well. Short strokes at low contrast read as ground cover, and
+    # they have no shape large enough for the eye to match across the tile
+    # seam, which is the other half of why the grid disappeared.
+    W = H = 160
+    img, _ = canvas(W, H, P["grass"])
+    px = img.load()
+
+    def soft_patch(cx, cy, r, colour, strength):
+        for y in range(-r, r + 1):
+            for x in range(-r, r + 1):
+                d2 = (x * x + y * y) / float(r * r)
+                if d2 >= 1.0:
+                    continue
+                if rng.random() > strength * (1.0 - d2):
+                    continue
+                px[(cx + x) % W, (cy + y) % H] = colour
+
+    # Broad, very low contrast variation first, so the field is not flat.
+    for _ in range(14):
+        soft_patch(rng.randrange(W), rng.randrange(H), rng.randrange(18, 40),
+                   P["grass_dark"], 0.5)
+    for _ in range(12):
+        soft_patch(rng.randrange(W), rng.randrange(H), rng.randrange(14, 34),
+                   P["grass_lit"], 0.45)
+
+    # Then the blades. Mostly upright, one to three pixels, in both directions
+    # from the base tone so the texture reads at a distance without any one
+    # stroke being visible.
+    for _ in range(1500):
+        x, y = rng.randrange(W), rng.randrange(H)
+        length = rng.randrange(1, 4)
+        lean = rng.choice((-1, 0, 0, 1))
+        tone = P["grass_lit"] if rng.random() < 0.5 else P["grass_dark"]
+        for i in range(length):
+            px[(x + lean * i) % W, (y - i) % H] = tone
+    # A little bare earth showing through.
+    for _ in range(90):
+        x, y = rng.randrange(W), rng.randrange(H)
+        for i in range(rng.randrange(1, 4)):
+            px[(x + i) % W, y] = (104, 92, 62, 255)
+    save(img, "acorn_storm/clearing.png")
+
+    # --- the shade layer --------------------------------------------------
+    # 224px against the floor's 160, drifting at a different rate. Two periods
+    # that never line up is what actually killed the river's grid; a bigger
+    # tile on its own only makes the grid bigger.
+    #
+    # Kept light. At its first strength it turned the whole clearing into a
+    # dark green soup that the player and both ground marks had to fight to
+    # be seen against -- and the marks are the game.
+    DW = DH = 224
+    field = [[0.0] * DW for _ in range(DH)]
+    for _ in range(22):
+        cx, cy = rng.randrange(DW), rng.randrange(DH)
+        radius = rng.randrange(30, 78)
+        weight = rng.uniform(-1.0, 1.0)
+        for y in range(-radius, radius + 1):
+            for x in range(-radius, radius + 1):
+                d2 = (x * x + y * y) / float(radius * radius)
+                if d2 >= 1.0:
+                    continue
+                field[(cy + y) % DH][(cx + x) % DW] += weight * (1.0 - d2) ** 2
+    peak = max(abs(v) for row in field for v in row) or 1.0
+    img, _ = canvas(DW, DH)
+    for y in range(DH):
+        for x in range(DW):
+            v = field[y][x] / peak
+            colour = (236, 244, 206) if v >= 0 else (28, 44, 24)
+            a = abs(v) * (26 if v >= 0 else 30)
+            if a < 2.0:
+                continue
+            img.putpixel((x, y), (*colour, int(a)))
+    save(img, "acorn_storm/canopy_shade.png")
+
+    # --- rock -------------------------------------------------------------
+    W, H = 22, 16
+    img, d = canvas(W, H)
+    d.ellipse([0, 4, W - 1, H - 1], fill=P["rock_dark"])
+    d.ellipse([1, 2, W - 4, H - 4], fill=P["rock"])
+    d.ellipse([4, 4, W - 10, H - 9], fill=(146, 146, 156, 255))
+    save(img, "acorn_storm/rock.png")
+
+    # --- squirrel, up in the canopy ---------------------------------------
+    W, H = 16, 14
+    img, d = canvas(W, H)
+    body = (150, 96, 58, 255)
+    d.ellipse([3, 5, 12, 13], fill=body)
+    d.ellipse([8, 2, 14, 8], fill=body)                    # head
+    d.polygon([(4, 10), (0, 3), (3, 2), (6, 8)], fill=(176, 122, 72, 255))
+    d.point((12, 4), (24, 18, 14, 255))
+    save(img, "acorn_storm/squirrel.png")
+
+    # --- the canopy overhead ----------------------------------------------
+    # The roof the storm comes out of: one band across the top of the screen,
+    # 512 wide for a 480 viewport so it can sway without running out of art.
+    #
+    # It does NOT tile, and that is the point. It was 112 wide and repeated
+    # horizontally first, which put four copies of the same silhouette across
+    # the screen -- the exact grid the river spent a whole round killing, and
+    # unnecessary here because the clearing does not scroll. A band that is
+    # simply wider than the screen has no period to find.
+    W, H = 512, 76
+    img, d = canvas(W, H)
+    px = img.load()
+    dark = (24, 44, 28)
+    mid = (36, 62, 38)
+    lit = (52, 84, 48)
+
+    def leaf_blob(cx, cy, r, colour):
+        for y in range(-r, r + 1):
+            for x in range(-r, r + 1):
+                if x * x + y * y > r * r:
+                    continue
+                tx, ty = cx + x, cy + y
+                if ty < 0 or ty >= H or tx < 0 or tx >= W:
+                    continue
+                px[tx, ty] = colour + (255,)
+
+    # A solid base across the top third first: the blobs alone left pinholes
+    # of sky inside the mass, which reads as a bad composite rather than as
+    # leaves. Only the BOTTOM edge of this band is supposed to be ragged.
+    d.rectangle([0, 0, W - 1, int(H * 0.38)], fill=dark + (255,))
+
+    # Every blob is opaque and the ragged edge comes from the blobs
+    # themselves -- overlapping circles scallop the bottom on their own.
+    # The first version thinned the lower pixels instead, first by alpha and
+    # then by dither; one came out as grey haze over the sky and the other as
+    # a band of static. Neither looked like leaves, and both were solving a
+    # problem the silhouette already solved.
+    for _ in range(120):
+        leaf_blob(rng.randrange(W), rng.randrange(-6, int(H * 0.60)),
+                  rng.randrange(10, 22), dark)
+    for _ in range(140):
+        leaf_blob(rng.randrange(W), rng.randrange(-4, int(H * 0.54)),
+                  rng.randrange(6, 15), mid)
+    for _ in range(120):
+        leaf_blob(rng.randrange(W), rng.randrange(-2, int(H * 0.46)),
+                  rng.randrange(3, 9), lit)
+    # A few clumps hanging below the mass, so the edge is broken rather than
+    # merely curved. Kept sparse: a row of them at a similar height stopped
+    # reading as stray leaves and became a second row of dots under the first.
+    for _ in range(22):
+        leaf_blob(rng.randrange(W), rng.randrange(int(H * 0.56), int(H * 0.80)),
+                  rng.randrange(4, 9), dark if rng.random() < 0.6 else mid)
+    # Close the pinholes. Overlapping circles leave one- and two-pixel gaps
+    # of sky inside the mass, and at 3x screen scale those are three to six
+    # bright pixels winking out of a dark canopy. Per column, walk down from
+    # the top and fill any gap of two pixels or less, which seals the mass
+    # while leaving the hanging clumps -- separated by much more than that --
+    # detached.
+    for x in range(W):
+        y = 0
+        last_solid = -1
+        while y < H:
+            if px[x, y][3] > 0:
+                last_solid = y
+            elif y - last_solid > 2:
+                break
+            y += 1
+        for fill_y in range(last_solid + 1):
+            if px[x, fill_y][3] == 0:
+                px[x, fill_y] = dark + (255,)
+    save(img, "acorn_storm/canopy.png")
+
+    # --- a catch / impact flash -------------------------------------------
+    # One white-hot disc, tinted by whoever spawns it. Deliberately not either
+    # of the two marks: a flash that looked like a telegraph would mean the
+    # moment of resolution and the moment of warning share a shape.
+    W = H = 24
+    img, _ = canvas(W, H)
+    px = img.load()
+    for y in range(H):
+        for x in range(W):
+            dx, dy = (x + 0.5 - W / 2) / (W / 2), (y + 0.5 - H / 2) / (H / 2)
+            dist = _m.sqrt(dx * dx + dy * dy)
+            if dist > 1.0:
+                continue
+            px[x, y] = (255, 252, 238, int(255 * (1.0 - dist) ** 1.4))
+    save(img, "acorn_storm/burst.png")
+
+
 def treeline():
     """Distant trees past the bank, as the slowest parallax layer.
 
@@ -863,6 +1146,13 @@ def hud_icons():
         d.line([(4, y), (2, y - 1)], fill=W)
         d.line([(4, y), (6, y - 1)], fill=W)
     save(img, "ui/icon_wheat.png")
+
+    img, d = canvas(9, 9)                                   # leaf (vitality)
+    # One leaf rather than a two-leaf sprout: at nine pixels the sprout's
+    # stem and two tiny flags came out looking like an aerial.
+    d.polygon([(8, 0), (8, 5), (6, 7), (3, 7), (1, 5), (1, 3)], fill=W)
+    d.line([(0, 8), (7, 1)], fill=(28, 26, 38, 255))
+    save(img, "ui/icon_leaf.png")
 
     img, d = canvas(9, 9)                                   # lantern
     d.rectangle([3, 0, 5, 1], fill=W)
@@ -1104,7 +1394,7 @@ def main() -> None:
     lotus_pads(); chime(); hazards()
     village_tiles(); tree(); treeline()
     ui_bits(); hud_icons(); heart_segments(); alarm_frame(); vignette(); scrim()
-    player_jump_frames(); control_pictograms()
+    player_jump_frames(); control_pictograms(); acorn_storm_art()
     decor_motes(); decor_props()
     made = sorted(p.relative_to(OUT).as_posix() for p in OUT.rglob("*.png"))
     print(f"assets/game now holds {len(made)} sprites")

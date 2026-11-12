@@ -7,7 +7,7 @@ because the budget was always split eight ways.
 
 So the project is now one game at a time: **Riverleap**, polished until it is
 genuinely good, then the next one, and only then the shell that holds them.
-Everything parked is listed in §7, with the commit it lives in.
+Everything parked is listed in §9, with the commit it lives in.
 
 ---
 
@@ -21,7 +21,7 @@ The constraints that shape every decision:
 | Constraint | Consequence |
 |---|---|
 | It sits unattended in a public space | Playable by someone who has never seen it, with no instructions |
-| The player has already paid | **No fail state** — *amended for Riverleap, see §5.* A game over thirty seconds in is a machine that took money and gave nothing. Riverleap now has five lives, chosen deliberately, with a gentle first minute as the compromise |
+| The player has already paid | **No fail state** — *amended for the two endless games, see §5.* A game over thirty seconds in is a machine that took money and gave nothing. Riverleap now has five lives, chosen deliberately, with a gentle first minute as the compromise |
 | One stick, one button | Every verb has to fit that |
 | Raspberry Pi 4/5 | 480 × 270 internal, GL Compatibility renderer |
 | The money is a donation | The cabinet says so when the run ends |
@@ -38,7 +38,7 @@ Each minigame gathers one **gift** for the sleeping sun. Riverleap's is **the
 river chimes**: the sun has always woken to them, and the wind has stopped, so
 somebody has to cross the river and ring them by hand.
 
-The lore is written and parked (§7). It belongs with the shell, because a
+The lore is written and parked (§9). It belongs with the shell, because a
 cutscene with nothing on either side of it is just a delay.
 
 ---
@@ -131,7 +131,139 @@ choosing between games. Both keys are inert outside a debug build.
 
 ---
 
-## 5. Riverleap (`wind_leaf`) — *hop*
+## 5. What every game inherits
+
+Riverleap was built first and alone, so a fair amount of what looks like
+Riverleap is actually *the cabinet*. This section is the part the second game
+did not have to rediscover, written down so the third does not either.
+
+### The difficulty curve has one shape
+
+`MiniGame.curve(seconds, gentle_seconds, gentle_ceiling, steep_tau)` — a gentle
+linear climb to a ceiling, then an exponential approach to 1 that never
+arrives. Each game passes its own three numbers; the shape is shared.
+
+The shape encodes two decisions. The gentle opening is **the compromise that
+buys a fail state**: a stranger who has not worked out the controls still gets
+a real go for their credit. The ceiling that is never reached is **what a good
+player is chasing**: there is always a next thirty seconds that is worse than
+this one.
+
+One curve, not a dozen tuned constants, is also what makes a game tunable at
+all. Everything reads `_intensity` — spawn rates, speeds, how many things are
+in the air at once, how fast a bar drains — so stretching the curve eases all
+of them together and keeps their relationships intact. Riverleap's opening was
+lengthened twice by changing two numbers.
+
+### Nothing happens until the world is up to speed
+
+Every game has a **launch**: a second or three after GO where the scene gets
+going and nothing is thrown at the player. Riverleap's river accelerates from
+a standstill; Acorn Storm's gale builds and the canopy starts to thrash.
+
+The pattern, in both:
+
+```gdscript
+func launch_factor() -> float:       # 0 at the gun, 1 once up to speed
+    return smoothstep(0.0, LAUNCH_SECONDS, elapsed)
+
+func play_time() -> float:           # the clock the difficulty runs on
+    return maxf(elapsed - LAUNCH_SECONDS, 0.0)
+
+func sequence_started() -> bool:     # the gate everything spawning reads
+    return elapsed >= LAUNCH_SECONDS
+```
+
+`play_time()` rather than `elapsed` matters: without it the "gentle first
+minute" is a gentle fifty-seven seconds, and every debut clock is early.
+
+### A thing that is about to happen is marked on the ground
+
+Both games warn with a **hard-edged mark that tightens onto the spot**, and
+both learned the same lessons getting there:
+
+- **Colour alone is not a cue.** Riverleap's dive marker was redrawn twice
+  before it was legible; Acorn Storm's two marks differ by *shape* first — an
+  open ticked ring against a filled disc — and are checked in greyscale.
+- **A plain circle reads as a ripple**, which these games already use to mean
+  something else. Ticks outside the ring fix it.
+- **The tightening is the clock.** Nothing else on screen says how long is
+  left, so the mark has to carry it on its own.
+
+### Draw order is a rule, and it is expressed in z
+
+Where something is drawn says what it is. In Riverleap an airborne player
+passes over a hornet; in Acorn Storm a falling body passes over the player and
+its ground mark goes under them.
+
+**Godot's child `z_index` is relative: it accumulates up the parent chain.**
+This shipped inverted once, with every constant in the file correct and only
+the scene wrong — so both suites resolve effective z by walking the chain
+rather than reading the constants back. Containers for things that set their
+own layers carry no `z_index` at all.
+
+### The director never corners you
+
+Each game defines what "cornered" means for it — Riverleap, a row with no
+reachable safe pad; Acorn Storm, no reachable spot clear of what is landing —
+and the director **rejects a placement that would create one** rather than
+throwing it and hoping.
+
+The guarantee is deliberately **instantaneous, not predictive**: could the
+player get somewhere from where they are *now*. That is the only promise a
+director can keep, and both suites assert it every frame of a driven run while
+ignoring the fraction of a second after the player has committed to a move of
+their own.
+
+### Two layers on different periods, or the ground looks tiled
+
+No shaders anywhere (§3), so repetition is beaten with geometry: a large base
+tile plus a second layer on a **different tile size and a different scroll
+rate**, so their periods never align. Riverleap's water is 192 px at 0.45×
+under 256 px at 0.38×; Acorn Storm's clearing is 160 px under a 224 px shade
+layer drifting with the wind.
+
+A bigger tile on its own only makes the grid bigger. And anything that must
+be *wider than the screen* — Acorn Storm's canopy band — should simply be drawn
+wider than the screen, because a tile with no period is the cheapest fix there
+is.
+
+### Speed is sold with the camera, not with shake
+
+`GameCamera` pushes **in** as pressure rises and kicks briefly when something
+happens. Widening the field of view is the most reliable way to express speed;
+shake expresses impact, so a constant tremble reads as an earthquake rather
+than as pace. Shake is in fractions of a game pixel and never rounded.
+
+### The opening card, then 3-2-1
+
+`StartCard` owns the backdrop, the page dots, the skip, the pacing and the
+countdown; each game supplies its slides by overriding `slide_count()` and
+`build_slide()`. Slides use the **real game objects** — a real lily pad, a real
+faller — so the lesson cannot drift away from what the game does.
+
+A first-timer is taught; a replay goes straight to the countdown; and
+`note_idle()` re-arms the lesson once the results card has sat untouched long
+enough that whoever presses next is probably a different person. A cabinet runs
+all day, so a flag set once per process would teach the first player of the
+morning and nobody else.
+
+### Endless games are compared on how long you lasted
+
+`MiniGameResult` carries a `normalised` field, 0–1000, alongside the raw score,
+so games on wildly different scales can share one table. A fixed-length game
+normalises on `par_score`; an **endless** one must not, because its score is
+unbounded and accelerating, and two endless games compared on points compare
+their scoring rates rather than their players.
+
+`MiniGame.normalised_from_duration(seconds, par_seconds)` gives par 500 and
+saturates without reaching 1000 — twice par is 750, four times is 937. The
+same "approach but never arrive" shape as the difficulty curves, for the same
+reason.
+
+---
+
+## 6. Riverleap (`wind_leaf`) — *hop*
 
 Five drifting leaves on a river that never ends. **Ride it for as long as you
 can hold on.** A leaf's life is `STABLE → SHAKING → SINKING → GONE → RISING`,
@@ -713,13 +845,229 @@ faster without ever becoming unfair.
 
 ---
 
-## 6. Testing
+## 7. Acorn Storm (`acorn_storm`) — *dodge, catch*
+
+Stand in a clearing under an oak in a gale. Things fall out of the canopy.
+Acorns hurt; sunfruit is the only thing keeping you alive.
+
+**The bar is always going down.** It drains slowly at first and faster the
+longer you last, catching sunfruit is the only way to put anything back, and
+the run ends when it empties. There is no clock and no round.
+
+### Why the bar replaced a sixty-second round
+
+The parked version of this game was a fixed round with a score, and it had a
+hole in it: **fruit was optional**. Dodging alone was a perfectly good
+strategy, so the "catch" half of a dodge-and-catch game never mattered — you
+could play the whole minute without once choosing to go somewhere.
+
+A draining bar makes fruit the thing keeping you alive rather than the thing
+adding to a number. Every design consequence below follows from that one
+change, and the biggest is this: **an unreachable fruit now costs a life, not
+some points.** Whether the player could physically have got there moved from a
+nicety to the single most important property in the game, and it is the first
+thing `tests/acorn_test.gd` asserts.
+
+It is also the second game to take a fail state, for the reason §6 gives: it
+is what a good player is for. The compromise is the same — a gentle opening.
+
+### The bar, exactly
+
+| | effect |
+|---|---|
+| time passing | drains at `lerp(0.0085, 0.082, intensity)` per second |
+| catching sunfruit | `+0.092`, up to `×1.35` on a full combo |
+| taking an acorn | `−0.14`, plus a 0.55 s stun and the lost points |
+
+Starts at 0.68, not full: a bar that opens at 100% gives the first fruit
+nothing to do, and the player learns what fruit is **for** by watching it move.
+
+The stun is the worse half of a hit. You cannot catch while you are seeing
+stars, so the drain carries on and the fruit that was going to save you lands
+somewhere you are not. A hit costs more than a hit.
+
+It uses the HUD's **continuous meter**, not the segmented heart bar Riverleap
+uses — a drain reads as a falling fill, and five discrete chunks would hide
+exactly the slow slide the game is about — with a leaf icon beside it so the
+bar never needs a word.
+
+### Fall time is the number everything hangs off
+
+`lerp(1.60, 0.95, intensity)` seconds from the canopy to the ground.
+
+A player walks at 92 px/s, and before they have reacted they have not moved,
+so the radius they can actually cover is
+
+```
+reach(fall) = 92 × (fall − 0.30)        # 0.30 s is a slow human's reaction
+```
+
+which is **120 px early and 60 px late**, in a clearing 388 px wide. The
+fraction of the field you can get to collapses as the run goes on, and that —
+not "more acorns" — is why the late game is hard.
+
+Three rules fall straight out of it:
+
+- **Sunfruit lands within reach, every time.** Chosen from the player's
+  position, at a distance between 26 px (or it is not a trip worth making) and
+  `reach × 0.82` (the margin pays for the diagonal, the field clamp, and
+  nobody running in a straight line). In the open field it would land wherever
+  it liked, the player would watch most of it fall, and the bar would empty
+  through no decision of theirs.
+- **Acorns aim at where you will BE** — your position carried forward by a
+  quarter of your own travel early and most of it late — and are then
+  scattered by a random offset that shrinks from 74 px to 18 px. The scatter
+  is what makes standing still survivable at the start and fatal at the end:
+  a stationary player is hit whenever the roll lands inside the acorn's
+  14 px, about 4% of throws early and about 60% late.
+
+  The first version threw into a *ring* around the player whose inner radius
+  never went below the hit radius, so a player who never moved could not be
+  hit **at all** — the exact opposite of the rule it was written for. Nothing
+  in a screenshot shows that; the suite found it by running a motionless bot
+  for 45 seconds and reporting zero hits.
+- **Except when that would corner you.** Before an acorn is placed, the
+  director samples the disc the player can reach — including the spot they are
+  already standing on, because staying put is an escape and the one good
+  players use most — and asks whether any of it is clear of everything
+  arriving at about that moment. If not, it picks again, up to twelve times,
+  reaching slightly further out each time. Being cornered is this game's
+  version of Riverleap's whole row going under at once: not difficulty, an
+  unwinnable frame.
+
+  **The question is asked when the acorn is thrown, and only then.** Asked
+  again every frame of its flight it answers "no" as a matter of arithmetic —
+  a fifth of a second before it lands there is nowhere anyone could get to,
+  which is what a hazard *is* rather than a failure to leave a way out. The
+  first version of the test asked per frame and reported dead ends that were
+  simply acorns about to land on a player who had not moved.
+
+- **And never stacked on a sunfruit.** A hot ring drawn over a gold disc says
+  "danger" and "take it" about the same square of grass, and a player cannot
+  act on that. A placement that would stack the two is passed over when there
+  is any other — a preference, not a refusal, because an acorn aims at the
+  player and a player standing on a fruit has to be a target like anywhere
+  else. Measured at 2% of frames; the suite fails above 4%.
+
+### The first sunfruit lands before the first acorn
+
+Always. "Gold is good" has to be learned before "red hurts", or the first
+lesson the game teaches costs a life. The first acorns also fall 38% slower
+and come singly, easing off across the first fourteen seconds of play.
+
+### Two marks, and they differ by shape
+
+An **open ticked ring** for an acorn, a **filled gold disc** for sunfruit.
+Both tighten onto the spot as the thing falls, so the mark is the warning and
+the clock at once.
+
+Colour is the second cue, never the first. Riverleap's dive marker was redrawn
+twice to learn that — and the greyscale test is the one that means anything,
+because a cabinet screen gets scuffed and some players do not see red.
+
+### High octane without a scrolling world
+
+Riverleap gets its pace from a river moving at 480 px/s. This game is played
+standing still in a clearing, so the ground cannot move — a clearing that
+scrolled would read as a conveyor belt. Everything that moves here is **wind**:
+
+- the canopy sways harder and faster as the gale builds
+- dappled shade travels through the leaves across the ground
+- torn leaves blow across the field, their speed driven by the same number
+- gusts every `lerp(4.4, 1.3, intensity)` seconds shove the camera's **zoom**,
+  not its position — what a gust has to read as is forward pressure, and a
+  camera that shook would read as an impact
+- a squirrel pops out of the canopy above each acorn as it is thrown, so the
+  eye has somewhere to go before the mark appears
+
+### How hard it actually is
+
+Bots at three reaction times, five runs each, chasing fruit and dodging:
+
+| reaction | mean | worst run |
+|---|---|---|
+| 133 ms | 200 s+ (never died inside the cap) | 200 s+ |
+| 216 ms | 188 s | 175 s |
+| 300 ms | 123 s | 115 s |
+
+A 300 ms player is a stranger who has not worked out the controls, and
+two minutes is a real go for a credit — close enough to Riverleap's measured
+118 s that the two games sit on the same normalised table honestly.
+
+**A perfect reactor does not die**, and that is what the two guarantees above
+promise: fruit always lands within reach, and there is always somewhere to
+stand. The ceiling is human reaction, not a wall. Riverleap has the same
+property for the same reason.
+
+Two notes on measuring it, both of which cost a round:
+
+- **One run is an anecdote.** The first measurement had a 133 ms bot dying
+  sooner than a 300 ms one. With five runs per lag it still did, until the bot
+  stopped re-choosing its target every frame — a bot that dithers dithers
+  *worse* the faster it reacts, which is a fact about the bot and nothing at
+  all about the game. A player picks a fruit and goes; the bot now does too,
+  and the ordering came out monotonic.
+- **The bot is not a player.** It knows every landing spot exactly and to the
+  millisecond. The lag models reaction, not reading a field, so treat these as
+  an upper bound on an equivalent human.
+
+### Scoring
+
+70 per sunfruit at ×1, up to ×4 on a chain of twelve; a hit costs 60 and the
+chain. Survival pays `lerp(6, 26, intensity)` per second, so the last half
+minute of a long run is worth more than its first two.
+
+The reported number is the sum. The **normalised** 0–1000 that goes alongside
+it is computed from how long the bar was held up, against a 120 s par — see
+§5, *Endless games are compared on how long you lasted*.
+
+### What the pictures caught that the tests could not
+
+Four things, in one round, none of which any assertion would have noticed:
+
+- **The clearing read as a pond.** Its texture was wide flat hard-edged
+  ellipses, which is what a lily pad looks like from above — a shape this
+  project has drawn before and should have recognised. Short grass strokes at
+  low contrast fixed it, and killed the visible tile seam as a side effect:
+  there is no shape large enough for the eye to match across the join.
+- **Both ground marks were washed out.** Their alpha ramped up from 0.45 as
+  the thing fell, which put the warning at its faintest exactly when it is
+  needed — the hot ring came out muddy brown over the grass and the gold disc
+  came out a pale sage blob, which is word for word the failure Riverleap's
+  dive marker had twice. They now start at 0.82.
+- **The shade layer had turned the clearing into soup**, dark enough that the
+  player and both marks had to fight to be seen against it.
+- **The intro slides drew the figure under the ground marks**, because a slide
+  figure defaults to z 0 while a real faller carries its own 4 and 40. The
+  slide teaching the draw-order rule was showing it backwards, and on one
+  slide the character was entirely hidden inside a gold disc.
+
+Which is the same lesson Riverleap recorded and worth repeating: **use the
+picture for what it looks like and the test for what happened.** Neither
+substitutes for the other, and this round needed both in opposite directions
+again — the pictures caught four things 175 passing checks did not, and the
+tests caught an un-hittable player that looked perfectly fine.
+
+---
+
+## 8. Testing
 
 ```
 tools/run_tests.sh          # or GODOT=/path/to/godot tools/run_tests.sh
 ```
 
-One suite now, `tests/soak_test.gd`. It used to prove that the game could be
+One suite per game, discovered automatically — `tools/run_tests.sh` runs every
+`tests/*_test.tscn` and sums their exit codes, so adding a game means adding a
+file rather than editing the script. They stand on `tests/soak_base.gd`, which
+holds the parts that are not about any particular game: check counting,
+reporting, input synthesis, frame pumping, and `effective_z()`.
+
+That split happened when the second game arrived. With eight coming, a hundred
+checks copied eight times would have drifted apart within a round.
+
+### What Riverleap's suite holds
+
+`tests/riverleap_test.gd`, 101 checks. It used to prove that the game could be
 **finished**; Riverleap is endless, so that property no longer exists and six
 others took its place:
 
@@ -750,7 +1098,49 @@ others took its place:
 Plus the curve's shape, and the regressions this game has already had, because
 a bug that got through once will get through again.
 
-Three notes that cost real time to learn:
+### What Acorn Storm's suite holds
+
+`tests/acorn_test.gd`. Its first assertion is the one the file exists for:
+
+- **Every sunfruit is reachable** — measured from where the player was standing
+  when it spawned, at *walking* pace, minus a slow human's reaction time, and
+  sampled across the whole curve because the reachable radius shrinks with the
+  fall time and the failure would only appear late. The sprint is deliberately
+  not in that calculation: a guarantee that depends on stamina the player may
+  already have spent is not a guarantee.
+- **The player is never cornered** — checked at the moment each acorn is
+  thrown, over a hundred throws across five points on the curve, and
+  **computed in the test** from the field rather than by calling the game's
+  own `escape_exists()`. A test that asks the game whether the game is right
+  cannot catch the game being wrong; Riverleap's suite records the same
+  reasoning for the same check. It also counts how many placements the
+  director *rejected*: a flood of them would mean the field is so crowded that
+  the escape rule is throttling the game rather than protecting the player,
+  which passes the cornering check while breaking the game.
+- **Fruit can outpace the drain** — at four points on the curve, the fruit on
+  offer must be worth more bar per second than the drain takes. Without this a
+  run could end on arithmetic rather than on anything the player did, and no
+  other check would notice.
+- **The first sunfruit lands before the first acorn**, over repeated runs.
+- **The two marks are rarely stacked** on the same patch of grass, since a
+  ring over a disc is a square the player cannot read.
+- **A motionless player gets hit.** Not asserted directly, but the idle run's
+  reported hit count is what exposed an aim rule that could not touch somebody
+  standing still.
+- **Ignoring fruit is fatal** — a bot that dodges perfectly and never catches
+  anything must die, and a bot that chases must last meaningfully longer. This
+  is the assertion that the parked version of this game would have failed, and
+  the whole reason the bar exists.
+- **The drain is gentle and then it is not** — asserted as a shape across the
+  curve, not as two numbers.
+- The launch stays quiet, draw order resolves correctly up the parent chain, a
+  run ends exactly once, and the card is skipped on a replay.
+
+Both suites run bots at **133 / 216 / 300 ms of reaction lag**, because a bot
+that reacts on the frame a thing spawns measures a game a machine plays rather
+than the one a person does.
+
+Seven notes that cost real time to learn:
 
 - **A screenshot is not a substitute for an assertion, and vice versa.** This
   round needed both, in opposite directions. The inverted draw order was
@@ -760,7 +1150,36 @@ Three notes that cost real time to learn:
 - **GDScript lambdas capture local variables by VALUE.** A counter
   incremented inside a `signal.connect(func(): n += 1)` callback stays zero
   outside it, which is indistinguishable from a signal that never fired. The
-  suite counts into an Array, whose reference is captured.
+  suites count into an Array, whose reference is captured. This has now been
+  walked into twice: the second time it was a `var ended := false` set by a
+  `finished` handler, which did not fail anything — it just ran every bot for
+  its full time limit and turned a ninety-second suite into a ten-minute one.
+- **A headless Godot whose main scene fails to parse does not exit — it
+  spins.** Two "runs" of the new suite burned fifteen minutes each at 99% CPU
+  and produced an empty log, which looks exactly like a slow machine or a hung
+  test, and sent two rounds of fixes at problems that were not there. The
+  script had never run at all. Two habits come out of it: pipe the engine's
+  output to a file **unfiltered** (a `grep` in the pipeline buffers everything
+  until the process ends, and it never ends), and syntax-check a new script
+  with `--check-only --script` before running it, ignoring the autoload
+  identifiers that check cannot see. The suite itself now prints each step as
+  it starts, so a hang names itself.
+- **GDScript type inference is a parse error, not a warning.** `for ring in
+  [1.0, 0.72, 0.42]` makes `ring` a Variant, every expression built from it
+  untyped, and the whole script fails to load — taking the scene's script with
+  it. That was the actual cause of the spin above.
+- **Ask a guarantee at the moment it is made.** The cornering check started
+  out sampling every frame and reported dead ends on a game that had none: an
+  acorn a fifth of a second from landing leaves nobody anywhere to go, by
+  arithmetic. Two rounds went into "fixing" that before the question turned
+  out to be the wrong one. A guarantee is about a decision, so test it where
+  the decision is taken.
+- **A measurement of the director must not be cut short by the game.** Three
+  of Acorn Storm's checks jump the clock to the end of the curve and then
+  count what spawns; left alone, the bar empties partway through and the game
+  stops spawning, so the sample is diluted by seconds of nothing. They pin the
+  bar open while they measure. A sample that quietly stops being a sample is
+  the same class of bug as a test that passes for the wrong reason.
 - **The bot has to hold the stick a frame before it presses the button.**
   `_unhandled_input` reads the direction with `Input.is_action_pressed` at the
   instant the `act` event arrives, so a hold and a press on the same frame comes
@@ -780,7 +1199,7 @@ Three notes that cost real time to learn:
 
 ---
 
-## 7. Parked, not cancelled
+## 9. Parked, not cancelled
 
 All present in `main` at `876d449` and restorable with
 `git checkout 876d449 -- <path>`:

@@ -314,11 +314,19 @@ func slide_title(text: String, sub: String) -> void:
 
 ## One of the player's own drawn frames, held rather than played, so a slide
 ## illustrates the game with the game's art instead of a picture of it.
-func figure(at: Vector2, clip: StringName, scale: float = 1.3) -> AnimatedSprite2D:
+##
+## `z` is the layer the figure sits on. It matters whenever a slide is built
+## from real game objects that carry their own: Acorn Storm's ground marks are
+## on z 4 and its falling bodies on z 40, so a figure left on 0 is drawn UNDER
+## the mark she is supposed to be standing on -- which is the draw-order rule
+## the slide exists to teach, shown backwards.
+func figure(at: Vector2, clip: StringName, scale: float = 1.3,
+		z: int = 0) -> AnimatedSprite2D:
 	var who := AnimatedSprite2D.new()
 	who.sprite_frames = load("res://src/core/player_frames.tres")
 	who.position = at
 	who.scale = Vector2(scale, scale)
+	who.z_index = z
 	who.set_meta(&"clip", clip)
 	_slide.add_child(who)
 	return who
@@ -343,9 +351,15 @@ func pose(who: AnimatedSprite2D, index: int) -> void:
 	who.frame = clampi(index, 0, who.sprite_frames.get_frame_count(clip) - 1)
 
 
+## `reserve_stick` keeps a stickless row's caption lined up with a row above
+## it that has one. Off by default, because Riverleap's two rows are deliberately
+## ragged -- its second row is the first row plus a stick, and the indent is
+## what shows that.
 func build_row(y: float, with_stick: bool, verb: String, what: String,
-		clip: StringName) -> void:
+		clip: StringName, reserve_stick: bool = false) -> void:
 	var x := 96.0
+	if not with_stick and reserve_stick:
+		x += 42.0
 	if with_stick:
 		var stick := TextureRect.new()
 		stick.texture = STICK

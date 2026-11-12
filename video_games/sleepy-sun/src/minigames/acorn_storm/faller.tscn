@@ -1,0 +1,11 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://src/minigames/acorn_storm/faller.gd" id="1"]
+
+; Deliberately carries NO z_index. Child z_index accumulates up the parent
+; chain, so a value here would be added to the container's and to each child's
+; -- which is exactly how Riverleap once ended up drawing a hazard over an
+; airborne player and inverting its own rule. The two layers this game cares
+; about are set on the children, in the script, and nowhere else.
+[node name="Faller" type="Node2D"]
+script = ExtResource("1")
