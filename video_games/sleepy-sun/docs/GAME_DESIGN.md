@@ -258,21 +258,38 @@ would have gone on passing while measuring a row the game no longer used.
 
 A ~5 s card over the still river, then a racing-style countdown, then play.
 
-**The card teaches the stick and the button and nothing else.** That is not
-minimalism, it is timing: hornets do not arrive until 35 s into a run and
-herons not until 100 s, so a card explaining them would be explaining
-something the player meets a minute and a half later. Those get a one-line
-`HUD.prompt()` the first time each actually appears — the small bottom line,
-not a centre toast, because it fires at the exact instant the player needs to
-be looking at the river.
+**Four slides**, about 2.2 s each: the controls, the pads going under, the
+hornet, the heron. Page dots underneath, any button skips the lot.
 
-**Everything on the card is up at once and loops.** Five seconds is not long
-enough to show one lesson and then another, and somebody glances up at a
-random moment; whatever is on screen then has to be the whole picture. The
-stick carries an arrow either side, lighting with the lean — the stick alone
-says "there is a stick", not which way to push it.
+**The slides use the real game objects, not drawings of them.** The sinking
+pad is an actual `RiverLeaf` put through `start_shake()`; the ring, the hornet
+and the heron are the sprites the river uses. A diagram would be free to drift
+away from what the game does; this cannot.
 
-**Full card the first time, countdown only on a replay** (~8 s against ~3 s).
+**They are also still taught in play.** A hornet does not turn up until 35 s
+into a run and a heron more than a minute after that, so the slide gets them
+recognised and a one-line `HUD.prompt()` the first time each appears does the
+rest — the small bottom line, not a centre toast, because it fires at the
+instant the player needs to be looking at the river.
+
+**Within a slide, everything is up at once and loops.** Somebody glances up at
+a random moment; whatever is on screen then has to be the whole picture. On
+the controls slide the stick carries an arrow either side, lighting with the
+lean — a stick alone says "there is a stick", not which way to push it.
+
+**Draw order inside a slide is the lesson.** Three of these were wrong first
+time and each said the opposite of its own caption: the hornet was added after
+the figure so it crossed her face instead of passing under her feet, and the
+heron's ring was painted over her when in the river it is on the water beneath
+her. The hazard that can be jumped goes in *before* the figure, the ring goes
+in before her, and the diving bird goes in after everything.
+
+A fourth was worse because it looked fine in motion: the figure fled the
+sinking pad on `shake_amount()`, which is zero once the pad has actually gone
+under — so she walked straight back and stood on open water. She now stays
+away for the whole of that pad's life and only returns when it is `STABLE`.
+
+**Full card the first time, countdown only on a replay** (~12 s against ~3 s).
 `StartCard.tutorial_seen` is a `static var`, so it survives the
 `reload_current_scene()` that replay uses, and is deliberately **not** saved to
 disk — a player returning tomorrow is still a stranger to the controls.

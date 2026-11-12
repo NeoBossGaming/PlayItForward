@@ -717,16 +717,19 @@ func _test_the_opening_card() -> void:
 	_check(replay_s >= floor_s,
 			"the countdown ran %.2fs, under the %.2fs its own beats need -- the "
 			% [replay_s, floor_s] + "game would start before GO")
-	_check(replay_s < StartCard.TUTORIAL_SECONDS,
-			"a repeat player waited %.2fs, as long as the whole lesson -- the "
-			% replay_s + "tutorial is not being skipped on replay")
+	var lesson_s := float(StartCard.SLIDES) * StartCard.SLIDE_SECONDS
+	_check(replay_s < lesson_s,
+			"a repeat player waited %.2fs against a %.2fs lesson -- the slides "
+			% [replay_s, lesson_s] + "are not being skipped on replay")
 
 	# And a first-timer gets markedly more than that.
 	StartCard.tutorial_seen = false
 	var first_s := await _time_card()
-	_check(first_s > replay_s + 2.0,
+	# Four slides, so a first-timer should be waiting several seconds longer,
+	# not merely a little.
+	_check(first_s > replay_s + lesson_s * 0.6,
 			"a first-timer waited %.2fs against a repeat player's %.2fs -- the "
-			% [first_s, replay_s] + "lesson is barely being shown")
+			% [first_s, replay_s] + "slides are barely being shown")
 	print("  start card  first run %.1fs, replay %.1fs" % [first_s, replay_s])
 	StartCard.tutorial_seen = false
 	await _frames(2)
