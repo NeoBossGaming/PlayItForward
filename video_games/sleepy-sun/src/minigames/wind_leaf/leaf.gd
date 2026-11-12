@@ -76,21 +76,51 @@ func _ride_the_swell() -> void:
 	_sprite.rotation = sin(t + 0.6) * 0.05
 
 
+## The pad coming apart under you. This is the only thing the game ever asks
+## the player to read in a hurry, so it is deliberately over-played: the old
+## version topped out at about 15 degrees of roll and four pixels of sway,
+## which read as a loose floor tile rather than as something being taken by the
+## river.
+##
+## The vertical judder is the addition that changes its character. Without it
+## the pad only ever moved side to side, and side-to-side is what *rattling*
+## looks like; a thing being pulled under moves down as well, and fights it.
 func _process_shaking(delta: float) -> void:
 	var progress := clampf(_timer / _duration, 0.0, 1.0)
 	# Wobble accelerates as the leaf runs out of time.
-	var intensity := lerpf(0.5, 2.6, progress)
-	_sprite.rotation = sin(_timer * 26.0 + _shake_seed) * 0.10 * intensity
-	_sprite.position.x = sin(_timer * 34.0) * 1.6 * intensity
-	_sprite.modulate = Color(1, 1, 1).lerp(Color(1.0, 0.55, 0.45), progress)
+	var intensity := lerpf(0.6, 3.1, progress)
+	_sprite.rotation = sin(_timer * 30.0 + _shake_seed) * 0.17 * intensity
+	_sprite.position.x = sin(_timer * 38.0) * 3.1 * intensity
+	# Detuned against the sway so the two never lock into a tidy circle, and
+	# biased downward -- it is being dragged under, not bounced.
+	_sprite.position.y = sin(_timer * 25.0 + 1.3) * 1.9 * intensity \
+			+ progress * 1.6
+	# Dipping and recovering, losing the fight by degrees.
+	var dip := 1.0 - 0.09 * progress * (0.5 + 0.5 * sin(_timer * 21.0))
+	_sprite.scale = Vector2(2.0 * dip, 2.0 * dip)
+	# Red above 1.0 on purpose. modulate MULTIPLIES, and the pad is green -- so
+	# a tint of (1.0, 0.4, 0.3) cannot make it red, it can only make it dark
+	# olive. Pushing the red channel past 1 actually lifts what little red the
+	# pad has, so it goes warm rather than merely dim. "Shifts toward red" is
+	# one of the four warning cues and it should be true.
+	_sprite.modulate = Color(1, 1, 1).lerp(Color(1.45, 0.45, 0.34), progress)
 
-	_ripple.modulate.a = 0.25 + 0.45 * progress
-	_ripple.scale = Vector2.ONE * lerpf(1.4, 2.6, progress)
+	_ripple.modulate.a = 0.3 + 0.6 * progress
+	_ripple.scale = Vector2.ONE * lerpf(1.4, 3.4, progress)
 	_ripple.rotation += delta * 2.0
 	_sprite.speed_scale = lerpf(1.0, SHAKE_ANIM_SCALE, progress)
 
 	if progress >= 1.0:
 		_begin_sinking()
+
+
+## How hard this pad is shaking right now, 0 when it is not. The player reads
+## this to sway with it -- a pad thrashing under a character standing perfectly
+## still reads as two unrelated objects sharing a screen.
+func shake_amount() -> float:
+	if state != State.SHAKING:
+		return 0.0
+	return clampf(_timer / _duration, 0.0, 1.0)
 
 
 func _process_sinking() -> void:
@@ -118,6 +148,8 @@ func _process_rising() -> void:
 
 
 func _begin_sinking() -> void:
+	_sprite.scale = Vector2(2.0, 2.0)
+	_sprite.position = Vector2.ZERO
 	_enter(State.SINKING)
 	Audio.sfx(&"splash", 1.35)
 	sank.emit(lane)

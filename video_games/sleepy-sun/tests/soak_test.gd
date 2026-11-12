@@ -29,6 +29,13 @@ const OPENING_FLOOR := 45.0
 const FASTEST_HORNET := 360.0
 ## The least warning it may give at that speed before it is on you.
 const HORNET_LEAD_FLOOR := 0.40
+## And the least its FIRST ones may give, which is a different promise: the
+## floor above asks whether a known threat can be dodged, this asks whether an
+## unknown one can be learned. The clock a player actually runs on does not
+## start when the hazard appears, it starts when they work out what it is.
+const HORNET_DEBUT_FLOOR := 0.90
+## How long the river takes to get up to speed.
+const LAUNCH_OVER := 3.0
 
 var _failures: PackedStringArray = []
 var _checks: int = 0
@@ -41,8 +48,10 @@ func _ready() -> void:
 	await _test_parallax_order()
 	await _test_pads_ride_one_swell()
 	await _test_the_curve()
+	await _test_the_river_launches()
 	await _test_hazards_are_dodgeable()
 	await _test_jumping_puts_you_over_a_hornet()
+	await _test_the_first_hornet_is_readable()
 	await _test_a_hit_knocks_you_into_the_water()
 	await _test_the_opening_is_survivable()
 	await _test_a_run_must_end()
@@ -263,10 +272,13 @@ func _test_the_curve() -> void:
 			% game.intensity_at(30.0))
 
 	# "Twice as fast" was the literal ask. The old river opened at 34 px/s.
+	# cruise_speed(), not current_speed(): the second one is scaled by how far
+	# into the launch the run is, and this game's clock has barely started. The
+	# launch gets its own test below.
 	game.set("_intensity", 0.0)
-	var opening: float = game.current_speed()
+	var opening: float = game.cruise_speed()
 	game.set("_intensity", 1.0)
-	var late: float = game.current_speed()
+	var late: float = game.cruise_speed()
 	_check(opening >= 204.0,
 			"the river opens at %.0f px/s -- it should start at three times the "
 			% opening + "68 it ran at before, which is the whole 'aggressive "
@@ -284,6 +296,43 @@ func _test_the_curve() -> void:
 			% late + "rather than flows at this resolution")
 	print("  curve       %.0f -> %.0f px/s, intensity %.2f at 60s"
 			% [opening, late, at_minute])
+	game.free()
+	await _frames(2)
+
+
+## The river is taken up to speed over the first few seconds rather than
+## starting there. Asserted at the ends because the shape in between is a
+## smoothstep and pinning its middle would just be writing the formula twice.
+func _test_the_river_launches() -> void:
+	var game := (load(SCENE) as PackedScene).instantiate() as MiniGame
+	add_child(game)
+	await _frames(3)
+
+	game.set("elapsed", 0.0)
+	var at_gun: float = game.launch_factor()
+	_check(at_gun <= 0.01,
+			"the river is already at %.0f%% speed on the first frame -- it is "
+			% (at_gun * 100.0) + "meant to start from a standstill")
+
+	game.set("elapsed", LAUNCH_OVER)
+	# Explicitly typed: `game` is a MiniGame, so these Riverleap-only calls come
+	# back as Variant and := has nothing to infer from.
+	var half: float = game.launch_factor()
+	_check(half >= 0.95,
+			"the river is only at %.0f%% speed after the launch should be over"
+			% (half * 100.0))
+
+	# And the two speeds must actually differ during the launch, or the ramp is
+	# wired up to nothing.
+	game.set("elapsed", 0.6)
+	game.set("_intensity", 0.0)
+	var during: float = game.current_speed()
+	var cruise: float = game.cruise_speed()
+	_check(during < cruise * 0.6,
+			"mid-launch the river runs at %.0f px/s against a cruise of %.0f -- "
+			% [during, cruise] + "the ramp is not reaching the water")
+	print("  launch      0%% -> %.0f%% over %.1fs, %.0f px/s at 0.6s"
+			% [half * 100.0, LAUNCH_OVER, during])
 	game.free()
 	await _frames(2)
 
@@ -476,6 +525,44 @@ func _test_a_hit_knocks_you_into_the_water() -> void:
 			+ "takes two bites out of the same mistake")
 	if wet and before - after == 2:
 		print("  knockback   hit -> thrown into the water, one life, not two")
+	game.free()
+	await _frames(2)
+
+
+## The first hornet you ever see must be slow enough to read.
+##
+## This is NOT the same promise as HORNET_LEAD_FLOOR and the two must not be
+## collapsed into one: a hornet on its debut used to clear that floor easily at
+## 0.67s and was still too fast the first time, which is what Neo reported.
+## Measured through the game's own spawner at the moment of introduction, so a
+## change to the ramp, the interval or the spawn height all show up here.
+func _test_the_first_hornet_is_readable() -> void:
+	var game := (load(SCENE) as PackedScene).instantiate() as MiniGame
+	add_child(game)
+	await _frames(3)
+	game.begin()
+	# Stand the clock at the hornet's introduction and ask for one.
+	game.set("elapsed", 35.0)
+	game.set("_intensity", game.intensity_at(35.0))
+	game.call("_spawn_hazard", RiverHazard.Kind.HORNET, 2)
+	await _frames(1)
+
+	var hazards: Array = game.get_node("Hazards").get_children()
+	_check(hazards.size() > 0, "no hornet spawned at its introduction")
+	if hazards.is_empty():
+		game.free()
+		return
+	var hornet: RiverHazard = hazards[0]
+	# On screen is from y=0; above that it is not warning anybody.
+	var lead: float = (hornet.row_y - RiverHazard.STRIKE_BAND) / hornet.speed
+
+	_check(lead >= HORNET_DEBUT_FLOOR,
+			"the first hornet gives %.2fs of warning at %.0f px/s -- the first "
+			% [lead, hornet.speed] + "one a player ever sees needs %.2fs to be "
+			% HORNET_DEBUT_FLOOR + "learned from, not just dodged")
+	if lead >= HORNET_DEBUT_FLOOR:
+		print("  debut       first hornet %.2fs of warning at %.0f px/s"
+				% [lead, hornet.speed])
 	game.free()
 	await _frames(2)
 

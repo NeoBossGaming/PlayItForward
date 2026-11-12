@@ -46,6 +46,16 @@ const STEEP_TAU := 90.0
 const CURRENT_START := 204.0
 const CURRENT_END := 480.0
 
+## The river does not start at speed, it gets up to it. Three seconds from a
+## standstill to CURRENT_START, because being dropped straight into 204 px/s on
+## frame one reads as the game starting mid-sentence -- there is no sense of
+## being taken by the current, only of already being in it.
+##
+## smoothstep rather than a straight ramp: a linear climb arrives at cruise
+## with a corner on it, which is visible. This eases out of rest and settles
+## into speed, which is what accelerating looks like.
+const LAUNCH_SECONDS := 3.0
+
 ## Every scrolling layer is a fraction of the current, so the whole scene is
 ## one parallax stack driven by one number. Different speeds in the SAME
 ## direction is the oldest depth cue in 2D and it is what this scene never
@@ -110,9 +120,36 @@ const HORNET_SPEED := Vector2(240.0, 360.0)
 ## fastest this is still ~0.55s of approach.
 const HORNET_FROM_Y := -60.0
 
+## --- meeting a hazard for the first time -------------------------------------
+##
+## There are two different questions about a threat and they need two different
+## guarantees, which is why this exists alongside the reaction floor the suite
+## enforces and is NOT redundant with it:
+##
+##   "can this be dodged?"  -- the 0.40s floor. About a threat you already know.
+##   "can this be learned?" -- this ramp. About the first one you ever see.
+##
+## A hornet on its debut used to fly at ~261 px/s, roughly 0.67s on screen.
+## That clears the floor comfortably and is still far too quick the first time,
+## because the clock does not start when the hazard appears -- it starts when
+## you work out what it is.
+##
+## So each hazard eases in from ITS OWN debut rather than from the global
+## curve: the first ones are slow and arrive alone, and they reach their real
+## pace over the following stretch, by which point they are no longer new.
+const HORNET_DEBUT_SPEED := 150.0       ## ~1.16s on screen, against 0.67s
+const HORNET_DEBUT_SPACING := 1.7       ## first ones arrive this much further apart
+const HORNET_RAMP_SECONDS := 40.0
+
 const HERON_FROM_SECONDS := 100.0
 const HERON_INTERVAL := Vector2(5.5, 2.4)
 const HERON_TELEGRAPH := Vector2(0.95, 0.50)
+## The heron's first dives get a longer ring than the curve would give them.
+## This one matters more than the hornet's, not less: jumping does not save you
+## from a dive, so the ring IS the dodge -- and the shortest warning in the
+## game currently lands on the dive you have least idea how to read.
+const HERON_DEBUT_TELEGRAPH := 1.45
+const HERON_RAMP_SECONDS := 40.0
 
 ## --- lives -------------------------------------------------------------------
 ##
@@ -273,6 +310,7 @@ func _process(delta: float) -> void:
 	_tick_recovery(delta)
 	_tick_aim(delta)
 	_tick_facing(delta)
+	_tick_sympathy()
 	_tick_wakes(delta)
 	_tick_wind(delta)
 	_tick_survival(delta)
@@ -340,8 +378,26 @@ func _advance_river(_delta: float) -> void:
 		leaf.wave_speed = swell
 
 
+## What the river is doing right now: the speed the curve asks for, scaled by
+## how far into the launch we are.
+##
+## Kept separate from cruise_speed() on purpose. The two are different
+## questions -- "how fast is the water moving" versus "where is the difficulty
+## curve" -- and the soak suite asks the second one of a game whose clock has
+## barely started, so folding the launch into one function would make the curve
+## unmeasurable.
 func current_speed() -> float:
+	return cruise_speed() * launch_factor()
+
+
+## The speed the difficulty curve asks for, ignoring the launch.
+func cruise_speed() -> float:
 	return lerpf(CURRENT_START, CURRENT_END, _intensity)
+
+
+## 0 at the gun, 1 once the river is up to speed.
+func launch_factor() -> float:
+	return smoothstep(0.0, LAUNCH_SECONDS, elapsed)
 
 
 ## --- lives and the end ------------------------------------------------------
@@ -525,6 +581,33 @@ func _on_hop_landed() -> void:
 	_check_footing()
 
 
+## Ride the pad you are standing on. A pad thrashing under a character standing
+## perfectly still reads as two unrelated objects sharing a screen, and it robs
+## the shake of exactly the urgency it exists to create.
+##
+## Deliberately written to `anim.position` -- the sprite's offset inside the
+## player -- and never to the player's own position, which the hop tween and
+## the recovery bob both drive. Two things writing one property is how a hop
+## ends up landing somewhere nobody asked for.
+func _tick_sympathy() -> void:
+	if _in_water or _ending:
+		return
+	if _hopping or _airborne:
+		_player.anim.position = Vector2.ZERO
+		return
+	var pad := _leaves[_lane]
+	var amount := pad.shake_amount()
+	if amount <= 0.0:
+		_player.anim.position = Vector2.ZERO
+		return
+	# Her own footing, not a copy of the pad's motion: smaller, and lagging it,
+	# because she is being moved BY the thing rather than moving with it.
+	var t := Time.get_ticks_msec() / 1000.0
+	_player.anim.position = Vector2(
+		sin(t * 36.0) * 2.2 * amount,
+		sin(t * 23.0 + 0.9) * 1.3 * amount)
+
+
 ## Point the stick and the character looks that way, whether or not you then
 ## press the button. Since the controls changed, a direction on its own does
 ## nothing mechanically -- which left the character staring upstream while the
@@ -566,6 +649,7 @@ func _check_footing() -> void:
 
 func _fall_in() -> void:
 	_in_water = true
+	_player.anim.position = Vector2.ZERO
 	_splashes += 1
 	_recovery_timer = RECOVERY_TIME
 	# Anything queued is void the moment you are in the water.
@@ -653,13 +737,20 @@ func _tick_hazards(delta: float) -> void:
 
 	_hornet_timer -= delta
 	if elapsed >= HORNET_FROM_SECONDS and _hornet_timer <= 0.0:
+		# Stretched while they are still new, so the first few arrive one at a
+		# time. A stream of them is impossible to learn from however slow each
+		# one is.
 		_hornet_timer = lerpf(HORNET_INTERVAL.x, HORNET_INTERVAL.y, _intensity) \
+				* lerpf(HORNET_DEBUT_SPACING, 1.0,
+						_debut(HORNET_FROM_SECONDS, HORNET_RAMP_SECONDS)) \
 				* randf_range(0.8, 1.2)
 		_spawn_hornet()
 
 	_heron_timer -= delta
 	if elapsed >= HERON_FROM_SECONDS and _heron_timer <= 0.0:
 		_heron_timer = lerpf(HERON_INTERVAL.x, HERON_INTERVAL.y, _intensity) \
+				* lerpf(HORNET_DEBUT_SPACING, 1.0,
+						_debut(HERON_FROM_SECONDS, HERON_RAMP_SECONDS)) \
 				* randf_range(0.8, 1.2)
 		_spawn_heron()
 
@@ -723,13 +814,22 @@ func _lane_threatened(lane: int) -> bool:
 	return false
 
 
+## 0 the moment this hazard first appears in a run, 1 once it is no longer new.
+func _debut(from_seconds: float, over: float) -> float:
+	return clampf((elapsed - from_seconds) / maxf(over, 0.01), 0.0, 1.0)
+
+
 func _spawn_hazard(kind: RiverHazard.Kind, lane: int) -> void:
 	var hazard: RiverHazard = _hazard_scene.instantiate()
 	hazard.kind = kind
 	hazard.lane = lane
 	hazard.row_y = ROW_Y
-	hazard.speed = lerpf(HORNET_SPEED.x, HORNET_SPEED.y, _intensity)
-	hazard.telegraph = lerpf(HERON_TELEGRAPH.x, HERON_TELEGRAPH.y, _intensity)
+	hazard.speed = lerpf(HORNET_DEBUT_SPEED,
+			lerpf(HORNET_SPEED.x, HORNET_SPEED.y, _intensity),
+			_debut(HORNET_FROM_SECONDS, HORNET_RAMP_SECONDS))
+	hazard.telegraph = lerpf(HERON_DEBUT_TELEGRAPH,
+			lerpf(HERON_TELEGRAPH.x, HERON_TELEGRAPH.y, _intensity),
+			_debut(HERON_FROM_SECONDS, HERON_RAMP_SECONDS))
 	hazard.position = Vector2(LANE_X[lane],
 			HORNET_FROM_Y if kind == RiverHazard.Kind.HORNET else ROW_Y)
 	hazard.spent.connect(func(h: RiverHazard) -> void: _hazards.erase(h))

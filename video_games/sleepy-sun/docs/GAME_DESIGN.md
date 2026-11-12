@@ -169,6 +169,8 @@ difficulty-linked reads this one value and nothing else:
 | | t=0 | t=60 | late |
 |---|---|---|---|
 | current | **204 px/s** | 290 | → 480 |
+| hornet airspeed | *(none yet)* | 150 → 260 | → 360 |
+| heron telegraph | *(none yet)* | — | 1.45 s → 0.50 s |
 | shake interval | 2.6 s | 1.7 s | 0.40 s |
 | shake telegraph | 1.15 s | 0.85 s | 0.30 s |
 | pads shaking at once | 1 | 1–2 | 3 |
@@ -186,6 +188,43 @@ so each of these is answered differently:
 | **a pad shaking** | hop off it |
 | **a river hornet** (from 35 s) | **jump** — it passes underneath you |
 | **a diving heron** (from 100 s) | jumping will **not** save you; get out of the lane |
+
+### The river launches
+
+It does not start at 204 px/s, it gets there over **three seconds**, on a
+`smoothstep` from rest. Dropped straight into full speed the game reads as
+starting mid-sentence: you are already in the current with no sense of having
+been taken by it. A straight ramp would arrive at cruise with a visible corner
+on it, so the ease matters as much as the ramp.
+
+`current_speed()` is `cruise_speed() * launch_factor()`, and the split is
+load-bearing: "how fast is the water moving" and "where is the difficulty
+curve" are different questions, and the suite asks the second one of a game
+whose clock has barely started. Fold them together and the curve becomes
+unmeasurable. Hornets read neither — they fly, so they do not stall on the
+start line.
+
+### Two different promises about a hazard
+
+These look redundant and they are not. Collapsing them loses the second one:
+
+| | asks | guaranteed by |
+|---|---|---|
+| **reaction floor** | can a hazard I *know* be dodged? | ≥ 0.40 s on screen at top airspeed |
+| **debut ramp** | can a hazard I have *never seen* be learned? | ≥ 0.90 s for the first ones |
+
+A hornet on its debut used to fly at ~261 px/s — about 0.67 s on screen. That
+clears the floor comfortably and was still too fast the first time, which is
+what Neo reported. The player's clock does not start when the hazard appears;
+it starts when they work out what it is.
+
+So each hazard eases in from **its own debut** rather than from the global
+curve: the first ones are slow, arrive further apart so they can be met one at
+a time, and reach their real pace over the following forty seconds. The heron
+gets the longer end of this (1.45 s of ring, against 0.95 s before), because
+jumping does not save you from a dive — the ring *is* the dodge, and the
+shortest warning in the game was landing on the dive players had least idea
+how to read.
 
 ### Both hazards fly, and that is load-bearing
 
@@ -217,6 +256,15 @@ Two traps live here, and both have already been sprung:
   stays inside human reaction time however wild the river gets. It is
   therefore *slower* than the late river, which is correct: it holds its line
   while the current tears past beneath it.
+
+**The shake is deliberately over-played.** It tops out around 30° of roll with
+lateral sway, a **vertical judder** and a scale dip — the judder being the one
+that changes its character, because side-to-side alone is what *rattling*
+looks like, and a thing being pulled under moves down as well and fights it.
+The player sways with it: a pad thrashing under a character standing perfectly
+still reads as two unrelated objects sharing a screen. That sway is written to
+the sprite's own offset and never to the player's position, which the hop tween
+and the recovery bob already drive.
 
 **The shake is telegraphed three redundant ways at once** — an accelerating
 wobble, a shift toward red, and a widening ripple — because it has to read on a
@@ -466,28 +514,32 @@ run against a copy of itself slowed to human reaction lag. Every trial, at
 every lag, recorded **zero** frames where the player had no reachable lane to
 stand on — the never-corner guarantee holds over ~20 minutes of play.
 
-Re-measured after the river went to 204 → 480 px/s. **Two trials per lag**, so
-read these as a band rather than a figure — the spread within one lag is wider
-than the gap between some of them.
+Re-measured after the launch ramp and the hazard debut ramps. **Two trials per
+lag**, so read these as a band rather than a figure — the spread within one lag
+is wider than the gap between some of them, and the single passive run is one
+sample and nothing more.
 
 | Bot reaction lag | Survives | Score |
 |---|---|---|
 | 50 ms (frame-perfect) | **never dies** (capped at 7 min) | — |
-| 133 ms (expert, anticipating) | 140–216 s | 7k–16k |
-| 216 ms (average human) | 148–163 s | 8k–11k |
-| 300 ms (slow) | 86–98 s | ~4.5k |
-| no input at all | ~76 s | ~2.9k |
+| 133 ms (expert, anticipating) | 212–238 s | 18k–20k |
+| 216 ms (average human) | 145–168 s | 9k–10k |
+| 300 ms (slow) | 92–95 s | 4k–5k |
+| no input at all | ~61 s | ~2.9k |
 
-The tripled speed bit hardest at the **slow** end (122–131 s → 86–98 s) and at
-the expert end; the middle band moved within its own noise. That shape is what
-was wanted — the floor for someone fumbling the controls is still over a
-minute, while the ceiling came down.
+The gentler opening lifted the **expert** band most (140–216 s → 212–238 s),
+which makes sense: a player who reads hazards well gains most from meeting them
+one at a time and loses least to a slow start. The middle and slow bands moved
+within their own noise.
+
+Every trial at every lag, across three rounds of tuning, has recorded **zero
+cornered frames**.
 
 Two things worth reading off that table. **A perfect reactor never dying is not
 a bug** — it is exactly what a strict never-corner guarantee promises, and it
 means the skill ceiling is set by human reaction rather than by a wall. And
-**every trial at every lag recorded zero cornered frames**, before and after
-the speed change, which is the number that actually matters: the game got much
+**every trial at every lag has recorded zero cornered frames**, through every
+round of tuning, which is the number that actually matters: the game got much
 faster without ever becoming unfair.
 
 ---
