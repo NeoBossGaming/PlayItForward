@@ -49,6 +49,7 @@ func _ready() -> void:
 	await _test_pads_ride_one_swell()
 	await _test_the_curve()
 	await _test_the_river_launches()
+	await _test_the_launch_is_quiet()
 	await _test_hazards_are_dodgeable()
 	await _test_jumping_puts_you_over_a_hornet()
 	await _test_the_first_hornet_is_readable()
@@ -174,9 +175,13 @@ func _test_parallax_order() -> void:
 	add_child(game)
 	await _frames(3)
 	game.begin()
-	await _frames(10)
+	# Past the launch before reading any speed: during the run-up every layer
+	# is scaled toward zero, so the stack is ordered but the numbers are
+	# meaningless and the absolute comparison below would be measuring nothing.
+	game.set("elapsed", LAUNCH_OVER + 1.0)
+	await _frames(4)
 
-	var order := ["World/TreelineLeft", "World/Water", "World/RiverLitter",
+	var order := ["World/TreelineLeft", "World/WaterDepth", "World/Water",
 			"World/BankLeft"]
 	var speeds: Array[float] = []
 	for path in order:
@@ -195,6 +200,16 @@ func _test_parallax_order() -> void:
 		_check(speeds[i] < speeds[i + 1],
 				"parallax out of order: %s (%.1f) should be slower than %s (%.1f)"
 				% [order[i], speeds[i], order[i + 1], speeds[i + 1]])
+	# The surface and the depth beneath it must never share a rate. Different
+	# tile sizes on different speeds is the entire reason the river stopped
+	# looking tiled; set these equal and the visible grid comes straight back,
+	# with nothing else in the suite to catch it.
+	var surface: float = game.get_node("World/Water").scroll.y
+	var depth: float = game.get_node("World/WaterDepth").scroll.y
+	_check(absf(surface - depth) > 1.0,
+			"the surface and depth layers both scroll at %.1f px/s -- they have "
+			% surface + "to differ, or the two tile patterns lock together and "
+			+ "the repeat becomes visible again")
 	print("  parallax    %s" % [speeds])
 	game.free()
 	await _frames(2)
@@ -495,6 +510,9 @@ func _test_a_hit_knocks_you_into_the_water() -> void:
 	add_child(game)
 	await _frames(3)
 	game.begin()
+	# Hazards are ignored entirely until the river is up to speed, so the
+	# collision this test is about cannot happen during the run-up.
+	game.set("elapsed", LAUNCH_OVER + 1.0)
 	await _frames(4)
 
 	var before: int = game.get("_life_halves")
@@ -542,7 +560,9 @@ func _test_the_first_hornet_is_readable() -> void:
 	await _frames(3)
 	game.begin()
 	# Stand the clock at the hornet's introduction and ask for one.
-	game.set("elapsed", 35.0)
+	# `elapsed` counts from the gun; the hazard clocks count from the end of
+	# the launch, so the debut moment is LAUNCH_OVER later on this clock.
+	game.set("elapsed", LAUNCH_OVER + 35.0)
 	game.set("_intensity", game.intensity_at(35.0))
 	game.call("_spawn_hazard", RiverHazard.Kind.HORNET, 2)
 	await _frames(1)
@@ -563,6 +583,41 @@ func _test_the_first_hornet_is_readable() -> void:
 	if lead >= HORNET_DEBUT_FLOOR:
 		print("  debut       first hornet %.2fs of warning at %.0f px/s"
 				% [lead, hornet.speed])
+	game.free()
+	await _frames(2)
+
+
+## The river comes up to speed before the game starts throwing things. A pad
+## used to begin shaking on the very first frame, and a chime spawned at the
+## gun visibly hung at the top of the screen, because chimes drift at a
+## fraction of a current that was still nearly zero.
+func _test_the_launch_is_quiet() -> void:
+	var game := (load(SCENE) as PackedScene).instantiate() as MiniGame
+	add_child(game)
+	await _frames(3)
+	game.begin()
+
+	var disturbed := 0
+	var hazards := 0
+	var chimes := 0
+	while game.elapsed < LAUNCH_OVER - 0.1:
+		await _frames(1)
+		for pad in game.get_node("Leaves").get_children():
+			if pad.state != RiverLeaf.State.STABLE:
+				disturbed += 1
+		hazards = maxi(hazards, game.get_node("Hazards").get_child_count())
+		chimes = maxi(chimes, game.get_node("Chimes").get_child_count())
+
+	_check(disturbed == 0,
+			"a pad was already going under %d frames into the launch -- nothing "
+			% disturbed + "should be thrown at the player before the river is "
+			+ "even up to speed")
+	_check(hazards == 0, "%d hazards spawned during the launch" % hazards)
+	_check(chimes == 0,
+			"%d chimes spawned during the launch -- they drift at a fraction of "
+			% chimes + "the current, so one released now just hangs there")
+	if disturbed == 0 and hazards == 0 and chimes == 0:
+		print("  launch gate calm water for the whole %.1fs run-up" % LAUNCH_OVER)
 	game.free()
 	await _frames(2)
 

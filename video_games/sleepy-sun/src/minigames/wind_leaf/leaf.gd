@@ -89,14 +89,24 @@ func _process_shaking(delta: float) -> void:
 	var progress := clampf(_timer / _duration, 0.0, 1.0)
 	# Wobble accelerates as the leaf runs out of time.
 	var intensity := lerpf(0.6, 3.1, progress)
-	_sprite.rotation = sin(_timer * 30.0 + _shake_seed) * 0.17 * intensity
-	_sprite.position.x = sin(_timer * 38.0) * 3.1 * intensity
+	# A third of what this was. The previous pass reached about 30 degrees of
+	# roll, which Neo called too much, and he is right -- at that amplitude the
+	# pad stops reading as a pad and becomes a visual effect.
+	#
+	# This lands slightly BELOW the version he called too weak two rounds ago,
+	# and that is deliberate rather than an oversight: the shake no longer has
+	# to carry the warning on its own. The vertical judder, the scale dip, the
+	# warmer red and the wider ripple are all newer than that version and all
+	# still here. If it ever reads too subtle, raise these three numbers --
+	# do not quietly re-add amplitude somewhere else.
+	_sprite.rotation = sin(_timer * 30.0 + _shake_seed) * 0.057 * intensity
+	_sprite.position.x = sin(_timer * 38.0) * 1.03 * intensity
 	# Detuned against the sway so the two never lock into a tidy circle, and
 	# biased downward -- it is being dragged under, not bounced.
-	_sprite.position.y = sin(_timer * 25.0 + 1.3) * 1.9 * intensity \
-			+ progress * 1.6
+	_sprite.position.y = sin(_timer * 25.0 + 1.3) * 0.63 * intensity \
+			+ progress * 0.53
 	# Dipping and recovering, losing the fight by degrees.
-	var dip := 1.0 - 0.09 * progress * (0.5 + 0.5 * sin(_timer * 21.0))
+	var dip := 1.0 - 0.03 * progress * (0.5 + 0.5 * sin(_timer * 21.0))
 	_sprite.scale = Vector2(2.0 * dip, 2.0 * dip)
 	# Red above 1.0 on purpose. modulate MULTIPLIES, and the pad is green -- so
 	# a tint of (1.0, 0.4, 0.3) cannot make it red, it can only make it dark

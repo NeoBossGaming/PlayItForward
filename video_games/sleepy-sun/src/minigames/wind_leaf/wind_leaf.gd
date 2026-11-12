@@ -64,6 +64,7 @@ const LAUNCH_SECONDS := 3.0
 const LAYER_SPEEDS := {
 	"World/TreelineLeft": 0.35,
 	"World/TreelineRight": 0.35,
+	"World/WaterDepth": 0.38,
 	"World/Water": 0.45,
 	"World/WaterGlints": 0.60,
 	"World/RiverLitter": 0.50,
@@ -295,6 +296,10 @@ func begin() -> void:
 	_hud.toast("HOLD ON", Color(0.8, 0.95, 1.0), 1.4)
 	_hornet_timer = HORNET_FROM_SECONDS
 	_heron_timer = HERON_FROM_SECONDS
+	# Without this the director fires on its very first tick after the launch,
+	# so the river comes up to speed and a pad is already going under. A beat
+	# of calm water first is what makes the launch read as a beginning.
+	_shake_timer = SHAKE_INTERVAL.x * 0.5
 
 
 func _process(delta: float) -> void:
@@ -349,7 +354,7 @@ static func intensity_at(seconds: float) -> float:
 func _advance_river(_delta: float) -> void:
 	if _ending:
 		return
-	_intensity = intensity_at(elapsed)
+	_intensity = intensity_at(play_time())
 
 	# One current, every layer a fraction of it. Nothing in the scene sets its
 	# own speed any more -- two scrollers disagreeing is how the grass ended up
@@ -398,6 +403,25 @@ func cruise_speed() -> float:
 ## 0 at the gun, 1 once the river is up to speed.
 func launch_factor() -> float:
 	return smoothstep(0.0, LAUNCH_SECONDS, elapsed)
+
+
+## Seconds of actual play, which is not the same as seconds since begin().
+## Nothing is thrown at the player while the river is still getting up to
+## speed, so the difficulty curve and every hazard's debut clock measure from
+## the moment the game really starts -- otherwise the "gentle first minute" is
+## a gentle fifty-seven seconds.
+func play_time() -> float:
+	return maxf(elapsed - LAUNCH_SECONDS, 0.0)
+
+
+## True once the river is up to speed and the game proper has begun. Until
+## then the pads, the hazards, the chimes and the wind all stand down.
+##
+## This is not only about feel. Chimes drift at a fraction of the current, so
+## one spawned at the gun visibly HANGS at the top of the screen until the
+## water catches up with it.
+func sequence_started() -> bool:
+	return elapsed >= LAUNCH_SECONDS
 
 
 ## --- lives and the end ------------------------------------------------------
@@ -603,9 +627,11 @@ func _tick_sympathy() -> void:
 	# Her own footing, not a copy of the pad's motion: smaller, and lagging it,
 	# because she is being moved BY the thing rather than moving with it.
 	var t := Time.get_ticks_msec() / 1000.0
+	# Down by the same third as the pad itself, or she out-wobbles the thing
+	# she is standing on.
 	_player.anim.position = Vector2(
-		sin(t * 36.0) * 2.2 * amount,
-		sin(t * 23.0 + 0.9) * 1.3 * amount)
+		sin(t * 36.0) * 0.73 * amount,
+		sin(t * 23.0 + 0.9) * 0.43 * amount)
 
 
 ## Point the stick and the character looks that way, whether or not you then
@@ -732,11 +758,11 @@ func _nearest_safe_lane(from_lane: int) -> int:
 # --- hazards -----------------------------------------------------------------
 
 func _tick_hazards(delta: float) -> void:
-	if _ending:
+	if _ending or not sequence_started():
 		return
 
 	_hornet_timer -= delta
-	if elapsed >= HORNET_FROM_SECONDS and _hornet_timer <= 0.0:
+	if play_time() >= HORNET_FROM_SECONDS and _hornet_timer <= 0.0:
 		# Stretched while they are still new, so the first few arrive one at a
 		# time. A stream of them is impossible to learn from however slow each
 		# one is.
@@ -747,7 +773,7 @@ func _tick_hazards(delta: float) -> void:
 		_spawn_hornet()
 
 	_heron_timer -= delta
-	if elapsed >= HERON_FROM_SECONDS and _heron_timer <= 0.0:
+	if play_time() >= HERON_FROM_SECONDS and _heron_timer <= 0.0:
 		_heron_timer = lerpf(HERON_INTERVAL.x, HERON_INTERVAL.y, _intensity) \
 				* lerpf(HORNET_DEBUT_SPACING, 1.0,
 						_debut(HERON_FROM_SECONDS, HERON_RAMP_SECONDS)) \
@@ -816,7 +842,7 @@ func _lane_threatened(lane: int) -> bool:
 
 ## 0 the moment this hazard first appears in a run, 1 once it is no longer new.
 func _debut(from_seconds: float, over: float) -> float:
-	return clampf((elapsed - from_seconds) / maxf(over, 0.01), 0.0, 1.0)
+	return clampf((play_time() - from_seconds) / maxf(over, 0.01), 0.0, 1.0)
 
 
 func _spawn_hazard(kind: RiverHazard.Kind, lane: int) -> void:
@@ -883,7 +909,7 @@ func _pick_hazard_lane(dodgeable: bool) -> int:
 # --- the director ------------------------------------------------------------
 
 func _tick_director(delta: float) -> void:
-	if _ending:
+	if _ending or not sequence_started():
 		return
 	_shake_timer -= delta
 	if _shake_timer > 0.0:
@@ -937,7 +963,8 @@ func _on_leaf_sank(lane: int) -> void:
 # --- chimes ------------------------------------------------------------------
 
 func _tick_chimes(delta: float) -> void:
-	if not _ending:
+	# Existing chimes keep drifting whatever happens; only new ones wait.
+	if not _ending and sequence_started():
 		_chime_timer -= delta
 		if _chime_timer <= 0.0:
 			# Up to twice as often by the end of the crossing.
@@ -989,7 +1016,9 @@ func _shed_wake(at: Vector2, rush: float, strength: float) -> void:
 	wake.modulate = Color(1, 1, 1, 0.42 * strength)
 	_wake_root.add_child(wake)
 
-	var travel := lerpf(22.0, 54.0, rush)
+	# A wake is the pad moving through water. During the launch there is barely
+	# any movement to leave one.
+	var travel := lerpf(22.0, 54.0, rush) * launch_factor()
 	var tween := create_tween()
 	tween.set_parallel(true)
 	tween.tween_property(wake, "position:y", at.y + travel, WAKE_LIFE)
@@ -1003,7 +1032,7 @@ func _shed_wake(at: Vector2, rush: float, strength: float) -> void:
 ## spawn-a-sprite-and-tween pattern as the wake, which is cheap and already
 ## proven in this scene.
 func _tick_wind(delta: float) -> void:
-	if _ending:
+	if _ending or not sequence_started():
 		return
 	_gust_timer -= delta
 	if _gust_timer > 0.0:

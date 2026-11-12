@@ -1,4 +1,4 @@
-[gd_scene load_steps=21 format=3]
+[gd_scene load_steps=25 format=3]
 
 [ext_resource type="Script" path="res://src/minigames/wind_leaf/wind_leaf.gd" id="1"]
 [ext_resource type="PackedScene" path="res://src/core/player.tscn" id="2"]
@@ -9,7 +9,11 @@
 [ext_resource type="Texture2D" path="res://assets/game/village/treeline.png" id="10"]
 [ext_resource type="Texture2D" path="res://assets/game/decor/streak.png" id="d_streak"]
 [ext_resource type="Texture2D" path="res://assets/game/shared/water.png" id="5"]
-[ext_resource type="Texture2D" path="res://assets/game/shared/water_glints.png" id="6"]
+[ext_resource type="Texture2D" path="res://assets/game/shared/water_glints_0.png" id="6"]
+[ext_resource type="Texture2D" path="res://assets/game/shared/water_glints_1.png" id="6b"]
+[ext_resource type="Texture2D" path="res://assets/game/shared/water_glints_2.png" id="6c"]
+[ext_resource type="Texture2D" path="res://assets/game/shared/water_glints_3.png" id="6d"]
+[ext_resource type="Texture2D" path="res://assets/game/shared/water_depth.png" id="6e"]
 [ext_resource type="Texture2D" path="res://assets/game/shared/bank_edge.png" id="7"]
 [ext_resource type="Texture2D" path="res://assets/game/village/ground_0.png" id="8"]
 [ext_resource type="Texture2D" path="res://assets/game/village/tree.png" id="9"]
@@ -46,11 +50,26 @@ texture = ExtResource("5")
 script = ExtResource("4")
 area = Vector2i(504, 318)
 
+; Depth. Deliberately on a different tile size AND a different fraction of the
+; current from the surface above it: 256px at 0.38x against 192px at 0.45x.
+; Two patterns on periods that never line up is what stops the eye finding the
+; grid -- the bigger surface tile alone would only have made the grid bigger.
+[node name="WaterDepth" type="Sprite2D" parent="World"]
+position = Vector2(240, 135)
+texture = ExtResource("6e")
+script = ExtResource("4")
+area = Vector2i(504, 318)
+
+; The only animated layer in the river. Its frames share identical streak
+; positions and differ only in alpha, so nothing translates between them --
+; which is the whole reason a flipbook is safe here and was not on the base.
 [node name="WaterGlints" type="Sprite2D" parent="World"]
 position = Vector2(240, 135)
 texture = ExtResource("6")
 script = ExtResource("4")
 area = Vector2i(504, 318)
+frames = Array[Texture2D]([ExtResource("6"), ExtResource("6b"), ExtResource("6c"), ExtResource("6d")])
+frames_per_second = 7.0
 
 [node name="Shimmer" type="Node2D" parent="World"]
 z_index = 1

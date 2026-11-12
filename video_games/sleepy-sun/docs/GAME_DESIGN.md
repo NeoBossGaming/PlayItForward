@@ -189,10 +189,50 @@ so each of these is answered differently:
 | **a river hornet** (from 35 s) | **jump** — it passes underneath you |
 | **a diving heron** (from 100 s) | jumping will **not** save you; get out of the lane |
 
-### The river launches
+### Why the river stopped looking tiled
+
+The surface was one **64 px** tile across a 504 px river — about **forty
+visible repeats**, and no amount of detail inside a tile hides a grid that
+regular. Three things fix it, and the order of importance is not the obvious
+one:
+
+1. **A second period that never lines up.** `water_depth.png` is **256 px**
+   drifting at **0.38×** the current, under a surface that is **192 px** at
+   **0.45×**. Different size *and* different speed means the two patterns beat
+   against each other over a distance no player will ever watch. **This is the
+   one that does the work** — a bigger tile on its own would only have made
+   the grid bigger. The soak suite asserts the two rates stay different,
+   because setting them equal brings the grid straight back and nothing else
+   would catch it.
+2. **Fewer repeats.** The surface goes 64 → **192 px**, so ~40 repeats become
+   ~4, and at that size the tile can hold actual current shapes rather than
+   only speckle.
+3. **Animation, in the one place it is safe.** The base stays a still image.
+   An early version cycled three base frames that each shifted the pattern
+   3 px, so at 4 fps the whole river teleported four times a second. Only the
+   **glints** animate, across four frames whose streaks share identical
+   positions and differ solely in alpha — nothing translates, so nothing can
+   teleport.
+
+**A note on evidence.** The claim "it looks less tiled" was checked with a
+self-difference measurement at the tile period, and that measurement came back
+**inconclusive — it found no standout repeat in the old water either**. So the
+case for this change rests on the arithmetic (forty repeats to four, plus a
+second period) and on looking at it, not on that number. Recorded here so
+nobody later mistakes it for a measured result.
+
+### The river launches, and nothing happens until it has
 
 It does not start at 204 px/s, it gets there over **three seconds**, on a
-`smoothstep` from rest. Dropped straight into full speed the game reads as
+`smoothstep` from rest. **The game proper waits for it**: the pad director,
+the hazards, chime spawning and the wind all stand down until the river is up
+to speed, and the difficulty curve and every hazard debut clock measure from
+`play_time()` — seconds of play — rather than from the gun, so the gentle
+first minute is a real first minute of play.
+
+That gate is not only taste. Chimes drift at a fraction of the current, so one
+released at the gun visibly **hung** at the top of the screen waiting for the
+water to catch up. The soak suite asserts the whole run-up stays quiet. Dropped straight into full speed the game reads as
 starting mid-sentence: you are already in the current with no sense of having
 been taken by it. A straight ramp would arrive at cruise with a visible corner
 on it, so the ease matters as much as the ramp.
@@ -257,14 +297,22 @@ Two traps live here, and both have already been sprung:
   therefore *slower* than the late river, which is correct: it holds its line
   while the current tears past beneath it.
 
-**The shake is deliberately over-played.** It tops out around 30° of roll with
-lateral sway, a **vertical judder** and a scale dip — the judder being the one
+**The shake tops out around 10° of roll** with lateral sway, a **vertical
+judder** and a scale dip — the judder being the one
 that changes its character, because side-to-side alone is what *rattling*
 looks like, and a thing being pulled under moves down as well and fights it.
 The player sways with it: a pad thrashing under a character standing perfectly
 still reads as two unrelated objects sharing a screen. That sway is written to
 the sprite's own offset and never to the player's position, which the hop tween
 and the recovery bob already drive.
+
+Those numbers have been up and down: ±15° was called too weak, ±30° too much,
+and this is a third of the latter — slightly *below* the version that was too
+weak. That is deliberate. The shake no longer carries the warning alone: the
+judder, the dip, the warmer red and the wider ripple all post-date the ±15°
+version and all remain, and at this amplitude the **colour and the ripple
+lead** while the motion supports. If it ever reads too subtle, raise these
+three numbers rather than re-adding amplitude somewhere else.
 
 **The shake is telegraphed three redundant ways at once** — an accelerating
 wobble, a shift toward red, and a widening ripple — because it has to read on a
@@ -333,6 +381,7 @@ parallax stack:
 | Layer | × current |
 |---|---|
 | treeline, past the bank | 0.35 |
+| water depth | 0.38 |
 | water surface | 0.45 |
 | water glints | 0.60 |
 | river litter | 0.50 |

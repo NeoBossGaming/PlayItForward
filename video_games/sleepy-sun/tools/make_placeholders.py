@@ -85,7 +85,8 @@ KEEP = {
     # Jump poses, derived from the idle frames -- see player_jump_frames().
     *(f"player/jump_{d}_{i}.png"
       for d in ("down", "up", "left", "right") for i in (0, 1, 2)),
-    "shared/water.png", "shared/water_glints.png", "shared/bank_edge.png",
+    "shared/water.png", "shared/water_depth.png", "shared/bank_edge.png",
+    *(f"shared/water_glints_{i}.png" for i in range(4)),
     "shared/ripple.png",
     # (water_0..2 were the striped tiles; shared/water.png replaced all three)
     "wind_leaf/leaf_0.png", "wind_leaf/leaf_1.png", "wind_leaf/leaf_2.png",
@@ -121,51 +122,73 @@ def speckle(draw, rng, w, h, color, count):
 # --------------------------------------------------------------------------- water
 
 def water_tiles():
-    """The river surface, as two layers that drift at different rates.
+    """The river surface, as three layers on deliberately different periods.
 
-    The old version drew a full-width dark line every 12 rows out of a 32px
-    tile. Three things were wrong with that and all three were visible:
-    continuous lines across the whole screen read as corrugated metal rather
-    than water; 32 is not divisible by 12, so the band pattern broke at every
-    tile seam; and the three "shimmer" frames each shifted the bands 3px, so
-    at 4fps the whole pattern teleported four times a second.
+    Two lessons are baked in here and both cost a round to learn.
 
-    So: no mark spans the tile, nothing is aligned into rows, the tile is 64px
-    (and seam-checked), and there is no flipbook at all. Surface life comes
-    from the second layer below drifting at a slightly different speed, which
-    is what actually reads as moving water.
+    The first: no mark may span the tile and nothing may align into rows --
+    continuous lines read as corrugated metal, not water -- and there is no
+    flipbook on the BASE. An earlier version cycled three base frames that each
+    shifted the pattern 3px, so at 4fps the whole river teleported four times a
+    second. The base is one still image and stays that way.
+
+    The second is what this pass is about. A 64px tile across a 504px river is
+    forty visible repeats, and no amount of detail inside one tile hides a grid
+    that regular. Three things fix it together:
+
+      * the base goes to 192px, so the grid repeats about four times, not forty
+      * a separate depth layer at 256px drifts at a DIFFERENT fraction of the
+        current. Different size and different speed means the two patterns beat
+        against each other on a period long enough that no repeat is ever
+        visible. This is the one that actually does the work -- a bigger tile
+        on its own only makes the grid bigger.
+      * the glints animate in place: same positions every frame, only the alpha
+        rising and falling. Nothing translates, so the teleport cannot return.
     """
-    rng = random.Random(4100)
-    W = H = 64
+    import math as _m
 
+    # --- the surface ------------------------------------------------------
+    rng = random.Random(4100)
+    W = H = 192
     img, d = canvas(W, H, P["water_mid"])
 
-    # Mottling first: soft irregular patches of the deep tone, so the base is
-    # never a flat field. Wrapped by hand, because a patch that runs off the
-    # right edge has to come back on the left or the seam shows.
     def blob(cx, cy, rx, ry, colour):
+        """An ellipse that wraps at the edges, so the tile stays seamless."""
         for y in range(-ry, ry + 1):
             span = int(rx * (1.0 - (y / float(ry)) ** 2) ** 0.5)
             for x in range(-span, span + 1):
                 img.putpixel(((cx + x) % W, (cy + y) % H), colour)
 
-    # Mostly a tone between mid and deep. The first pass used water_deep for
-    # all of it and the result read as a shoal of fish rather than as water:
-    # too many marks, too dark, too uniform in size.
     shade = (40, 88, 126, 255)
-    for _ in range(11):
+
+    # Large-scale structure first. At 192px the tile is big enough to hold
+    # actual current shapes rather than only speckle, and without them a bigger
+    # tile is just more of the same mush -- which is the other way to look
+    # repetitive.
+    for _ in range(7):
+        cx, cy = rng.randrange(W), rng.randrange(H)
+        length = rng.randrange(40, 90)
+        drift = rng.uniform(-0.25, 0.25)
+        tone = shade if rng.random() < 0.6 else P["water_deep"]
+        for i in range(length):
+            x = cx + i
+            y = cy + int(_m.sin(i / 14.0) * 4.0 + i * drift)
+            blob(x % W, y % H, rng.randrange(5, 11), rng.randrange(2, 4), tone)
+
+    # Then the mottling, scaled up with the tile so the density is unchanged.
+    for _ in range(99):
         blob(rng.randrange(W), rng.randrange(H),
              rng.randrange(4, 13), rng.randrange(1, 4), shade)
-    for _ in range(4):
+    for _ in range(36):
         blob(rng.randrange(W), rng.randrange(H),
              rng.randrange(3, 8), rng.randrange(1, 3), P["water_deep"])
-    for _ in range(12):
+    for _ in range(108):
         blob(rng.randrange(W), rng.randrange(H),
              rng.randrange(3, 9), rng.randrange(1, 3), P["water_mid"])
 
-    # Then the streaks. Short, broken, never aligned, never full width -- this
-    # is the whole difference between "water" and "stripes".
-    for _ in range(22):
+    # Short broken streaks. Never aligned, never full width -- the whole
+    # difference between "water" and "stripes".
+    for _ in range(198):
         x, y = rng.randrange(W), rng.randrange(H)
         length = rng.randrange(3, 9)
         colour = P["water_light"] if rng.random() < 0.82 else P["foam"]
@@ -173,20 +196,62 @@ def water_tiles():
             img.putpixel(((x + i) % W, y), colour)
     save(img, "shared/water.png")
 
-    # --- the moving layer -------------------------------------------------
-    # Mostly transparent, so it can drift over the base without washing it out.
-    img, d = canvas(W, H)
+    # --- depth: the layer that kills the grid -----------------------------
+    # Very soft and very low contrast, because it is not meant to be seen as a
+    # texture at all. Its job is to make two identical surface tiles sit on
+    # different shades so the eye stops finding the repeat.
+    rng = random.Random(4150)
+    DW = DH = 256
+    field = [[0.0] * DW for _ in range(DH)]
+    for _ in range(26):
+        cx, cy = rng.randrange(DW), rng.randrange(DH)
+        radius = rng.randrange(34, 86)
+        weight = rng.uniform(-1.0, 1.0)
+        for y in range(-radius, radius + 1):
+            for x in range(-radius, radius + 1):
+                d2 = (x * x + y * y) / float(radius * radius)
+                if d2 >= 1.0:
+                    continue
+                falloff = (1.0 - d2) ** 2
+                field[(cy + y) % DH][(cx + x) % DW] += weight * falloff
+    peak = max(abs(v) for row in field for v in row) or 1.0
+    img, _ = canvas(DW, DH)
+    for y in range(DH):
+        for x in range(DW):
+            v = field[y][x] / peak
+            if v >= 0.0:
+                colour, a = P["water_light"][:3], v * 46.0
+            else:
+                colour, a = P["water_deep"][:3], -v * 64.0
+            if a < 2.0:
+                continue
+            img.putpixel((x, y), (*colour, int(a)))
+    save(img, "shared/water_depth.png")
+
+    # --- the glints, animated in place ------------------------------------
     rng = random.Random(4200)
-    for _ in range(18):
-        x, y = rng.randrange(W), rng.randrange(H)
-        length = rng.randrange(4, 12)
-        alpha = rng.randrange(40, 95)
-        for i in range(length):
-            # Taper both ends so a streak has no hard stops.
-            t = min(i, length - 1 - i) / max(1.0, (length - 1) / 2.0)
-            img.putpixel(((x + i) % W, y),
-                         (206, 232, 246, int(alpha * min(1.0, t + 0.35))))
-    save(img, "shared/water_glints.png")
+    GW = GH = 128
+    streaks = []
+    for _ in range(72):
+        streaks.append((rng.randrange(GW), rng.randrange(GH),
+                        rng.randrange(4, 12), rng.randrange(40, 95),
+                        rng.uniform(0.0, _m.tau)))
+    FRAMES = 4
+    for frame in range(FRAMES):
+        img, _ = canvas(GW, GH)
+        phase = frame / float(FRAMES) * _m.tau
+        for x, y, length, alpha, offset in streaks:
+            # Only the brightness moves. Positions are identical in every
+            # frame, which is what makes this safe where a base flipbook was
+            # not: there is nothing to teleport.
+            pulse = 0.55 + 0.45 * _m.sin(phase + offset)
+            for i in range(length):
+                t = min(i, length - 1 - i) / max(1.0, (length - 1) / 2.0)
+                a = alpha * min(1.0, t + 0.35) * pulse
+                if a < 3.0:
+                    continue
+                img.putpixel(((x + i) % GW, y), (206, 232, 246, int(a)))
+        save(img, f"shared/water_glints_{frame}.png")
 
 
 def bank_edge():
