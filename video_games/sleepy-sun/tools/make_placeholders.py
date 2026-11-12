@@ -82,6 +82,7 @@ def canvas(w: int, h: int, fill=CLEAR) -> tuple[Image.Image, ImageDraw.ImageDraw
 KEEP = {
     "player/idle_down.png", "player/idle_left.png", "player/idle_right.png",
     "player/idle_up.png",
+    "ui/stick.png", "ui/button.png", "ui/arrow.png",
     # Jump poses, derived from the idle frames -- see player_jump_frames().
     *(f"player/jump_{d}_{i}.png"
       for d in ("down", "up", "left", "right") for i in (0, 1, 2)),
@@ -651,6 +652,49 @@ def player_jump_frames():
             save(pose(src, *args), f"player/jump_{facing}_{index}.png")
 
 
+def control_pictograms():
+    """The stick and the button, for the card that teaches the controls.
+
+    Both are drawn NEUTRAL -- the stick upright, the button unpressed -- and
+    the tilt and the press are applied in code on the card. That is how
+    everything else in this project animates, and it means the whole lesson
+    needs two sprites rather than six.
+
+    Chunky and high contrast on purpose: this is read from a few feet back by
+    someone who has not decided to play yet.
+    """
+    # --- joystick -------------------------------------------------------
+    W, H = 20, 24
+    img, d = canvas(W, H)
+    shaft = (62, 58, 82, 255)
+    base = (38, 35, 52, 255)
+    ball = (236, 92, 78, 255)
+    ball_lit = (255, 150, 132, 255)
+    d.ellipse([1, H - 8, W - 2, H - 1], fill=base)          # base plate
+    d.ellipse([3, H - 7, W - 4, H - 3], fill=(54, 50, 70, 255))
+    d.rectangle([W // 2 - 2, 8, W // 2 + 1, H - 6], fill=shaft)
+    d.ellipse([W // 2 - 6, 1, W // 2 + 5, 12], fill=ball)   # ball top
+    d.ellipse([W // 2 - 4, 2, W // 2 + 1, 7], fill=ball_lit)
+    save(img, "ui/stick.png")
+
+    # --- button ---------------------------------------------------------
+    W = H = 16
+    img, d = canvas(W, H)
+    d.ellipse([0, 2, W - 1, H - 1], fill=(38, 35, 52, 255))  # the well
+    d.ellipse([1, 1, W - 2, H - 3], fill=(250, 196, 64, 255))
+    d.ellipse([3, 2, W - 6, H - 8], fill=(255, 232, 150, 255))
+    save(img, "ui/button.png")
+
+    # --- direction arrow ------------------------------------------------
+    # The stick on its own says "there is a stick"; it does not say which way
+    # to push it. Drawn pointing RIGHT and mirrored in code for the left.
+    W, H = 9, 12
+    img, d = canvas(W, H)
+    d.polygon([(0, 0), (W - 1, H // 2), (0, H - 1)], fill=(255, 236, 170, 255))
+    d.polygon([(2, 3), (W - 4, H // 2), (2, H - 4)], fill=(255, 255, 230, 255))
+    save(img, "ui/arrow.png")
+
+
 def treeline():
     """Distant trees past the bank, as the slowest parallax layer.
 
@@ -1060,7 +1104,7 @@ def main() -> None:
     lotus_pads(); chime(); hazards()
     village_tiles(); tree(); treeline()
     ui_bits(); hud_icons(); heart_segments(); alarm_frame(); vignette(); scrim()
-    player_jump_frames()
+    player_jump_frames(); control_pictograms()
     decor_motes(); decor_props()
     made = sorted(p.relative_to(OUT).as_posix() for p in OUT.rglob("*.png"))
     print(f"assets/game now holds {len(made)} sprites")

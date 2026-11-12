@@ -254,6 +254,49 @@ Anything needing this number must **read** it. It was once copied into six
 other places, including four in the test suite, and a test holding its own copy
 would have gone on passing while measuring a row the game no longer used.
 
+### Walking up to it: the card, then 3-2-1
+
+A ~5 s card over the still river, then a racing-style countdown, then play.
+
+**The card teaches the stick and the button and nothing else.** That is not
+minimalism, it is timing: hornets do not arrive until 35 s into a run and
+herons not until 100 s, so a card explaining them would be explaining
+something the player meets a minute and a half later. Those get a one-line
+`HUD.prompt()` the first time each actually appears — the small bottom line,
+not a centre toast, because it fires at the exact instant the player needs to
+be looking at the river.
+
+**Everything on the card is up at once and loops.** Five seconds is not long
+enough to show one lesson and then another, and somebody glances up at a
+random moment; whatever is on screen then has to be the whole picture. The
+stick carries an arrow either side, lighting with the lean — the stick alone
+says "there is a stick", not which way to push it.
+
+**Full card the first time, countdown only on a replay** (~8 s against ~3 s).
+`StartCard.tutorial_seen` is a `static var`, so it survives the
+`reload_current_scene()` that replay uses, and is deliberately **not** saved to
+disk — a player returning tomorrow is still a stranger to the controls.
+
+On its own that would teach the first player of the morning and nobody else,
+since a cabinet runs all day. So `note_idle()` clears the flag when the results
+card sat untouched for 30 s, on the assumption the last player wandered off.
+**It is a heuristic**, wrong in both directions sometimes; it fails harmlessly
+either way and the alternative is a tutorial almost nobody sees. It is not a
+real session boundary and should not be read as one.
+
+Two things that cost time here and are worth not repeating:
+
+- **`set_anchors_preset()` does not resolve a Control's rect until the next
+  layout pass.** The countdown numerals set their pivot and centring straight
+  after it, against a rect that was still zero-sized, so they scaled about the
+  screen corner and flew off it — created and freed exactly on schedule, just
+  never anywhere visible. They now set `size`, `position` and `pivot_offset`
+  explicitly.
+- **Headless at `--fixed-fps 60` is not real time.** It runs unthrottled, so
+  the countdown's 2.5 s of game time passes in about 3 ms of wall clock. Any
+  test timing a card with `Time.get_ticks_msec()` measures nothing; the suite
+  accumulates `get_process_delta_time()` instead.
+
 ### The river launches, and nothing happens until it has
 
 It does not start at 204 px/s, it gets there over **three seconds**, on a
@@ -697,6 +740,10 @@ Three notes that cost real time to learn:
   invisible to 65 passing checks and obvious in one capture; the knockback
   looked broken in six captures and was proved correct by one assertion. Use
   the picture for *what it looks like* and the test for *what happened*.
+- **GDScript lambdas capture local variables by VALUE.** A counter
+  incremented inside a `signal.connect(func(): n += 1)` callback stays zero
+  outside it, which is indistinguishable from a signal that never fired. The
+  suite counts into an Array, whose reference is captured.
 - **The bot has to hold the stick a frame before it presses the button.**
   `_unhandled_input` reads the direction with `Input.is_action_pressed` at the
   instant the `act` event arrives, so a hold and a press on the same frame comes

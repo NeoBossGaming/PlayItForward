@@ -58,6 +58,8 @@ func _ready() -> void:
 	await _test_the_curve()
 	await _test_the_river_launches()
 	await _test_the_launch_is_quiet()
+	await _test_the_opening_card()
+	await _test_a_new_player_is_taught_again()
 	await _test_pads_come_back_faster()
 	await _test_hazards_are_dodgeable()
 	await _test_jumping_puts_you_over_a_hornet()
@@ -679,6 +681,100 @@ func _test_the_launch_is_quiet() -> void:
 		print("  launch gate calm water for the whole %.1fs run-up" % LAUNCH_OVER)
 	game.free()
 	await _frames(2)
+
+
+## The opening card: the controls, then 3-2-1-GO.
+##
+## The first check here is the load-bearing one. The suite instances the game
+## as a CHILD and calls begin() itself, so it must never meet the card -- if
+## that guard breaks, every game instance in this file starts waiting eight
+## seconds and the suite quietly takes minutes longer while still passing.
+func _test_the_opening_card() -> void:
+	var game := (load(SCENE) as PackedScene).instantiate() as MiniGame
+	add_child(game)
+	await _frames(6)
+	var cards := 0
+	for child in game.get_children():
+		if child is StartCard:
+			cards += 1
+	_check(cards == 0,
+			"the suite built %d start cards -- the game must only show one when "
+			% cards + "it IS the running scene, or every test in this file "
+			+ "waits out a countdown it cannot see")
+	game.free()
+	await _frames(2)
+
+	# A repeat player skips the lesson and gets only the countdown.
+	#
+	# Timed in GAME seconds, never with Time.get_ticks_msec(). Headless at
+	# --fixed-fps 60 runs unthrottled: the countdown's 2.5s of game time goes
+	# by in about 3ms of wall clock, so a wall-clock assertion here measured
+	# nothing and "passed" by accident in both directions.
+	StartCard.tutorial_seen = true
+	var replay_s := await _time_card()
+	# Three beats plus the release. Anything less and the game starts before GO.
+	var floor_s := StartCard.BEAT * 3.0
+	_check(replay_s >= floor_s,
+			"the countdown ran %.2fs, under the %.2fs its own beats need -- the "
+			% [replay_s, floor_s] + "game would start before GO")
+	_check(replay_s < StartCard.TUTORIAL_SECONDS,
+			"a repeat player waited %.2fs, as long as the whole lesson -- the "
+			% replay_s + "tutorial is not being skipped on replay")
+
+	# And a first-timer gets markedly more than that.
+	StartCard.tutorial_seen = false
+	var first_s := await _time_card()
+	_check(first_s > replay_s + 2.0,
+			"a first-timer waited %.2fs against a repeat player's %.2fs -- the "
+			% [first_s, replay_s] + "lesson is barely being shown")
+	print("  start card  first run %.1fs, replay %.1fs" % [first_s, replay_s])
+	StartCard.tutorial_seen = false
+	await _frames(2)
+
+
+## Runs one card through and returns how long it took in GAME seconds.
+##
+## play() is started and NOT awaited, so the frame loop below can run while it
+## does; awaiting it directly would hand control back only at the end and
+## leave nothing to count. The counter is an Array because GDScript lambdas
+## capture locals by VALUE -- an `int` incremented inside the callback stays
+## zero outside it, which looks exactly like a signal that never fired.
+func _time_card() -> float:
+	var card := StartCard.new()
+	add_child(card)
+	var done: Array = []
+	card.finished.connect(func() -> void: done.append(true))
+	card.play()
+
+	var seconds := 0.0
+	while done.is_empty() and seconds < 30.0:
+		await _frames(1)
+		seconds += get_process_delta_time()
+	_check(done.size() == 1,
+			"the card reported %d times, expected exactly one" % done.size())
+	return seconds
+
+
+## The cabinet runs all day, so "has this player seen the tutorial" cannot just
+## be a flag set once per process -- that would teach the first player of the
+## morning and nobody else.
+func _test_a_new_player_is_taught_again() -> void:
+	StartCard.tutorial_seen = true
+	StartCard.note_idle(1000)
+	_check(StartCard.tutorial_seen,
+			"a 1s gap between runs reset the tutorial -- that is the same "
+			+ "player pressing again, not a new one")
+
+	StartCard.note_idle(StartCard.STRANGER_AFTER_MS + 1)
+	_check(not StartCard.tutorial_seen,
+			"the results card sat untouched for over %ds and the next player "
+			% int(StartCard.STRANGER_AFTER_MS / 1000) + "still got no "
+			+ "tutorial -- on a cabinet only the first player of the day "
+			+ "would ever be taught")
+	if not StartCard.tutorial_seen:
+		print("  new player  taught again after %ds idle"
+				% int(StartCard.STRANGER_AFTER_MS / 1000))
+	StartCard.tutorial_seen = false
 
 
 # --- playing it --------------------------------------------------------------

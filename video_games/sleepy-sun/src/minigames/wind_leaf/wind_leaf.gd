@@ -273,6 +273,9 @@ var _wake_timer: float = 0.0
 var _hornet_timer: float = 0.0
 var _heron_timer: float = 0.0
 var _hazards: Array[RiverHazard] = []
+## Which hazards this run has already introduced. Per run, not per process:
+## a new player on the next credit deserves the same prompt.
+var _taught: Dictionary = {}
 
 var _chimes: int = 0
 var _dodged: int = 0
@@ -321,6 +324,13 @@ func _ready() -> void:
 	if get_tree().current_scene == self:
 		finished.connect(_on_run_finished)
 		await get_tree().process_frame
+		# The controls, then 3-2-1. Nothing moves until this returns -- the
+		# river only scrolls once `running` is set, so the water sits still
+		# behind the card while the shimmer and the glints carry on, which is
+		# calm water rather than a frozen screenshot and sets up the launch.
+		var card := StartCard.new()
+		add_child(card)
+		await card.play()
 		begin()
 
 
@@ -532,7 +542,13 @@ func _on_run_finished(result: MiniGameResult) -> void:
 	Save.submit(result.score)
 	var card := RunCard.new()
 	add_child(card)
-	card.replay.connect(func() -> void: get_tree().reload_current_scene())
+	var shown_at := Time.get_ticks_msec()
+	card.replay.connect(func() -> void:
+		# A cabinet runs all day. If the results card sat here long enough,
+		# the last player has walked off and whoever presses now probably
+		# needs the controls explained -- see StartCard.note_idle().
+		StartCard.note_idle(Time.get_ticks_msec() - shown_at)
+		get_tree().reload_current_scene())
 	var held := int(result.stats.get("survived", 0))
 	card.show_run("RIVERLEAP", result.score, [
 		["held on", "%d:%02d" % [held / 60, held % 60]],
@@ -907,6 +923,7 @@ func _spawn_hornet() -> void:
 	if lane < 0:
 		return
 	_spawn_hazard(RiverHazard.Kind.HORNET, lane)
+	_teach_once(&"hornet", "hornet -- JUMP it")
 
 
 func _spawn_heron() -> void:
@@ -914,6 +931,23 @@ func _spawn_heron() -> void:
 	if lane < 0:
 		return
 	_spawn_hazard(RiverHazard.Kind.HERON, lane)
+	_teach_once(&"heron", "heron -- jumping will not help, MOVE")
+
+
+## The one moment a hazard can actually be taught: when the player first meets
+## it. The opening card cannot do this -- hornets arrive 35s in and herons
+## 100s in, long after anything it said would be remembered.
+##
+## Shown on the small bottom line rather than as a centre toast, because this
+## fires at the exact instant the player needs to be looking at the river.
+func _teach_once(key: StringName, text: String) -> void:
+	if _taught.has(key):
+		return
+	_taught[key] = true
+	_hud.prompt(text)
+	await Wait.on(self, 2.6)
+	if is_instance_valid(_hud):
+		_hud.clear_prompt()
 
 
 ## `dodgeable` is the whole of the difference between the two hazards here.

@@ -33,6 +33,11 @@ const LIBRARY := {
 	&"complete": [660.0, 0.45, Wave.SINE,     0.35, 2.0],
 	&"chime":    [990.0, 0.30, Wave.SINE,     0.28, 1.2],
 	&"tick":     [440.0, 0.05, Wave.SQUARE,   0.18, 1.0],
+	# Starting lights. Nothing already in here reads as one: `tick` is a UI
+	# blip and `confirm` is a menu accept. Three low beats and a higher,
+	# longer release, which is the shape everyone already knows from a race.
+	&"count":    [330.0, 0.16, Wave.SQUARE,   0.30, 1.0],
+	&"go":       [620.0, 0.38, Wave.SQUARE,   0.34, 1.9],
 }
 
 ## The five cave plates each get their own note, so the sequence is audible as
