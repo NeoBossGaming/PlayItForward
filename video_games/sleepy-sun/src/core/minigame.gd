@@ -14,6 +14,11 @@ extends Node2D
 
 signal finished(result: MiniGameResult)
 
+## ln 2, spelled out because GDScript has no LN2 and a missing constant in a
+## static function takes the whole class down with it -- MiniGame failed to
+## register and every game in the project stopped parsing.
+const LN_2 := 0.6931471805599453
+
 ## Short identifier for this game. Used by saves and test output.
 @export var id: StringName = &""
 ## Score a competent player should land near.
@@ -86,7 +91,48 @@ func finish(score: int, stats: Dictionary = {}) -> void:
 	running = false
 	set_process_input(false)
 	set_process_unhandled_input(false)
-	finished.emit(MiniGameResult.new(id, score, elapsed, stats))
+	finished.emit(MiniGameResult.new(id, score, elapsed, stats,
+			normalised_score(score)))
+
+
+## This run as 0-1000, for a table shared across games that score on wildly
+## different scales. Override it: the default assumes par_score is a decent
+## run, which is true of a fixed-length game and useless for an endless one.
+func normalised_score(raw: int) -> int:
+	if par_score <= 0:
+		return 0
+	return clampi(int(500.0 * float(raw) / float(par_score)), 0, 1000)
+
+
+## What an ENDLESS game should normalise on instead: how long you lasted.
+## Their raw scores are unbounded and accelerate, so two of them compared on
+## points would be comparing their scoring rates rather than their players.
+##
+## Par scores 500 and it saturates without ever reaching 1000 -- twice par is
+## 750, four times is 937 -- which is the same "approach but never arrive"
+## shape the difficulty curves use, and for the same reason: there has to be
+## something left to chase.
+static func normalised_from_duration(seconds: float, par_seconds: float) -> int:
+	if par_seconds <= 0.0:
+		return 0
+	return clampi(int(1000.0 * (1.0 - exp(-LN_2 * maxf(seconds, 0.0) / par_seconds))),
+			0, 1000)
+
+
+## The shape every game's difficulty takes: gentle and linear up to a ceiling,
+## then exponential toward 1 without ever arriving.
+##
+## Riverleap arrived at this after two rounds of tuning and it is not specific
+## to a river -- the first minute has to be survivable by somebody who has not
+## worked out the controls, and after that there has to be no ceiling. Each
+## game passes its own three numbers; the shape is shared so that stretching
+## one game's curve is a change to three constants rather than a redesign.
+static func curve(seconds: float, gentle_seconds: float, gentle_ceiling: float,
+		steep_tau: float) -> float:
+	var gentle := gentle_ceiling * clampf(seconds / maxf(gentle_seconds, 0.001), 0.0, 1.0)
+	var steep := (1.0 - gentle_ceiling) \
+			* (1.0 - exp(-maxf(seconds - gentle_seconds, 0.0) / maxf(steep_tau, 0.001)))
+	return gentle + steep
 
 
 func is_finished() -> bool:

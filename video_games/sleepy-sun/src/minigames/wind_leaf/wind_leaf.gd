@@ -18,7 +18,7 @@ extends MiniGame
 ##   * a log          -- jump; it passes underneath you
 ##   * a heron diving -- jumping will not save you, get out of the lane
 ##
-## See docs/GAME_DESIGN.md #5.
+## See docs/GAME_DESIGN.md #6.
 
 const LANES := 5
 const LANE_X: Array[float] = [106.0, 173.0, 240.0, 307.0, 374.0]
@@ -328,7 +328,7 @@ func _ready() -> void:
 		# river only scrolls once `running` is set, so the water sits still
 		# behind the card while the shimmer and the glints carry on, which is
 		# calm water rather than a frozen screenshot and sets up the launch.
-		var card := StartCard.new()
+		var card := RiverCard.new()
 		add_child(card)
 		await card.play()
 		begin()
@@ -388,10 +388,7 @@ func _unhandled_input(event: InputEvent) -> void:
 ## Written out rather than tabled because it is the single number the whole
 ## game's difficulty hangs off, and it should be readable in one glance.
 static func intensity_at(seconds: float) -> float:
-	var gentle := GENTLE_CEILING * clampf(seconds / GENTLE_SECONDS, 0.0, 1.0)
-	var steep := (1.0 - GENTLE_CEILING) \
-			* (1.0 - exp(-maxf(seconds - GENTLE_SECONDS, 0.0) / STEEP_TAU))
-	return gentle + steep
+	return MiniGame.curve(seconds, GENTLE_SECONDS, GENTLE_CEILING, STEEP_TAU)
 
 
 func _advance_river(_delta: float) -> void:
@@ -537,6 +534,15 @@ func _end_run() -> void:
 ## Stands in for the shell while it is parked: results, then straight back in.
 ## How long you lasted leads, because in an endless game that is the thing you
 ## are actually competing on and the number you will try to beat next credit.
+## Endless, so the comparable number is how long you lasted. Two and a half
+## minutes is a good run on the measured curve; see docs/GAME_DESIGN.md.
+const PAR_SECONDS := 150.0
+
+
+func normalised_score(_raw: int) -> int:
+	return normalised_from_duration(_survived, PAR_SECONDS)
+
+
 func _on_run_finished(result: MiniGameResult) -> void:
 	var best := Save.best()
 	Save.submit(result.score)

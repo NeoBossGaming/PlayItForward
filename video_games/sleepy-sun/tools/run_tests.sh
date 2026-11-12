@@ -25,11 +25,24 @@ status=0
 echo "=== importing assets ==="
 "$GODOT" --headless --path "$PROJECT" --import 2>&1 | grep -aiE 'error|failed' && status=1
 
+# Every tests/*_test.tscn is a suite, one per game, all standing on
+# tests/soak_base.gd. Adding a game means adding a file here, not editing this
+# script -- with eight games coming, a hand-maintained list would rot.
+#
 # --fixed-fps lets a minute of play run in a couple of seconds.
-echo
-echo "=== soak test ==="
-"$GODOT" --headless --fixed-fps 60 --path "$PROJECT" "tests/soak_test.tscn" 2>&1 | quiet
-[ "${PIPESTATUS[0]}" -ne 0 ] && status=1
+suites=$(find "$PROJECT/tests" -name '*_test.tscn' | sort)
+if [ -z "$suites" ]; then
+  echo "no suites found in tests/ -- nothing was run" >&2
+  exit 1
+fi
+
+for suite in $suites; do
+  name=$(basename "$suite" .tscn)
+  echo
+  echo "=== $name ==="
+  "$GODOT" --headless --fixed-fps 60 --path "$PROJECT" "tests/$name.tscn" 2>&1 | quiet
+  [ "${PIPESTATUS[0]}" -ne 0 ] && status=1
+done
 
 echo
 [ "$status" -eq 0 ] && echo "PASSED" || echo "FAILED"

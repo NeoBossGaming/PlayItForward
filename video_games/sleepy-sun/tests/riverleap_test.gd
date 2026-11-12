@@ -1,9 +1,10 @@
-extends Node
+extends SoakBase
 ## Riverleap soak. Run it with:
 ##
-##     godot --headless --fixed-fps 60 --path . tests/soak_test.tscn
+##     godot --headless --fixed-fps 60 --path . tests/riverleap_test.tscn
 ##
-## The one suite, now that the project is one game.
+## The harness it stands on -- check counting, input synthesis, frame pumping,
+## reporting -- lives in soak_base.gd and is shared with every other game.
 ##
 ## It used to prove that the game could be *finished*. Riverleap is endless
 ## now, so that property no longer exists and three others took its place:
@@ -45,11 +46,6 @@ static func row_y() -> float:
 	return (load("res://src/minigames/wind_leaf/wind_leaf.gd") as GDScript) \
 			.get_script_constant_map()["ROW_Y"]
 
-var _failures: PackedStringArray = []
-var _checks: int = 0
-var _held: Array[StringName] = []
-
-
 func _ready() -> void:
 	await _test_contract()
 	await _test_scrollers_agree()
@@ -69,21 +65,7 @@ func _ready() -> void:
 	await _test_a_run_must_end()
 	await _test_drowning_is_not_escapable()
 
-	print("\n================= SOAK TEST =================")
-	if _failures.is_empty():
-		print("PASS  -  %d checks" % _checks)
-	else:
-		print("FAIL  -  %d of %d checks" % [_failures.size(), _checks])
-		for failure in _failures:
-			print("  x  " + failure)
-	print("============================================")
-	get_tree().quit(0 if _failures.is_empty() else 1)
-
-
-func _check(condition: bool, message: String) -> void:
-	_checks += 1
-	if not condition:
-		_failures.append(message)
+	get_tree().quit(report("RIVERLEAP"))
 
 
 # --- the contract ------------------------------------------------------------
@@ -520,13 +502,13 @@ func _test_jumping_puts_you_over_a_hornet() -> void:
 	if hazards.is_empty():
 		game.free()
 		return
-	var hazard_z := _effective_z(hazards[0])
+	var hazard_z := effective_z(hazards[0])
 	var player: Node2D = game.get_node("Player")
 
 	game.call("_set_airborne", false)
-	var grounded := _effective_z(player)
+	var grounded := effective_z(player)
 	game.call("_set_airborne", true)
-	var airborne := _effective_z(player)
+	var airborne := effective_z(player)
 
 	_check(airborne > hazard_z,
 			"a jumping player draws at z %d and the hornet at z %d -- jump over "
@@ -542,19 +524,6 @@ func _test_jumping_puts_you_over_a_hornet() -> void:
 	game.call("_set_airborne", false)
 	game.free()
 	await _frames(2)
-
-
-## What Godot will actually sort by: z_index accumulates up the parent chain
-## for as long as the nodes are relative, which is the default and the thing
-## that made this bug invisible.
-func _effective_z(node: CanvasItem) -> int:
-	var total := node.z_index
-	var parent := node.get_parent()
-	while node.z_as_relative and parent is CanvasItem:
-		node = parent as CanvasItem
-		total += node.z_index
-		parent = node.get_parent()
-	return total
 
 
 ## Getting hit is not just losing a life where you stand: it throws you off the
@@ -717,7 +686,7 @@ func _test_the_opening_card() -> void:
 	_check(replay_s >= floor_s,
 			"the countdown ran %.2fs, under the %.2fs its own beats need -- the "
 			% [replay_s, floor_s] + "game would start before GO")
-	var lesson_s := float(StartCard.SLIDES) * StartCard.SLIDE_SECONDS
+	var lesson_s := float(RiverCard.new().slide_count()) * StartCard.SLIDE_SECONDS
 	_check(replay_s < lesson_s,
 			"a repeat player waited %.2fs against a %.2fs lesson -- the slides "
 			% [replay_s, lesson_s] + "are not being skipped on replay")
@@ -743,7 +712,7 @@ func _test_the_opening_card() -> void:
 ## capture locals by VALUE -- an `int` incremented inside the callback stays
 ## zero outside it, which looks exactly like a signal that never fired.
 func _time_card() -> float:
-	var card := StartCard.new()
+	var card := RiverCard.new()
 	add_child(card)
 	var done: Array = []
 	card.finished.connect(func() -> void: done.append(true))
@@ -1053,39 +1022,3 @@ func _is_cornered(game: MiniGame) -> bool:
 		if _usable(pads, hazards, lane + offset):
 			return false
 	return true
-
-
-# --- input synthesis ---------------------------------------------------------
-#
-# Input.action_press() only sets the polled action state; it never travels
-# through _input/_unhandled_input. The hop is read by event, so synthetic input
-# has to be parsed as a real event or the whole game goes untested.
-
-static func _send(action: StringName, pressed: bool) -> void:
-	var event := InputEventAction.new()
-	event.action = action
-	event.pressed = pressed
-	Input.parse_input_event(event)
-
-
-func _hold(action: StringName) -> void:
-	if action in _held:
-		return
-	_send(action, true)
-	_held.append(action)
-
-
-func _release(action: StringName) -> void:
-	if action in _held:
-		_send(action, false)
-		_held.erase(action)
-
-
-func _release_all() -> void:
-	for action in _held.duplicate():
-		_release(action)
-
-
-func _frames(count: int) -> void:
-	for i in count:
-		await get_tree().process_frame
