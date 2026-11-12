@@ -35,7 +35,9 @@ const DIVE_TIME := 0.22
 
 var kind: Kind = Kind.HORNET
 var lane: int = 0
-var row_y: float = 174.0
+## Where the player's row sits. Always set by the spawner from wind_leaf.gd's
+## ROW_Y; this default only matters if something instances a hazard directly.
+var row_y: float = 206.0
 ## Pixels per second, for a hornet. The heron uses `telegraph` instead.
 ##
 ## A hornet flies, so this is ITS airspeed and has nothing to do with how fast

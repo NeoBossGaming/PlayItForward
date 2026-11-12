@@ -22,7 +22,16 @@ extends MiniGame
 
 const LANES := 5
 const LANE_X: Array[float] = [106.0, 173.0, 240.0, 307.0, 374.0]
-const ROW_Y := 174.0
+## Two thirds of the way down a 270-tall screen, and lower than it was. The
+## river upstream of the player is the only place a hazard can be seen coming,
+## so moving the row down buys reaction time -- a hornet at top airspeed is now
+## on screen about 0.53s before it strikes rather than 0.44s. It costs the late
+## game nothing, which is what makes it the cheapest kind of forgiveness.
+##
+## Anything that needs this number must READ it. It used to be copied into six
+## other places, and a test carrying its own copy would have gone on passing
+## while measuring a row the game no longer used.
+const ROW_Y := 206.0
 
 ## --- the difficulty curve ----------------------------------------------------
 ##
@@ -33,9 +42,18 @@ const ROW_Y := 174.0
 ##   t=30s -> 0.15   t=60s -> 0.30   t=120s -> 0.64   t=180s -> 0.82
 ##
 ## Beginner 45-60s, a decent player 2-3 minutes, an expert longer.
-const GENTLE_SECONDS := 60.0
+## Stretched twice now. The shape is right -- shallow, then steep, approaching
+## but never reaching 1 -- but it arrived too fast: a beginner got about 90
+## seconds. Both numbers here lengthen the climb WITHOUT touching the ceiling,
+## so the late game is exactly as nasty and simply takes longer to reach.
+##
+## That is the whole reason this is one curve rather than a dozen tuned
+## constants: the shake interval, the telegraph, how many pads go at once and
+## every hazard clock all read it, so stretching it eases all of them together
+## and keeps their relationship intact.
+const GENTLE_SECONDS := 75.0
 const GENTLE_CEILING := 0.30
-const STEEP_TAU := 90.0
+const STEEP_TAU := 150.0
 
 ## The shore's speed. The opening is now THREE TIMES what it was last round
 ## (68) and six times the original crossing's 34: a river that is already
@@ -91,7 +109,22 @@ const INPUT_BUFFER := 0.16
 ## Seconds after the last hop before the character turns back upstream.
 const FACE_UPSTREAM_AFTER := 0.5
 const RECOVERY_TIME := 1.4
-const RESPAWN_DELAY := 2.2
+## How long a sunken pad stays gone. It was a flat 2.2s, which meant the row
+## had a hole in it for the same stretch whether the river was ambling or
+## tearing along -- and late on, with three pads going at once, that is most of
+## the row missing most of the time.
+##
+## It now starts quicker and keeps getting quicker as the pace rises, with the
+## gain shrinking until it stops mattering: fast improvement early, then a
+## plateau. Exponential decay toward a floor gives exactly that shape, and
+## unlike an actual logarithm it cannot run away toward zero.
+##
+##   intensity 0.0 -> 1.50s    0.3 -> 1.04s    0.6 -> 0.83s    1.0 -> 0.71s
+##
+## approaching REGEN_FLOOR without ever reaching it.
+const REGEN_START := 1.5
+const REGEN_FLOOR := 0.65
+const REGEN_K := 2.6
 
 ## Pads, as continuous functions of intensity rather than three fixed bands.
 const SHAKE_INTERVAL := Vector2(2.6, 0.40)
@@ -391,6 +424,12 @@ func _advance_river(_delta: float) -> void:
 ## curve" -- and the soak suite asks the second one of a game whose clock has
 ## barely started, so folding the launch into one function would make the curve
 ## unmeasurable.
+## Seconds a sunken pad stays gone, falling toward REGEN_FLOOR as the river
+## speeds up. See the constants for the shape.
+func regen_delay() -> float:
+	return REGEN_FLOOR + (REGEN_START - REGEN_FLOOR) * exp(-REGEN_K * _intensity)
+
+
 func current_speed() -> float:
 	return cruise_speed() * launch_factor()
 
@@ -924,7 +963,7 @@ func _tick_director(delta: float) -> void:
 		var lane := _pick_shake_lane()
 		if lane < 0:
 			return
-		_leaves[lane].start_shake(telegraph, RESPAWN_DELAY)
+		_leaves[lane].start_shake(telegraph, regen_delay())
 
 
 ## Picks a leaf to shake without ever cornering the player: after this leaf

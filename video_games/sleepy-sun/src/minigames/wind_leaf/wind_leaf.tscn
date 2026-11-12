@@ -262,6 +262,6 @@ script = ExtResource("4c")
 z_index = 25
 
 [node name="Player" parent="." instance=ExtResource("2")]
-position = Vector2(240, 174)
+position = Vector2(240, 206)
 
 [node name="HUD" parent="." instance=ExtResource("3")]

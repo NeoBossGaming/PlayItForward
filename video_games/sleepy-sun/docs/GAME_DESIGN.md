@@ -163,7 +163,15 @@ gentle := 0.30 * min(t / 60, 1)
 steep  := 0.70 * (1 - exp(-max(t - 60, 0) / 90))
 ```
 
-≈0.15 at 30 s, 0.30 at 60 s, 0.64 at 120 s, 0.82 at 180 s. Everything speed- or
+≈0.12 at 30 s, 0.24 at 60 s, 0.48 at 120 s, 0.65 at 180 s — stretched once
+already, because a beginner was getting about 90 seconds. **Both numbers
+lengthen the climb without touching the ceiling**, so the late game is exactly
+as nasty and simply takes longer to arrive.
+
+This is the whole reason it is one curve rather than a dozen tuned constants:
+the shake interval, the telegraph, how many pads go at once, the regen delay
+and every hazard clock all read it, so stretching it eases all of them
+together and keeps their relationships intact. Everything speed- or
 difficulty-linked reads this one value and nothing else:
 
 | | t=0 | t=60 | late |
@@ -220,6 +228,31 @@ self-difference measurement at the tile period, and that measurement came back
 case for this change rests on the arithmetic (forty repeats to four, plus a
 second period) and on looking at it, not on that number. Recorded here so
 nobody later mistakes it for a measured result.
+
+### Pads come back faster as the pace rises, then stop improving
+
+A sunken pad used to stay gone for a flat **2.2 s** whether the river was
+ambling or tearing along — and late on, with three pads going at once, that is
+most of the row missing most of the time. `regen_delay()` now decays toward a
+floor: **1.50 s** at the start, 1.04 s at intensity 0.3, 0.83 s at 0.6, 0.71 s
+at 1.0, approaching 0.65 without reaching it.
+
+Exponential decay to a floor is the "fast improvement, then plateau" shape
+wanted here, and unlike an actual logarithm it cannot run away toward zero. It
+is forgiveness at both ends: a beginner spends less time facing a hole, and the
+late game keeps a usable row despite the churn.
+
+### The row sits low on purpose
+
+`ROW_Y` is **206** of 270. The river *upstream* of the player is the only place
+a hazard can be seen coming, so a low row buys reaction time — a hornet at top
+airspeed is on screen about 0.53 s before it strikes rather than 0.44 s, and
+the first one a player ever meets gives 1.27 s rather than 1.05 s. It costs the
+late game nothing, which makes it the cheapest forgiveness available.
+
+Anything needing this number must **read** it. It was once copied into six
+other places, including four in the test suite, and a test holding its own copy
+would have gone on passing while measuring a row the game no longer used.
 
 ### The river launches, and nothing happens until it has
 
@@ -334,6 +367,23 @@ blob: a dark blob on dark water is exactly the thing nobody sees coming.
   felt unhooked from the character even though they were working correctly.
   Mechanically, moving still costs two inputs: that is the change that makes
   everything else harder, and the gentle first minute exists to absorb it.
+
+### How the director chooses which pad falls
+
+Random, **with the player's position as a veto rather than a bias.**
+
+`_pick_shake_lane()` builds a list of every lane whose pad is currently
+`STABLE` *and* which passes `_leaves_escape_route()`, then picks **uniformly at
+random** among them. The escape check is the player-aware half: it looks at the
+three lanes reachable in one hop — `_lane-1`, `_lane`, `_lane+1` — and requires
+at least one of them, other than the lane about to shake, to still be available
+(pad safe *and* no heron diving on it).
+
+So it never aims at the player and never spares them either. **Their own lane
+is exactly as likely as any other.** The only thing it refuses is a choice that
+would leave them nowhere to go. That is why a run can be unlucky but not
+unwinnable, and why a frame-perfect bot never dies: that is the guarantee
+working, not a bug.
 
 ### The director never corners you
 
@@ -559,30 +609,40 @@ The endless redesign took **three** of the five: intensify rather than fill
 ### How hard it actually is
 
 Measured by the soak bot, which reacts in 3 frames with perfect information,
-run against a copy of itself slowed to human reaction lag. Every trial, at
-every lag, recorded **zero** frames where the player had no reachable lane to
-stand on — the never-corner guarantee holds over ~20 minutes of play.
+run against a copy of itself slowed to human reaction lag.
 
-Re-measured after the launch ramp and the hazard debut ramps. **Two trials per
-lag**, so read these as a band rather than a figure — the spread within one lag
-is wider than the gap between some of them, and the single passive run is one
-sample and nothing more.
+Re-measured after the curve was stretched, the row dropped and regen sped up.
+**Three trials per lag**, means in brackets; read them as bands, since the
+spread within one lag is wider than the gap between some of them.
 
 | Bot reaction lag | Survives | Score |
 |---|---|---|
 | 50 ms (frame-perfect) | **never dies** (capped at 7 min) | — |
-| 133 ms (expert, anticipating) | 212–238 s | 18k–20k |
-| 216 ms (average human) | 145–168 s | 9k–10k |
-| 300 ms (slow) | 92–95 s | 4k–5k |
-| no input at all | ~61 s | ~2.9k |
+| 133 ms (expert, anticipating) | 245–312 s (276) | 17k–22k |
+| 216 ms (average human) | 225–252 s (241) | 13k–16k |
+| 300 ms (slow) | 98–158 s (118) | 4k–8k |
+| no input at all | ~77 s | ~2.9k |
 
-The gentler opening lifted the **expert** band most (140–216 s → 212–238 s),
-which makes sense: a player who reads hazards well gains most from meeting them
-one at a time and loses least to a slow start. The middle and slow bands moved
-within their own noise.
+The target was a beginner at roughly two minutes, against ~90 s before, and the
+mean landed at 118 s. The expert band went **up** (212–238 s → 245–312 s)
+rather than down, which is the point: the climb got longer, the game did not
+get flatter. Each round of easing has lifted the expert band most, which makes
+sense — a player who reads hazards well gains most from anything that buys
+reading time.
 
-Every trial at every lag, across three rounds of tuning, has recorded **zero
-cornered frames**.
+**The guarantee is instantaneous, not predictive, and that limit is real.**
+`_leaves_escape_route()` is evaluated against where the player is standing when
+a pad is chosen; nothing can evaluate it against where they might hop next. Over
+long runs the bot does occasionally hop into a corner — diagnosed precisely as
+`lane=0, pads=[SHAKING, SHAKING, STABLE, GONE, GONE]`, landed that same frame,
+with a safe lane two hops away that it had just moved away from. Both pads were
+telegraphing before the hop, so the information was on screen; it moved toward
+the edge on stale information and ran out of room against the wall.
+
+The suite therefore asserts that the **directors never create** a corner, and
+ignores the third of a second after a landing. Asserting a flat zero would be
+asserting something the code does not promise, and the first bad hop would have
+blamed the director for it.
 
 Two things worth reading off that table. **A perfect reactor never dying is not
 a bug** — it is exactly what a strict never-corner guarantee promises, and it

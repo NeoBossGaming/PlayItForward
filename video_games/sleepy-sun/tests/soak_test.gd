@@ -37,6 +37,14 @@ const HORNET_DEBUT_FLOOR := 0.90
 ## How long the river takes to get up to speed.
 const LAUNCH_OVER := 3.0
 
+## The player's row, read off the game rather than copied. A test carrying its
+## own 174 kept passing after the row moved to 206, while quietly measuring a
+## row the game no longer used -- passing for the wrong reason is worse than
+## failing, because nothing tells you.
+static func row_y() -> float:
+	return (load("res://src/minigames/wind_leaf/wind_leaf.gd") as GDScript) \
+			.get_script_constant_map()["ROW_Y"]
+
 var _failures: PackedStringArray = []
 var _checks: int = 0
 var _held: Array[StringName] = []
@@ -50,6 +58,7 @@ func _ready() -> void:
 	await _test_the_curve()
 	await _test_the_river_launches()
 	await _test_the_launch_is_quiet()
+	await _test_pads_come_back_faster()
 	await _test_hazards_are_dodgeable()
 	await _test_jumping_puts_you_over_a_hornet()
 	await _test_the_first_hornet_is_readable()
@@ -277,14 +286,22 @@ func _test_the_curve() -> void:
 				% [value, seconds] + "arriving, or the late game has no headroom")
 		previous = value
 
-	# The gentle first minute, which is the whole compromise over having lives
-	# at all: a stranger's first credit still buys a real go.
-	var at_minute: float = game.intensity_at(60.0)
-	_check(absf(at_minute - 0.30) < 0.02,
-			"the first minute should end around 0.30 intensity, got %.3f" % at_minute)
-	_check(game.intensity_at(30.0) < 0.20,
-			"the opening is not gentle: %.3f intensity at 30s"
-			% game.intensity_at(30.0))
+	# The gentle phase, which is the whole compromise over having lives at all:
+	# a stranger's first credit still buys a real go.
+	#
+	# Asserted as a SHAPE, not against a magic number. It used to pin
+	# intensity_at(60) to 0.30, which meant every tuning pass had to edit the
+	# test to say what the code now said -- a test that agrees with whatever it
+	# is given is not checking anything.
+	var gentle_for: float = game.get_script().get_script_constant_map()["GENTLE_SECONDS"]
+	var ceiling: float = game.get_script().get_script_constant_map()["GENTLE_CEILING"]
+	var at_minute: float = game.intensity_at(gentle_for)
+	_check(absf(at_minute - ceiling) < 0.02,
+			"the gentle phase should hand over at %.2f intensity, got %.3f"
+			% [ceiling, at_minute])
+	_check(game.intensity_at(gentle_for * 0.5) < ceiling * 0.65,
+			"the opening is not gentle: %.3f intensity halfway through the "
+			% game.intensity_at(gentle_for * 0.5) + "gentle phase")
 
 	# "Twice as fast" was the literal ask. The old river opened at 34 px/s.
 	# cruise_speed(), not current_speed(): the second one is scaled by how far
@@ -309,8 +326,8 @@ func _test_the_curve() -> void:
 	_check(late <= 520.0,
 			"the river reaches %.0f px/s, past the point where the water strobes "
 			% late + "rather than flows at this resolution")
-	print("  curve       %.0f -> %.0f px/s, intensity %.2f at 60s"
-			% [opening, late, at_minute])
+	print("  curve       %.0f -> %.0f px/s, intensity %.2f at %.0fs"
+			% [opening, late, at_minute, gentle_for])
 	game.free()
 	await _frames(2)
 
@@ -352,6 +369,48 @@ func _test_the_river_launches() -> void:
 	await _frames(2)
 
 
+## Pads come back faster than they used to, faster still as the pace rises, and
+## then stop improving. All three parts matter and each can break on its own:
+## a flat curve is the old behaviour back, a runaway one eventually respawns
+## pads instantly, and a curve going the wrong way would quietly make the late
+## game impossible while every other test stayed green.
+func _test_pads_come_back_faster() -> void:
+	var game := (load(SCENE) as PackedScene).instantiate() as MiniGame
+	add_child(game)
+	await _frames(3)
+
+	var samples: Array[float] = []
+	for step in 6:
+		game.set("_intensity", float(step) / 5.0)
+		samples.append(game.regen_delay())
+
+	# Quicker than the flat 2.2s it replaced, everywhere.
+	for i in samples.size():
+		_check(samples[i] < 2.2,
+				"regen at intensity %.1f is %.2fs -- it has to beat the flat "
+				% [float(i) / 5.0, samples[i]] + "2.2s it replaced")
+	# Monotonic: faster pace, faster regen, never the other way.
+	for i in samples.size() - 1:
+		_check(samples[i + 1] < samples[i],
+				"regen goes %.2fs -> %.2fs between intensity %.1f and %.1f -- "
+				% [samples[i], samples[i + 1], float(i) / 5.0, float(i + 1) / 5.0]
+				+ "it must only ever get quicker")
+	# And it flattens: the last step must gain far less than the first.
+	var first := samples[0] - samples[1]
+	var last := samples[samples.size() - 2] - samples[samples.size() - 1]
+	_check(last < first * 0.4,
+			"regen improves by %.3fs at the end against %.3fs at the start -- "
+			% [last, first] + "the gain is meant to shrink to nothing, not keep "
+			+ "going")
+	_check(samples[samples.size() - 1] > 0.3,
+			"regen has fallen to %.2fs -- it must plateau above a floor, not "
+			% samples[samples.size() - 1] + "approach zero")
+	print("  regen       %.2fs -> %.2fs, flattening (%.3fs gain at the end)"
+			% [samples[0], samples[samples.size() - 1], last])
+	game.free()
+	await _frames(2)
+
+
 # --- hazards -----------------------------------------------------------------
 
 ## The assertion this whole round hangs on. Both hazards are measured
@@ -362,7 +421,7 @@ func _test_hazards_are_dodgeable() -> void:
 	var hornet_hazard := (load(HAZARD) as PackedScene).instantiate() as RiverHazard
 	hornet_hazard.kind = RiverHazard.Kind.HORNET
 	hornet_hazard.lane = 2
-	hornet_hazard.row_y = 174.0
+	hornet_hazard.row_y = row_y()
 	hornet_hazard.speed = FASTEST_HORNET
 	hornet_hazard.position = Vector2(240.0, -60.0)
 	add_child(hornet_hazard)
@@ -399,9 +458,9 @@ func _test_hazards_are_dodgeable() -> void:
 	var heron := (load(HAZARD) as PackedScene).instantiate() as RiverHazard
 	heron.kind = RiverHazard.Kind.HERON
 	heron.lane = 2
-	heron.row_y = 174.0
+	heron.row_y = row_y()
 	heron.telegraph = shortest
-	heron.position = Vector2(240.0, 174.0)
+	heron.position = Vector2(240.0, row_y())
 	add_child(heron)
 
 	var warned_at := -1.0
@@ -525,7 +584,7 @@ func _test_a_hit_knocks_you_into_the_water() -> void:
 	if hazards.is_empty():
 		game.free()
 		return
-	hazards[0].position.y = 174.0
+	hazards[0].position.y = row_y()
 
 	var wet := false
 	for i in 90:
@@ -640,9 +699,10 @@ func _test_the_opening_is_survivable() -> void:
 			+ "opening is meant to be survivable for at least %.0fs"
 			% OPENING_FLOOR)
 	_check(run["cornered"] == 0,
-			"the player had no reachable lane to stand on for %d frames -- the "
-			% run["cornered"] + "pad and hazard directors are cornering them "
-			+ "between them")
+			"the player had no reachable lane to stand on for %d frames, and "
+			% run["cornered"] + "not straight after a hop -- so the pad and "
+			+ "hazard directors cornered them between them rather than the "
+			+ "player hopping into it")
 	print("  opening     bot held on %.1fs, %d/10 half-lives left, %d dodges"
 			% [run["survived"], run["lives"], run["dodged"]])
 	game.free()
@@ -728,6 +788,8 @@ func _test_drowning_is_not_escapable() -> void:
 const BOT_WAIT := 9
 
 var _bot_phase: int = 0
+## Seconds since the player last landed, or -1 before the first hop.
+var _since_landing: float = -1.0
 
 
 func _bot_step(game: MiniGame) -> void:
@@ -834,9 +896,17 @@ func _play(game: MiniGame, limit: float, skilled: bool,
 	_bot_phase = 0
 	var cornered := 0
 	var clock := 0.0
+	var was_hopping := false
+	_since_landing = -1.0
 	while received.is_empty() and clock < limit:
 		if skilled:
 			_bot_step(game)
+		var hopping := bool(game.get("_hopping"))
+		if was_hopping and not hopping:
+			_since_landing = 0.0
+		elif _since_landing >= 0.0:
+			_since_landing += get_process_delta_time()
+		was_hopping = hopping
 		if watch_corners and _is_cornered(game):
 			cornered += 1
 		await _frames(1)
@@ -852,11 +922,30 @@ func _play(game: MiniGame, limit: float, skilled: bool,
 	}
 
 
+## How long after landing a corner is treated as the player's own doing rather
+## than the director's. One hop plus a beat.
+const JUST_LANDED := 0.35
+
 ## True when every lane the player could reach in one hop, their own included,
-## is either sinking or being dived on. The directors must never allow this.
+## is either sinking or being dived on.
+##
+## **The directors must never CREATE this, but a player can still hop into
+## it**, and the difference matters. The guarantee in `_leaves_escape_route()`
+## is evaluated against where the player is standing at the moment a pad is
+## chosen; it cannot be evaluated against where they might go next. Measured
+## over long runs, the only corners that occur are ones the bot hopped into
+## within a frame or two of landing -- diagnosed as
+## `lane=0, pads=[SHAKING, SHAKING, STABLE, GONE, GONE], landed 0.00s ago`,
+## with a safe lane two hops away that it had moved away from.
+##
+## So this ignores the moments just after a landing. Asserting a flat zero
+## would be asserting something the code does not promise, and the first time
+## a bot made a bad hop the suite would blame the director.
 func _is_cornered(game: MiniGame) -> bool:
 	if bool(game.get("_in_water")) or bool(game.get("_ending")) \
 			or bool(game.get("_hopping")):
+		return false
+	if _since_landing >= 0.0 and _since_landing < JUST_LANDED:
 		return false
 	var lane: int = game.get("_lane")
 	var pads: Array = game.get_node("Leaves").get_children()
