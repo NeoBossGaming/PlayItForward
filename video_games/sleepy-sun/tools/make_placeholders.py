@@ -89,6 +89,7 @@ KEEP = {
     "acorn_storm/clearing.png", "acorn_storm/canopy_shade.png",
     "acorn_storm/rock.png", "acorn_storm/squirrel.png",
     "acorn_storm/canopy.png", "acorn_storm/burst.png",
+    "acorn_storm/prize.png", "wind_leaf/chime_gold.png", "decor/spark.png",
     "ui/icon_leaf.png",
     # Jump poses, derived from the idle frames -- see player_jump_frames().
     *(f"player/jump_{d}_{i}.png"
@@ -978,6 +979,78 @@ def acorn_storm_art():
     save(img, "acorn_storm/burst.png")
 
 
+def golden_prize():
+    """The rare one. Both games hand out the same idea in their own shape.
+
+    It has to read as SPECIAL within a quarter of a second and from a few
+    feet back, against a busy scene, without being mistaken for the thing
+    the player already collects every few seconds. Three cues, none of
+    which the ordinary pickups use: a white-hot core (nothing else in
+    either game is white), a hard gold rim, and four radiating points.
+
+    Deliberately NOT just a yellow version of the normal pickup. Riverleap's
+    chimes are already pale and Acorn Storm's sunfruit is already gold; a
+    brighter one of either would read as "another one of those" at exactly
+    the moment it should not.
+    """
+    import math as _m
+
+    def star(size, rays, ray_len):
+        img, _ = canvas(size, size)
+        px = img.load()
+        c = (size - 1) / 2.0
+        core = size * 0.26
+        for y in range(size):
+            for x in range(size):
+                dx, dy = x - c, y - c
+                dist = _m.sqrt(dx * dx + dy * dy)
+                if dist <= core:
+                    # White-hot centre fading to gold at the rim.
+                    k = dist / max(core, 0.001)
+                    px[x, y] = (255, int(255 - 40 * k), int(246 - 110 * k), 255)
+                elif dist <= core + 1.6:
+                    px[x, y] = (236, 170, 54, 255)          # hard rim
+        # Four points, drawn after so they sit over the disc.
+        for i in range(rays):
+            ang = i * (2 * _m.pi / rays)
+            for step in range(int(ray_len * size)):
+                t = step / float(max(int(ray_len * size) - 1, 1))
+                r = core + 1.0 + step
+                x = int(round(c + _m.cos(ang) * r))
+                y = int(round(c + _m.sin(ang) * r))
+                if 0 <= x < size and 0 <= y < size:
+                    # Long and bright. The first pass had short faint rays
+                    # and the prize read as "a slightly whiter sunfruit" in
+                    # the air, which is the one thing it must not be: the
+                    # player has to want it before it lands, not recognise it
+                    # afterwards.
+                    a = int(255 * (1.0 - t) ** 0.45)
+                    if a > 8:
+                        px[x, y] = (255, 246, 214, a)
+                        # Two pixels wide near the core, so the rays read as
+                        # beams rather than as stray dots at 3x screen scale.
+                        if t < 0.45:
+                            for ox, oy in ((1, 0), (0, 1)):
+                                nx, ny = x + ox, y + oy
+                                if 0 <= nx < size and 0 <= ny < size \
+                                        and px[nx, ny][3] == 0:
+                                    px[nx, ny] = (255, 246, 214, int(a * 0.7))
+        return img
+
+    save(star(26, 4, 0.44), "wind_leaf/chime_gold.png")
+    save(star(26, 4, 0.44), "acorn_storm/prize.png")
+
+    # A spark the prize sheds as it travels, and throws on collection.
+    img, _ = canvas(6, 6)
+    px = img.load()
+    for y in range(6):
+        for x in range(6):
+            d = _m.sqrt((x - 2.5) ** 2 + (y - 2.5) ** 2)
+            if d <= 2.6:
+                px[x, y] = (255, 248, 214, int(255 * (1.0 - d / 2.6)))
+    save(img, "decor/spark.png")
+
+
 def treeline():
     """Distant trees past the bank, as the slowest parallax layer.
 
@@ -1395,6 +1468,7 @@ def main() -> None:
     village_tiles(); tree(); treeline()
     ui_bits(); hud_icons(); heart_segments(); alarm_frame(); vignette(); scrim()
     player_jump_frames(); control_pictograms(); acorn_storm_art()
+    golden_prize()
     decor_motes(); decor_props()
     made = sorted(p.relative_to(OUT).as_posix() for p in OUT.rglob("*.png"))
     print(f"assets/game now holds {len(made)} sprites")

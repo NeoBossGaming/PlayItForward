@@ -22,6 +22,7 @@ func _ready() -> void:
 	await _test_the_boot_scene_is_a_game()
 	await _test_the_rank_bands_cover_everything()
 	await _test_saves_do_not_mix_games()
+	await _test_the_golden_prize_is_rare_but_real()
 
 	get_tree().quit(report("CABINET"))
 
@@ -194,6 +195,59 @@ func _test_saves_do_not_mix_games() -> void:
 	_check(Save.best(&"wind_leaf") == 0, "clear() left scores behind")
 	print("  saves       kept apart per game, best rank tracked separately")
 	await _frames(1)
+
+
+## "About one run in five" is a claim about runs that END with one, not about
+## runs that are offered one: a run can finish before the prize is due, and a
+## prize that falls still has to be caught. Both of those sit between the roll
+## and the thing the player experiences, so the roll is tuned against this
+## rather than set to 0.2 and hoped over.
+##
+## Measured on the roll alone here. The two losses above only ever reduce it,
+## so this is the ceiling -- and the floor that matters is that it is not so
+## rare nobody ever sees one.
+func _test_the_golden_prize_is_rare_but_real() -> void:
+	var runs := 20000
+	var offered := 0
+	var total := 0.0
+	for i in runs:
+		var at := Golden.roll()
+		if at >= 0.0:
+			offered += 1
+			total += at
+			_check_window(at)
+	var rate := float(offered) / float(runs)
+	_check(absf(rate - Golden.CHANCE) < 0.02,
+			"the prize was offered on %.0f%% of runs against the %.0f%% it "
+			% [rate * 100.0, Golden.CHANCE * 100.0] + "declares")
+	_check(rate > 0.2 and rate < 0.5,
+			"an offer rate of %.0f%% cannot land near one collected run in "
+			% (rate * 100.0) + "five: too low and nobody sees one, too high "
+			+ "and it stops being rare")
+	_check(_window_breaks == 0,
+			"%d prizes were scheduled outside the window they declare"
+			% _window_breaks)
+	# The window has to sit inside a run an ordinary player actually reaches.
+	# A prize due at 90s in a game whose average run is 85s is a reward for
+	# being good, which is the opposite of what a lucky drop is for.
+	_check(Golden.WINDOW.y < 80.0,
+			"the prize can be scheduled as late as %.0fs, past the point an "
+			% Golden.WINDOW.y + "ordinary run reaches")
+	_check(Golden.WINDOW.x > 8.0,
+			"the prize can arrive %.0fs in, before the player has met the "
+			% Golden.WINDOW.x + "ordinary version of it")
+	print("  golden      offered on %.0f%% of runs, %.0f-%.0fs in (mean %.0fs)"
+			% [rate * 100.0, Golden.WINDOW.x, Golden.WINDOW.y,
+					total / maxf(float(offered), 1.0)])
+	await _frames(1)
+
+
+var _window_breaks: int = 0
+
+
+func _check_window(at: float) -> void:
+	if at < Golden.WINDOW.x or at > Golden.WINDOW.y:
+		_window_breaks += 1
 
 
 func _game_folders() -> PackedStringArray:

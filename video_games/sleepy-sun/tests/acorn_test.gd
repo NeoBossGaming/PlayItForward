@@ -50,6 +50,9 @@ var _last_run: String = ""
 ## The sunfruit the bot is currently going for. A player picks one and goes;
 ## a bot that re-chooses every frame is not modelling anything.
 var _target: int = 0
+## Golden prizes actually CAUGHT, across every bot run this suite drives.
+var _runs: int = 0
+var _golden_runs: int = 0
 
 
 ## Each step is announced before it runs and timed after it. This suite drives
@@ -606,6 +609,21 @@ func _test_the_opening_is_survivable() -> void:
 					+ "an average")
 	print("  difficulty  " + line.strip_edges())
 
+	# Measured across every bot run the suite has driven, which is the only
+	# honest way to state "about one run in five": the roll is 34%, and a run
+	# that ends before the prize is due or fails to reach it takes that down.
+	var rate := float(_golden_runs) / float(maxi(_runs, 1))
+	_check(_runs >= 15,
+			"only %d bot runs to measure the prize rate over" % _runs)
+	_check(_golden_runs > 0,
+			"no bot run in %d ever caught a golden prize -- it may be "
+			% _runs + "unreachable, or never scheduled inside a real run")
+	_check(rate < 0.6,
+			"%.0f%% of runs ended with a golden, which is not rare"
+			% (rate * 100.0))
+	print("  golden      caught in %d of %d bot runs (%.0f%%)"
+			% [_golden_runs, _runs, rate * 100.0])
+
 
 ## The opening card: the lesson, then 3-2-1-GO.
 ##
@@ -696,6 +714,8 @@ func _bot(reaction_ms: int, chase: bool, limit: float) -> float:
 	var held: float = game._survived
 	_last_run = "%d fruit, %d hits, %d missed" % [game._fruit, game._hits,
 			game._missed]
+	_runs += 1
+	_golden_runs += 1 if game._goldens > 0 else 0
 	_drop(game)
 	return held
 
@@ -728,6 +748,11 @@ func _decide(game: Node, chase: bool) -> Vector2:
 			# How much room to spare, not how soon -- the soonest fruit is
 			# often the one there is no chance of reaching.
 			var margin: float = game.reach(faller.seconds_left()) * 1.5 - distance
+			# Any player alive goes for the rare one, so the bot does too --
+			# otherwise the measured collect rate below is a fact about a bot
+			# that does not want the prize rather than about the prize.
+			if faller.kind == Faller.Kind.PRIZE:
+				margin += 120.0
 			# A fruit already being chased keeps a head start, so the bot
 			# does not change its mind every frame. Without this it dithered
 			# between two targets and reached neither -- and the dithering got

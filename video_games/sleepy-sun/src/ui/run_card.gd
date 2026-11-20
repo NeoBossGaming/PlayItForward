@@ -59,7 +59,12 @@ func show_run(title: String, score: int, lines: Array, best: int,
 
 	for line: Array in lines:
 		await Wait.on(self, ROW_DELAY)
-		_add_row(String(line[0]), String(line[1]))
+		# A third element tints the row, so a game can mark one out without
+		# needing its own card.
+		if line.size() > 2:
+			_add_row(String(line[0]), String(line[1]), line[2])
+		else:
+			_add_row(String(line[0]), String(line[1]))
 
 	await Wait.on(self, ROW_DELAY)
 	if score >= best and score > 0:

@@ -279,6 +279,46 @@ unreachable**: it runs, its own suite passes, and the cycle simply never offers
 it. `tests/cabinet_test.gd` exists to turn that silence into a failure, and was
 verified by breaking the convention on purpose and watching it fail.
 
+### Every run ends with a letter
+
+`MiniGameResult` carries a `normalised` 0-1000; `src/core/rank.gd` bands it
+into **D C B A S SS**, and `RunCard` stamps the letter in once the score has
+finished counting.
+
+It is cut from the normalised number rather than the raw score on purpose. Raw
+scores are per-game and unbounded -- Riverleap pays tens of thousands for a
+long run, a fixed-length game pays hundreds -- so a letter cut from them would
+grade the game rather than the player. Par is 500, so **a par run is a B**, a
+good one an A, a strong one an S, and SS is several times par.
+
+"Best yet" is compared **by band, not by number**, so two runs inside SS do not
+both claim it.
+
+### The rare golden prize
+
+About one run in five ends with one, in every game: a golden chime in
+Riverleap, a shining ball in Acorn Storm. `src/core/golden.gd` owns the
+once-per-run roll, the window it may appear in, and the collect effect (white
+flash, sparks, camera kick, a rising three-note fanfare). Each game supplies
+only the sprite and how the thing travels.
+
+**It scores nothing and nothing branches on it.** What it is for has not been
+decided yet; quietly making it worth points would be deciding.
+
+Two things that look like details and are not:
+
+- **"One in five" means collected, not offered.** A run can end before the
+  prize is due, and a prize that falls still has to be caught, so the roll sits
+  at 34% and the measured rate lands near 15%. Tuned against bot runs rather
+  than set to 0.2 and hoped over.
+- **It must be obvious in the air, not on the ground.** In Acorn Storm it
+  shares the ordinary **filled-disc** mark rather than getting a third shape:
+  the ground grammar is two symbols and a third would make the player learn
+  one in the half second they have to act. What is *falling* carries the
+  difference -- white-hot core, hard gold rim, long beams, and bigger than the
+  ordinary pickup. Drawn at the same size it read as "a slightly whiter
+  sunfruit", which is the one thing it must not be.
+
 ### Endless games are compared on how long you lasted
 
 `MiniGameResult` carries a `normalised` field, 0–1000, alongside the raw score,
@@ -608,6 +648,32 @@ would leave them nowhere to go. That is why a run can be unlucky but not
 unwinnable, and why a frame-perfect bot never dies: that is the guarantee
 working, not a bug.
 
+### The river comes for you, more so as it goes
+
+`_pick_shake_lane()` used to pick uniformly among eligible lanes, so your own
+pad was a flat **1 in 5** for a whole run and most of it was watching other
+pads sink somewhere else -- pretty, and not very threatening. It now ramps to
+**2 in 3** by the end, from *exactly* the uniform share, so the opening is the
+draw it replaced rather than an approximation of it:
+
+```gdscript
+var own := lerpf(1.0 / float(candidates.size()), OWN_LANE_SHARE, _intensity)
+```
+
+The eligibility rule needed no change -- a lane the player cannot escape from
+was never a candidate -- but **the time did**. `SHAKE_TELEGRAPH` bottoms out at
+0.30 s, which is fine for a pad across the row and is an unreactable eviction
+notice under your own feet, where it has to cover a reaction *plus* the 0.26 s
+the hop itself takes. Your own pad now always gets at least
+`OWN_TELEGRAPH_FLOOR` (0.60 s). Uniform selection had hidden that behind a
+1-in-5 chance; at 2-in-3 it would have been the whole late game, and
+unsurvivable.
+
+One mercy the design gets for free: once your pad goes you are in the water,
+and that lane is not `STABLE` -- so not a candidate -- for a couple of seconds.
+The share can rise all it likes; the duty cycle caps how often it can actually
+happen.
+
 ### The director never corners you
 
 The oldest guarantee in the game, and now the easiest to break: **two**
@@ -922,6 +988,42 @@ uses — a drain reads as a falling fill, and five discrete chunks would hide
 exactly the slow slide the game is about — with a leaf icon beside it so the
 bar never needs a word.
 
+### The game was getting smaller as it got harder
+
+The first version of this section called the shrinking reachable area the
+reason "the late game is hard". That was wrong, and it is the most useful
+mistake in this document.
+
+Fruit must land within walking reach, and reach is `speed x (fall - reaction)`,
+so every cut to the fall time also cut the circle the player worked in:
+
+| | fall | reach | mean trip |
+|---|---|---|---|
+| early | 1.60 s | 120 px | **62 px** |
+| mid | 1.27 s | 90 px | 50 px |
+| late | 0.95 s | 60 px | **37 px** |
+
+In a field 388 px wide the late game was a shuffle inside a 98 px circle. The
+game got *smaller* as it got harder -- which is why it played flat, and why
+the sprint button never mattered. **Every check in the suite passed the whole
+time**, because every fruit really was reachable: reachability was never the
+problem, and nothing was measuring size.
+
+Two changes fix it, and they are really one. The gale **carries the player
+too** (`SPEED`, 92 to 185 px/s), which is what lets the fall drop to 0.85 s
+without the field collapsing. And the distance roll is **directed**: an
+exponent that falls with intensity drags the mean out toward the edge of what
+is reachable, so late fruit is a committed run rather than a drift.
+
+Reach itself cannot be made to rise, which is worth knowing before anyone
+tries again: a reaction costs a flat 0.30 s whatever happens, so a 0.85 s fall
+leaves 0.55 s of travel against 1.30 s early. No sane walking speed covers a
+handicap that size -- chasing one put the player at 240 px/s across a 388 px
+field. Biasing *within* the circle does what enlarging it could not.
+
+Mean trip now runs **66 74 78 77**, and `tests/acorn_test.gd` asserts that the
+second half of a run beats the first.
+
 ### Fall time is the number everything hangs off
 
 `lerp(1.60, 0.95, intensity)` seconds from the canopy to the ground.
@@ -1127,7 +1229,10 @@ others took its place:
   player counts their hearts.
 
 Plus the curve's shape, and the regressions this game has already had, because
-a bug that got through once will get through again.
+a bug that got through once will get through again. Newer: the own-lane share
+at both ends of the curve, and that every own-pad shake leaves a safe
+neighbour **and** enough warning to reach it -- computed in the test from the
+row, not by asking the game.
 
 ### What Acorn Storm's suite holds
 
@@ -1153,6 +1258,11 @@ a bug that got through once will get through again.
   run could end on arithmetic rather than on anything the player did, and no
   other check would notice.
 - **The first sunfruit lands before the first acorn**, over repeated runs.
+- **The mean trip grows across a run.** Measured per intensity band and pooled
+  into halves, because a dozen fruit a band differ by several pixels on noise
+  alone -- a strict band-over-band rule failed on a 4% wobble while the run as
+  a whole was 23% up. This is the check that would have caught the shrinking
+  bubble, and it did not exist because nothing was asking about size.
 - **The two marks are rarely stacked** on the same patch of grass, since a
   ring over a disc is a square the player cannot read.
 - **A motionless player gets hit.** Not asserted directly, but the idle run's
@@ -1208,6 +1318,19 @@ Eight notes that cost real time to learn:
   [1.0, 0.72, 0.42]` makes `ring` a Variant, every expression built from it
   untyped, and the whole script fails to load — taking the scene's script with
   it. That was the actual cause of the spin above.
+- **Passing checks do not mean the thing is any good.** Acorn Storm shipped
+  with every assertion green and was no fun, because the suite proved fruit
+  was always *reachable* and nothing asked whether the player ever had to
+  *move*. The game halved the ground it used over a run and no test noticed,
+  because no test was about size. Assertions cover the properties somebody
+  thought to name -- when something feels wrong and everything passes, the
+  missing check is usually the whole answer.
+- **A measurement needs enough of the thing to measure.** Own-pad shakes are
+  rate-limited by the game itself: once your pad goes you are in the water and
+  that lane cannot be picked again for a couple of seconds. Three short
+  windows yielded eight samples, and the first instinct -- top the player's
+  lives up so they survive -- changed nothing, because lives were never the
+  limit. Find the real limit before working around the wrong one.
 - **Ask a guarantee at the moment it is made.** The cornering check started
   out sampling every frame and reported dead ends on a game that had none: an
   acorn a fifth of a second from landing leaves nobody anywhere to go, by

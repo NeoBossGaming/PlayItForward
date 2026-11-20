@@ -202,6 +202,10 @@ var _best_combo: int = 0
 ## Counted rather than asserted away: if the director ever cannot find an
 ## acorn placement that leaves an escape, the test wants to know how often.
 var _skipped_acorns: int = 0
+## Seconds of play at which this run's prize falls, or -1 for a run without
+## one. See src/core/golden.gd.
+var _golden_at: float = -1.0
+var _goldens: int = 0
 var _first_fruit_at: float = -1.0
 var _first_acorn_at: float = -1.0
 
@@ -256,6 +260,7 @@ func begin() -> void:
 	# The first sunfruit lands before the first acorn, so "gold is good" is
 	# learned before "red hurts". These two numbers are the whole of that
 	# guarantee and acorn_test.gd checks the order it produces, not them.
+	_golden_at = Golden.roll()
 	_fruit_timer = 0.35
 	_acorn_timer = 0.35 + FALL_SECONDS.x * DEBUT_FALL_BONUS + 0.45
 
@@ -267,11 +272,13 @@ func _process(delta: float) -> void:
 
 	_advance(delta)
 	_tick_stun(delta)
+	_tick_prize_trail()
 	_player.position = _player.position.clamp(FIELD.position, FIELD.end)
 	if _ending:
 		return
 	_tick_vitality(delta)
 	_tick_spawns(delta)
+	_tick_golden(delta)
 
 
 ## --- the world ---------------------------------------------------------------
@@ -320,6 +327,18 @@ func _tick_stun(delta: float) -> void:
 		_player.anim.modulate = Color.WHITE
 	else:
 		_player.anim.modulate = Color(1, 0.6, 0.6, 0.6 + 0.4 * sin(_stun * 40.0))
+
+
+## Sparks shed by a prize on the way down, so it is seen coming rather than
+## only celebrated once caught.
+func _tick_prize_trail() -> void:
+	for child in _fallers.get_children():
+		var faller := child as Faller
+		if faller == null or faller.resolved or faller.kind != Faller.Kind.PRIZE:
+			continue
+		if randf() < 0.4:
+			Golden.trail(_fallers, faller.position
+					+ Vector2(0.0, -faller.progress() * 8.0 - 10.0))
 
 
 ## --- the bar -----------------------------------------------------------------
@@ -381,6 +400,24 @@ func _tick_spawns(delta: float) -> void:
 		if _acorns_falling() < int(round(lerpf(ACORN_AT_ONCE.x, ACORN_AT_ONCE.y,
 				_intensity))):
 			_spawn_acorn()
+
+
+## The rare one, at most once per run. It falls where a sunfruit would -- same
+## within-reach rule, same mark -- because a prize you cannot get to is a worse
+## non-event than no prize at all.
+func _tick_golden(delta: float) -> void:
+	if _golden_at < 0.0 or _ending or not sequence_started():
+		return
+	if play_time() < _golden_at:
+		return
+	_golden_at = -1.0
+	var seconds := fall_time(false)
+	var limit := maxf(reach(seconds) * REACH_MARGIN, FRUIT_MIN_TRIP + 6.0)
+	var spot := (_player.position
+			+ Vector2.RIGHT.rotated(randf() * TAU) * randf_range(FRUIT_MIN_TRIP, limit)) \
+			.clamp(FIELD.position, FIELD.end)
+	_drop(Faller.Kind.PRIZE, spot, seconds)
+	_hud.toast("SOMETHING BRIGHT", Color(1, 0.9, 0.5), 1.1)
 
 
 func fall_time(is_acorn: bool) -> float:
@@ -600,7 +637,16 @@ func escape_exists(seconds: float, extra := Vector2.INF) -> bool:
 func _on_landed(faller: Faller) -> void:
 	var at := faller.position
 	var near := _player.position.distance_to(at) < faller.radius()
-	if faller.kind == Faller.Kind.SUNFRUIT:
+	if faller.kind == Faller.Kind.PRIZE:
+		if near:
+			_goldens += 1
+			Golden.celebrate(self, at, _camera)
+			_hud.toast("GOLDEN", Color(1, 0.86, 0.4), 1.6)
+		else:
+			# Missed. No second chance and no penalty -- it was luck either
+			# way, and punishing a miss would make the rare thing a tax.
+			Audio.sfx(&"deny", 0.7)
+	elif faller.kind == Faller.Kind.SUNFRUIT:
 		if _first_fruit_at < 0.0:
 			_first_fruit_at = play_time()
 		if near:
@@ -719,6 +765,7 @@ func _collapse() -> void:
 	var total := maxi(_score + int(_survival_score), 0)
 	_hud.set_score(total)
 	finish(total, {
+		"goldens": _goldens,
 		"fruit": _fruit,
 		"hits": _hits,
 		"missed": _missed,
@@ -739,7 +786,8 @@ func normalised_score(_raw: int) -> int:
 func _on_run_finished(result: MiniGameResult) -> void:
 	var best := Save.best(id)
 	var best_rank := Save.best_normalised(id)
-	Save.submit(id, result.score, result.normalised)
+	Save.submit(id, result.score, result.normalised,
+			int(result.stats.get("goldens", 0)))
 	var card := RunCard.new()
 	add_child(card)
 	var shown_at := Time.get_ticks_msec()
@@ -752,4 +800,13 @@ func _on_run_finished(result: MiniGameResult) -> void:
 		["sunfruit", "%d" % int(result.stats.get("fruit", 0))],
 		["best chain", "x%d" % maxi(int(result.stats.get("chain", 0)), 1)],
 		["acorns taken", "%d" % int(result.stats.get("hits", 0))],
-	], best, result.normalised, best_rank)
+	] + _golden_row(result), best, result.normalised, best_rank)
+
+
+## Only shown when there is one: a row reading "golden 0" on every ordinary
+## run would turn the rare thing into a thing you are missing.
+func _golden_row(result: MiniGameResult) -> Array:
+	var count := int(result.stats.get("goldens", 0))
+	if count <= 0:
+		return []
+	return [["GOLDEN", "x%d" % count, Color(1, 0.86, 0.4)]]

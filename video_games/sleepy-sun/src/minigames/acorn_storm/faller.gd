@@ -26,7 +26,7 @@ extends Node2D
 
 signal landed(faller: Faller)
 
-enum Kind { ACORN, SUNFRUIT }
+enum Kind { ACORN, SUNFRUIT, PRIZE }
 
 const Z_MARK := 4
 const Z_BODY := 40
@@ -47,10 +47,18 @@ const CANOPY_Y := 58.0
 const TEXTURES := {
 	Kind.ACORN: preload("res://assets/game/acorn_storm/acorn.png"),
 	Kind.SUNFRUIT: preload("res://assets/game/acorn_storm/sunfruit.png"),
+	Kind.PRIZE: preload("res://assets/game/acorn_storm/prize.png"),
 }
+## The prize shares the sunfruit's mark ON PURPOSE. The ground grammar is two
+## shapes -- an open ring means move, a filled disc means take it -- and it is
+## the thing the whole game is read by. A third shape would make the player
+## learn a new symbol in the half second they have to act on it, at the one
+## moment they least want to be puzzled. The prize is announced by what is
+## FALLING, which is white-hot and unmistakable, not by the ground.
 const MARKS := {
 	Kind.ACORN: preload("res://assets/game/acorn_storm/mark_danger.png"),
 	Kind.SUNFRUIT: preload("res://assets/game/acorn_storm/mark_good.png"),
+	Kind.PRIZE: preload("res://assets/game/acorn_storm/mark_good.png"),
 }
 
 var kind: Kind = Kind.ACORN
@@ -94,7 +102,7 @@ func seconds_left() -> float:
 
 
 func radius() -> float:
-	return CATCH_RADIUS if kind == Kind.SUNFRUIT else HIT_RADIUS
+	return HIT_RADIUS if kind == Kind.ACORN else CATCH_RADIUS
 
 
 func _process(delta: float) -> void:
@@ -124,6 +132,12 @@ func _apply(t: float) -> void:
 	_body.position.y = -_drop * (1.0 - t * t)
 	_body.scale = Vector2.ONE * lerpf(1.45, 0.9, t)
 	_body.rotation = t * (5.5 if kind == Kind.ACORN else 2.2)
+	if kind == Kind.PRIZE:
+		# Bigger, spinning and pulsing all the way down, so it is obviously
+		# not a sunfruit long before the mark could say so. At the same size
+		# as the ordinary pickup it read as a slightly whiter one.
+		_body.scale *= 1.45 + sin(life * 11.0) * 0.16
+		_mark.modulate = Color(1.0, 0.98, 0.78)
 
 	# The ring tightening onto the spot IS the countdown; nothing else on
 	# screen says how long is left.

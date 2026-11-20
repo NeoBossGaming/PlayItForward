@@ -38,6 +38,11 @@ const LIBRARY := {
 	# longer release, which is the shape everyone already knows from a race.
 	&"count":    [330.0, 0.16, Wave.SQUARE,   0.30, 1.0],
 	&"go":       [620.0, 0.38, Wave.SQUARE,   0.34, 1.9],
+	# The rare prize. A long, clean, rising sine -- the only cue in the bank
+	# that is allowed to sound triumphant, because it is the only event that
+	# happens to about one player in five. Played three times at rising
+	# pitches by Golden.fanfare(), so one entry makes a chord.
+	&"golden":   [523.0, 0.55, Wave.SINE,     0.40, 2.4],
 }
 
 ## The five cave plates each get their own note, so the sequence is audible as

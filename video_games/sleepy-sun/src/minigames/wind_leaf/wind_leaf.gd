@@ -281,6 +281,10 @@ var _airborne: bool = false
 var _in_water: bool = false
 var _ending: bool = false
 var _life_halves: int = MAX_LIFE_HALVES
+## Seconds of play at which this run's golden chime appears, or -1 for a run
+## that does not contain one. See src/core/golden.gd.
+var _golden_at: float = -1.0
+var _goldens: int = 0
 var _invulnerable: float = 0.0
 var _survived: float = 0.0
 var _survival_score: float = 0.0
@@ -315,6 +319,7 @@ var _wind_root: Node2D
 var _gust_timer: float = 0.0
 var _streak_texture := preload("res://assets/game/decor/streak.png")
 var _chime_texture := preload("res://assets/game/wind_leaf/chime.png")
+var _golden_texture := preload("res://assets/game/wind_leaf/chime_gold.png")
 
 
 func _ready() -> void:
@@ -358,6 +363,7 @@ func _ready() -> void:
 func begin() -> void:
 	super.begin()
 	_hud.toast("HOLD ON", Color(0.8, 0.95, 1.0), 1.4)
+	_golden_at = Golden.roll()
 	_hornet_timer = HORNET_FROM_SECONDS
 	_heron_timer = HERON_FROM_SECONDS
 	# Without this the director fires on its very first tick after the launch,
@@ -376,6 +382,7 @@ func _process(delta: float) -> void:
 	_tick_director(delta)
 	_tick_hazards(delta)
 	_tick_chimes(delta)
+	_tick_golden(delta)
 	_tick_recovery(delta)
 	_tick_aim(delta)
 	_tick_facing(delta)
@@ -544,6 +551,7 @@ func _end_run() -> void:
 	var total := _score + int(_survival_score)
 	_hud.set_score(maxi(total, 0))
 	finish(total, {
+		"goldens": _goldens,
 		"chimes": _chimes,
 		"splashes": _splashes,
 		"chain": _best_chain,
@@ -567,7 +575,8 @@ func normalised_score(_raw: int) -> int:
 func _on_run_finished(result: MiniGameResult) -> void:
 	var best := Save.best(id)
 	var best_rank := Save.best_normalised(id)
-	Save.submit(id, result.score, result.normalised)
+	Save.submit(id, result.score, result.normalised,
+			int(result.stats.get("goldens", 0)))
 	var card := RunCard.new()
 	add_child(card)
 	var shown_at := Time.get_ticks_msec()
@@ -584,7 +593,16 @@ func _on_run_finished(result: MiniGameResult) -> void:
 		["best chain", "x%d" % maxi(int(result.stats.get("chain", 0)), 1)],
 		["dodged", "%d" % int(result.stats.get("dodged", 0))],
 		["splashes", "%d" % int(result.stats.get("splashes", 0))],
-	], best, result.normalised, best_rank)
+	] + _golden_row(result), best, result.normalised, best_rank)
+
+
+## Only shown when there is one, because a row reading "golden 0" on every
+## ordinary run would turn the rare thing into a thing you are missing.
+func _golden_row(result: MiniGameResult) -> Array:
+	var count := int(result.stats.get("goldens", 0))
+	if count <= 0:
+		return []
+	return [["GOLDEN", "x%d" % count, Color(1, 0.86, 0.4)]]
 
 
 # --- hopping -----------------------------------------------------------------
@@ -1100,6 +1118,11 @@ func _tick_chimes(delta: float) -> void:
 			continue
 		chime.position.y += _chime_speed() * delta
 		chime.rotation = sin(chime.position.y / 18.0) * 0.3
+		if chime.has_meta(&"golden"):
+			# Seen before it is reached, not only after it is caught.
+			chime.scale = Vector2.ONE * (2.0 + sin(elapsed * 9.0) * 0.22)
+			if randf() < 0.35:
+				Golden.trail(_chimes_root, chime.position)
 		if chime.position.y > 300.0:
 			chime.queue_free()
 		elif not _in_water and chime.position.distance_to(_player.position) < 18.0:
@@ -1214,16 +1237,36 @@ func _chime_speed() -> float:
 	return current_speed() * 0.85
 
 
-func _spawn_chime() -> void:
+func _spawn_chime(golden: bool = false) -> void:
 	var chime := Sprite2D.new()
-	chime.texture = _chime_texture
+	chime.texture = _golden_texture if golden else _chime_texture
 	# The 16px art is nearly invisible against moving water at this resolution.
 	chime.scale = Vector2(2.0, 2.0)
 	chime.position = Vector2(LANE_X[randi() % LANES], -16.0)
+	if golden:
+		chime.set_meta(&"golden", true)
+		chime.z_index = 2
 	_chimes_root.add_child(chime)
 
 
+## The rare one, once per run at most. It rides the river exactly like any
+## other chime -- same lane, same drift, same collection radius -- so it is
+## caught the way everything else is and the only thing that differs is what
+## it is worth and how hard it is to miss seeing.
+func _tick_golden(delta: float) -> void:
+	if _golden_at < 0.0 or _ending or not sequence_started():
+		return
+	if play_time() < _golden_at:
+		return
+	_golden_at = -1.0
+	_spawn_chime(true)
+	_hud.toast("SOMETHING BRIGHT", Color(1, 0.9, 0.5), 1.1)
+
+
 func _collect(chime: Sprite2D) -> void:
+	if chime.has_meta(&"golden"):
+		_collect_golden(chime)
+		return
 	_chimes += 1
 	_chain += 1
 	_best_chain = maxi(_best_chain, _chain)
@@ -1240,6 +1283,16 @@ func _collect(chime: Sprite2D) -> void:
 	pop.parallel().tween_property(chime, "modulate:a", 0.0, 0.12)
 	pop.tween_callback(chime.queue_free)
 	chime.set_meta(&"collected", true)
+
+
+## The prize. Deliberately scores nothing: what it is for has not been decided
+## yet, and quietly making it worth points would be deciding.
+func _collect_golden(chime: Sprite2D) -> void:
+	_goldens += 1
+	chime.set_meta(&"collected", true)
+	chime.queue_free()
+	Golden.celebrate(self, chime.position, _camera)
+	_hud.toast("GOLDEN CHIME", Color(1, 0.86, 0.4), 1.6)
 
 
 ## 1 to CHIME_CHAIN_MAX, stepping up every CHIME_CHAIN_STEP chimes.

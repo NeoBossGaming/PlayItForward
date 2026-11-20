@@ -43,6 +43,9 @@ lives and the run is over.
 **Controls** — stick or arrows/WASD plus the button to hop left and right;
 button alone jumps on the spot. That is the whole game.
 
+The river turns personal: early on your own pad is as likely to sink as any
+other, and by the end two sinks in three are the one you are standing on.
+
 ## Acorn Storm — *dodge, catch*
 
 Stand in a clearing under an oak in a gale. Things fall out of the canopy.
@@ -55,6 +58,21 @@ glance and in greyscale. Acorns aim at where you will be, so standing still goes
 from unwise to fatal.
 
 **Controls** — stick or arrows/WASD to move, button to sprint.
+
+As the gale builds, things fall faster, land further away, *and you move
+quicker* — so the clearing stays worth crossing instead of shrinking to a
+shuffle.
+
+## Both games
+
+Every run ends with a **letter** — D through SS — stamped next to the score.
+It is cut from a shared 0–1000 scale, so a grade means the same thing in every
+game: a par run is a B, a good one an A.
+
+About **one run in five** also turns up a **golden prize** — a golden chime in
+Riverleap, a shining ball in Acorn Storm. It scores nothing and nothing
+depends on it yet; it is counted and saved, and what it unlocks is still to be
+decided.
 
 **Fonts** — Press Start 2P and Pixelify Sans, both under the SIL Open Font
 License; the licence files ship beside them in `assets/game/fonts/`.
