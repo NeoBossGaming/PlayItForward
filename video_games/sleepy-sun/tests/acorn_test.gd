@@ -236,7 +236,10 @@ func _test_fruit_is_always_reachable() -> void:
 	var worst := 0.0
 	var checked := 0
 	var failures := 0
+	var means: Array[float] = []
 	for intensity in [0.0, 60.0, 140.0, 240.0]:
+		var band_total := 0.0
+		var band_count := 0
 		var game: Node = await _start()
 		# Jump the clock rather than play four minutes: the director reads the
 		# curve, so this is the same director it would be at that moment.
@@ -261,6 +264,8 @@ func _test_fruit_is_always_reachable() -> void:
 					continue
 				checked += 1
 				var distance := standing.distance_to(faller.position)
+				band_total += distance
+				band_count += 1
 				var could_reach: float = game.reach(faller.fall_seconds)
 				worst = maxf(worst, distance / maxf(could_reach, 0.001))
 				if distance > could_reach:
@@ -273,7 +278,38 @@ func _test_fruit_is_always_reachable() -> void:
 								% could_reach + "that, so it was never "
 								+ "catchable, and with the bar draining an "
 								+ "uncatchable fruit costs a life")
+		means.append(band_total / float(maxi(band_count, 1)))
 		_drop(game)
+
+	# --- the trip has to grow, not shrink --------------------------------
+	#
+	# This is the assertion that would have caught the game quietly getting
+	# SMALLER as it got harder. Fruit must land within walking reach, and
+	# reach is speed x (fall - reaction), so shortening the fall shrank the
+	# circle the player worked in: the mean trip ran 62, 50, 37px across a
+	# field 388px wide, and the late game was a shuffle. Every check in this
+	# file passed throughout, because every fruit was still reachable --
+	# reachability was never the problem, and nothing was measuring size.
+	# Halves rather than band-by-band. Each band sees about a dozen sunfruit,
+	# so neighbouring bands differ by several pixels on noise alone -- a
+	# strict band-over-band rule failed on a 4% wobble while the run as a
+	# whole was 23% up. Pooling asks the question that was actually asked:
+	# does the player cover more ground later, or less?
+	var early := (means[0] + means[1]) * 0.5
+	var late := (means[2] + means[3]) * 0.5
+	_check(late > early,
+			"the second half of a run averages a %.0fpx trip against %.0fpx "
+			% [late, early] + "in the first -- the clearing is getting "
+			+ "smaller as it gets harder, which is what made it a shuffle")
+	for i in means.size():
+		_check(means[i] >= means[0] * 0.8,
+				"band %d's mean trip is %.0fpx, well under the %.0fpx the run "
+				% [i, means[i], means[0]] + "opens with -- on the old "
+				+ "constants the last band ran at 60%% of the first")
+	print("  trip        mean %s px, halves %.0f -> %.0f (was 62 50 37)"
+			% [" ".join(PackedStringArray(means.map(
+					func(m: float) -> String: return "%.0f" % m))), early, late])
+
 	_check(checked > 50,
 			"only %d sunfruit were measured -- not enough to claim anything"
 			% checked)

@@ -131,6 +131,27 @@ const SHAKE_INTERVAL := Vector2(2.6, 0.40)
 const SHAKE_TELEGRAPH := Vector2(1.15, 0.30)
 const SHAKE_AT_ONCE := Vector2(1.0, 3.0)
 
+## How often the pad going under is the one the player is standing on, at full
+## intensity. It used to be whatever uniform chance five lanes gave it, which
+## meant the river never really came for YOU -- most of a run was watching
+## other pads sink somewhere else. By the end two sinks in three are now
+## yours, so you are almost always being moved, while the rest of the row
+## still goes often enough that the field stays alive around you.
+##
+## Ramped from the uniform share rather than toward a fixed number, so the
+## opening is not merely close to unweighted but exactly it.
+const OWN_LANE_SHARE := 0.66
+
+## The least warning the player's OWN pad may give before it goes.
+##
+## SHAKE_TELEGRAPH bottoms out at 0.30s, which is fine for a pad across the
+## row -- that is information, and you act on it at leisure. Under your own
+## feet it is an eviction notice, and 0.30s does not cover a human reaction
+## plus the 0.26s the hop itself takes. Uniform selection hid this, because
+## your own pad came up one time in five; at two in three it would be the
+## whole game, and an unreactable one.
+const OWN_TELEGRAPH_FLOOR := 0.60
+
 ## --- hazards -----------------------------------------------------------------
 ##
 ## Both arrive late enough that the opening is purely pad-hopping: long enough
@@ -1003,12 +1024,23 @@ func _tick_director(delta: float) -> void:
 		var lane := _pick_shake_lane()
 		if lane < 0:
 			return
-		_leaves[lane].start_shake(telegraph, regen_delay())
+		# Your own pad always gives you time to leave it. See
+		# OWN_TELEGRAPH_FLOOR.
+		var warning := telegraph
+		if lane == _lane:
+			warning = maxf(warning, OWN_TELEGRAPH_FLOOR)
+		_leaves[lane].start_shake(warning, regen_delay())
 
 
 ## Picks a leaf to shake without ever cornering the player: after this leaf
 ## starts shaking, at least one lane they can reach in one hop must still be
 ## safe. Without this rule the game becomes unwinnable by luck alone.
+##
+## Among the lanes that pass that test, the player's own is increasingly the
+## one chosen -- see OWN_LANE_SHARE. The eligibility rule is untouched by the
+## weighting: a lane the player could not escape from is never a candidate in
+## the first place, so making their own lane likelier cannot make it unfair,
+## only relentless.
 func _pick_shake_lane() -> int:
 	var candidates: Array[int] = []
 	for lane in LANES:
@@ -1018,6 +1050,17 @@ func _pick_shake_lane() -> int:
 			candidates.append(lane)
 	if candidates.is_empty():
 		return -1
+
+	if _lane in candidates:
+		# Starts at exactly the uniform share and climbs, so the opening is
+		# the draw this replaced rather than an approximation of it.
+		var own := lerpf(1.0 / float(candidates.size()), OWN_LANE_SHARE, _intensity)
+		if randf() < own:
+			return _lane
+		var others := candidates.duplicate()
+		others.erase(_lane)
+		if not others.is_empty():
+			return others[randi() % others.size()]
 	return candidates[randi() % candidates.size()]
 
 

@@ -43,8 +43,19 @@ const LAUNCH_OVER := 3.0
 ## row the game no longer used -- passing for the wrong reason is worse than
 ## failing, because nothing tells you.
 static func row_y() -> float:
+	return _const("ROW_Y")
+
+
+## Constants are READ from the game rather than copied, for the reason above.
+static func _const(name: String) -> Variant:
 	return (load("res://src/minigames/wind_leaf/wind_leaf.gd") as GDScript) \
-			.get_script_constant_map()["ROW_Y"]
+			.get_script_constant_map()[name]
+
+
+## What a slow human costs before they have moved at all. The same figure
+## Acorn Storm measures its reach against, so the two games are forgiving to
+## the same person rather than to two different imagined players.
+const REACTION := 0.25
 
 func _ready() -> void:
 	await _test_contract()
@@ -64,6 +75,8 @@ func _ready() -> void:
 	await _test_the_opening_is_survivable()
 	await _test_a_run_must_end()
 	await _test_drowning_is_not_escapable()
+	await _test_the_river_comes_for_you()
+	await _test_your_own_pad_is_always_leavable()
 
 	get_tree().quit(report("RIVERLEAP"))
 
@@ -725,6 +738,141 @@ func _time_card() -> float:
 	_check(done.size() == 1,
 			"the card reported %d times, expected exactly one" % done.size())
 	return seconds
+
+
+## The river has to come for YOU, and more so as it goes. Uniform selection
+## meant most of a run was other pads sinking somewhere else, which is pretty
+## and not very threatening.
+##
+## Drives the director directly rather than playing: the draw is the thing
+## under test, and a real run would confound it with pads already sinking,
+## herons claiming lanes, and the player moving.
+func _test_the_river_comes_for_you() -> void:
+	var game := (load(SCENE) as PackedScene).instantiate() as MiniGame
+	add_child(game)
+	await _frames(2)
+	game.begin()
+	await _frames(2)
+
+	var share: Array[float] = []
+	for intensity: float in [0.0, 1.0]:
+		game._intensity = intensity
+		var own := 0
+		var draws := 4000
+		for i in draws:
+			# Every pad stable and the player in the middle, so the only
+			# thing varying between the two measurements is the weighting.
+			for leaf in game._leaves:
+				leaf.state = RiverLeaf.State.STABLE
+			game._lane = 2
+			if game._pick_shake_lane() == 2:
+				own += 1
+		share.append(float(own) / float(draws))
+
+	var lanes: int = _const("LANES")
+	var uniform := 1.0 / float(lanes)
+	_check(absf(share[0] - uniform) < 0.03,
+			"at the start the player's own pad went %.0f%% of the time, not "
+			% (share[0] * 100.0) + "the %.0f%% an unweighted draw over %d "
+			% [uniform * 100.0, lanes] + "lanes gives -- the opening is "
+			+ "supposed to be exactly the draw this replaced")
+	var target: float = _const("OWN_LANE_SHARE")
+	_check(absf(share[1] - target) < 0.04,
+			"at full intensity the player's own pad went %.0f%% of the time "
+			% (share[1] * 100.0) + "against the %.0f%% it declares"
+			% (target * 100.0))
+	print("  own pad     %.0f%% at the start, %.0f%% at full pressure"
+			% [share[0] * 100.0, share[1] * 100.0])
+	game.free()
+	await _frames(2)
+
+
+## ...and it must always be possible to get off it. Two separate promises: a
+## pad next door that is actually safe, and enough WARNING to make the hop.
+##
+## The second is the one that only matters now. A 0.30s telegraph is fine on a
+## pad across the row, because that is information; under your own feet it has
+## to cover a human reaction plus the 0.26s the hop itself takes, and at two
+## sinks in three it would otherwise be the whole late game and unsurvivable.
+##
+## Computed here from the row rather than by calling the game's own
+## _leaves_escape_route(): a test that asks the game whether the game is right
+## cannot catch the game being wrong.
+func _test_your_own_pad_is_always_leavable() -> void:
+	var hop: float = _const("HOP_TIME")
+	var floor_s := REACTION + hop
+	var seen := 0
+	var no_exit := 0
+	var too_short := 0
+	var tightest := 99.0
+
+	# Late in the curve, because own-pad shakes are what is being counted and
+	# early on there are barely any: the interval is long AND the share is
+	# low, so a sample at the start measures the weighting's absence.
+	for offset: float in [80.0, 200.0, 320.0]:
+		var game := (load(SCENE) as PackedScene).instantiate() as MiniGame
+		add_child(game)
+		await _frames(2)
+		game.begin()
+		game.elapsed = LAUNCH_OVER + offset
+		# Every lane's previous state, not just the player's. Watching only
+		# `_leaves[_lane]` miscounts the moment the player moves: an
+		# already-shaking pad they hop ONTO looks like a fresh shake under
+		# them, and one they hop off and back to is missed.
+		var was_shaking := [false, false, false, false, false]
+		var played := 0.0
+		while played < 35.0:
+			await _frames(1)
+			# Topped up by hand. Nothing is driving the player, so their pad
+			# goes under and they drown -- five times, and then the run ends
+			# a few seconds in. This is a measurement of the DIRECTOR.
+			game._life_halves = game.MAX_LIFE_HALVES
+			played += get_process_delta_time()
+			var lane: int = game._lane
+			var leaf = game._leaves[lane]
+			var now_shaking: bool = leaf.state == RiverLeaf.State.SHAKING
+			var started: bool = now_shaking and not bool(was_shaking[lane])
+			for i in game.LANES:
+				was_shaking[i] = game._leaves[i].state == RiverLeaf.State.SHAKING
+			if started:
+				seen += 1
+				# Somewhere to go: a neighbour that is safe AND not already
+				# claimed by a diving heron.
+				var exit_found := false
+				for step: int in [-1, 1]:
+					var side := lane + step
+					if side < 0 or side >= game.LANES:
+						continue
+					if game._leaves[side].is_safe() and not game._lane_dived_on(side):
+						exit_found = true
+				if not exit_found:
+					no_exit += 1
+				# And time to use it.
+				var warning: float = leaf._duration
+				tightest = minf(tightest, warning)
+				if warning < floor_s:
+					too_short += 1
+		game.free()
+		await _frames(2)
+
+	# Twenty is about the ceiling three windows can produce, however the
+	# weighting is set: once your pad goes you are in the water, and the lane
+	# is not STABLE again -- so not a candidate -- for a couple of seconds.
+	# The share can rise all it likes; the duty cycle is what caps it, which
+	# is a mercy the design gets for free.
+	_check(seen > 20,
+			"the player's own pad only started shaking %d times -- not enough "
+			% seen + "to claim anything about it")
+	_check(no_exit == 0,
+			"%d of %d own-pad shakes left no safe neighbour to hop to"
+			% [no_exit, seen])
+	_check(too_short == 0,
+			"%d of %d own-pad shakes gave under %.2fs of warning, which does "
+			% [too_short, seen, floor_s] + "not cover a %.2fs reaction plus "
+			% REACTION + "the %.2fs the hop takes -- an eviction notice you "
+			% hop + "cannot act on")
+	print("  own pad     %d shakes under the player, tightest %.2fs warning "
+			% [seen, tightest] + "(floor %.2fs)" % floor_s)
 
 
 ## The cabinet runs all day, so "has this player seen the tutorial" cannot just

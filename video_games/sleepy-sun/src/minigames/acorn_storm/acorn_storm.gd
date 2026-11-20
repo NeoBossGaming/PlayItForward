@@ -72,12 +72,28 @@ const ALARM_BELOW := 0.26
 
 ## --- falling -----------------------------------------------------------------
 ##
-## Fall time is the number everything else hangs off: shorten it and the
-## reachable area around the player shrinks as the square of nothing in
-## particular -- linearly, but the field does not, so the fraction of the
-## clearing you can get to collapses. It is why the late game is hard and why
-## it is not simply "more acorns".
-const FALL_SECONDS := Vector2(1.60, 0.95)
+## Fall time is the number everything else hangs off, because the radius the
+## player can cover is `speed x (fall - reaction)`. Shortening the fall makes
+## the game faster AND the reachable circle smaller, and the second of those
+## was quietly ruining it: measured on the old constants the mean trip to a
+## sunfruit went 62px early, 50px mid, 37px late. In a field 388px wide the
+## late game was a shuffle inside a 98px circle -- the thing got *smaller* as
+## it got harder, which is why it played flat and why the sprint button never
+## mattered.
+##
+## The fall is now twice as fast by the end, and SPEED below is what stops
+## that collapsing the field.
+const FALL_SECONDS := Vector2(1.60, 0.85)
+
+## The gale carries the player too. Without this the two things Neo asked for
+## -- drops that fall faster and fruit that lands further away -- are in direct
+## contradiction, because both are divided by the same reach. With it they are
+## the same change: the storm speeds up and so do you.
+##
+## Set every frame from the curve rather than once in _ready(), and read by
+## reach() and by TopDownPlayer, so the ramp reaches the dodging, the catching
+## and the acorns' velocity lead together.
+const SPEED := Vector2(92.0, 185.0)
 ## Before a player has reacted they have not moved, so the reach that matters
 ## is the fall time MINUS a reaction. 0.30s is a slow human; measuring against
 ## a fast one would be designing the game for me rather than for a stranger.
@@ -89,6 +105,25 @@ const REACH_MARGIN := 0.82
 ## Fruit never lands in your lap -- it has to be worth a trip, or the catching
 ## half of the game is just standing still.
 const FRUIT_MIN_TRIP := 26.0
+## How far the distance roll is pushed toward the FAR edge of what is
+## reachable, at full intensity. This is the "directed random" half: early on
+## a sunfruit lands anywhere in reach, late on it is usually at the edge of
+## it, so holding the bar up means committing to a run across the clearing
+## rather than drifting a few pixels.
+##
+## Applied as an exponent on a 0-1 roll, so at intensity 0 the exponent is
+## exactly 1 and the draw is exactly the uniform one it replaces -- the
+## formula is the design statement rather than a table of cases.
+##
+## It has to carry most of the work, because the reach itself cannot rise:
+## a reaction costs a flat 0.30s whatever happens, so at a 0.85s fall only
+## 0.55s of it is usable against 1.30s early. No sane walking speed covers a
+## handicap that size, and chasing one would have put the player at 240px/s
+## across a 388px field. Biasing WITHIN the reachable circle does what raising
+## the circle could not.
+##
+##   mean trip, by band:  62  70  75  77  74 px   (it was 62 50 37)
+const FAR_BIAS := 0.8
 
 const ACORN_INTERVAL := Vector2(1.25, 0.36)
 const FRUIT_INTERVAL := Vector2(2.10, 0.92)
@@ -173,7 +208,7 @@ var _first_acorn_at: float = -1.0
 
 func _ready() -> void:
 	_player.position = Vector2(FIELD.get_center().x, FIELD.get_center().y)
-	_player.speed = 92.0
+	_player.speed = SPEED.x
 	_player.can_sprint = true
 	_player.z_index = Z_PLAYER
 	_player.stamina_changed.connect(_hud.set_stamina)
@@ -244,6 +279,9 @@ func _process(delta: float) -> void:
 func _advance(delta: float) -> void:
 	_intensity = intensity_at(play_time())
 	var gale := _intensity * launch_factor()
+
+	# You get faster as the storm does. See SPEED.
+	_player.speed = lerpf(SPEED.x, SPEED.y, _intensity)
 
 	_camera.set_intensity(gale)
 	# The canopy thrashes, and it is the only thing on screen that can show
@@ -375,7 +413,11 @@ func _spawn_fruit() -> void:
 	var best_clearance := -1.0
 	for attempt in 8:
 		var angle := randf() * TAU
-		var distance := randf_range(FRUIT_MIN_TRIP, limit)
+		# Directed rather than uniform: the exponent falls from 1 to 0.4
+		# across the run, which drags the mean roll from the middle of the
+		# reachable range out toward its edge. See FAR_BIAS.
+		var roll := pow(randf(), 1.0 - FAR_BIAS * _intensity)
+		var distance := lerpf(FRUIT_MIN_TRIP, limit, roll)
 		var spot := (_player.position + Vector2.RIGHT.rotated(angle) * distance) \
 				.clamp(FIELD.position, FIELD.end)
 		# The clamp can drag a spot back toward the player, or onto a wall; if
