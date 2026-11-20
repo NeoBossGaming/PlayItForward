@@ -737,8 +737,9 @@ func normalised_score(_raw: int) -> int:
 
 ## Stands in for the shell while it is parked: results, then straight back in.
 func _on_run_finished(result: MiniGameResult) -> void:
-	var best := Save.best()
-	Save.submit(result.score)
+	var best := Save.best(id)
+	var best_rank := Save.best_normalised(id)
+	Save.submit(id, result.score, result.normalised)
 	var card := RunCard.new()
 	add_child(card)
 	var shown_at := Time.get_ticks_msec()
@@ -751,4 +752,4 @@ func _on_run_finished(result: MiniGameResult) -> void:
 		["sunfruit", "%d" % int(result.stats.get("fruit", 0))],
 		["best chain", "x%d" % maxi(int(result.stats.get("chain", 0)), 1)],
 		["acorns taken", "%d" % int(result.stats.get("hits", 0))],
-	], best)
+	], best, result.normalised, best_rank)

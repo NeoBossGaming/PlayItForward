@@ -565,8 +565,9 @@ func normalised_score(_raw: int) -> int:
 
 
 func _on_run_finished(result: MiniGameResult) -> void:
-	var best := Save.best()
-	Save.submit(result.score)
+	var best := Save.best(id)
+	var best_rank := Save.best_normalised(id)
+	Save.submit(id, result.score, result.normalised)
 	var card := RunCard.new()
 	add_child(card)
 	var shown_at := Time.get_ticks_msec()
@@ -583,7 +584,7 @@ func _on_run_finished(result: MiniGameResult) -> void:
 		["best chain", "x%d" % maxi(int(result.stats.get("chain", 0)), 1)],
 		["dodged", "%d" % int(result.stats.get("dodged", 0))],
 		["splashes", "%d" % int(result.stats.get("splashes", 0))],
-	], best)
+	], best, result.normalised, best_rank)
 
 
 # --- hopping -----------------------------------------------------------------

@@ -15,6 +15,7 @@ const ROW_DELAY := 0.28
 ## a request to restart.
 const INPUT_DELAY := 0.7
 
+var _root: Control
 var _rows: VBoxContainer
 var _score: Label
 var _hint: Label
@@ -45,10 +46,16 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 ## `lines` is an array of [label, value] pairs, in the game's own words.
-func show_run(title: String, score: int, lines: Array, best: int) -> void:
+## `normalised` is the run on the shared 0-1000 scale, which is what the
+## letter is cut from -- see src/core/rank.gd. `best_normalised` is the best
+## this game has ever seen, so the card can say whether the letter is new.
+func show_run(title: String, score: int, lines: Array, best: int,
+		normalised: int = -1, best_normalised: int = 0) -> void:
 	_build(title)
 	_score.text = "0"
 	await _count_to(score)
+	if normalised >= 0:
+		await _stamp_rank(normalised, best_normalised)
 
 	for line: Array in lines:
 		await Wait.on(self, ROW_DELAY)
@@ -65,6 +72,51 @@ func show_run(title: String, score: int, lines: Array, best: int) -> void:
 	await Wait.on(self, INPUT_DELAY)
 	_ready_for_input = true
 	_hint.visible = true
+
+
+## The letter lands like a stamp rather than appearing: it is the one thing
+## the player came back for, and the whole point of a grade is the moment it
+## hits. Same move the parked results screen used.
+func _stamp_rank(normalised: int, best_normalised: int) -> void:
+	await Wait.on(self, 0.25)
+	var letter := Rank.letter(normalised)
+
+	var label := _label(&"Display", Rank.colour(normalised))
+	label.text = letter
+	# Placed explicitly, never by anchor preset: a Control's rect is not
+	# resolved until the next layout pass, and centring against a zero-size
+	# rect is how the countdown numerals once flew off the screen.
+	label.size = Vector2(120.0, 60.0)
+	label.position = Vector2(348.0, 54.0)
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.pivot_offset = label.size * 0.5
+	label.rotation = -0.12
+	_root.add_child(label)
+
+	label.scale = Vector2(4.0, 4.0)
+	label.modulate.a = 0.0
+	var tween := create_tween()
+	tween.set_parallel(true)
+	tween.tween_property(label, "modulate:a", 1.0, 0.08)
+	tween.tween_property(label, "scale", Vector2(1.6, 1.6), 0.18) \
+			.set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
+	Audio.sfx(&"complete", 1.0 + 0.12 * float(Rank.BANDS.size() - Rank.index(normalised)))
+
+	if Rank.is_new_letter(normalised, best_normalised):
+		await Wait.on(self, 0.3)
+		var note := _label(&"Small", Rank.colour(normalised))
+		note.text = "best yet"
+		note.size = Vector2(120.0, 14.0)
+		# Below the letter's SCALED extent, not its layout rect. The label is
+		# 60 tall and ends up at 1.6x about its own centre, so it really
+		# occupies y 36..132 -- a note placed against the unscaled box landed
+		# on top of it.
+		note.position = Vector2(348.0, 136.0)
+		note.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		_root.add_child(note)
+		Audio.sfx(&"chime", 1.4)
+	await Wait.on(self, 0.2)
 
 
 ## Counts up rather than printing. The few seconds a player spends watching a
@@ -87,6 +139,7 @@ func _build(title: String) -> void:
 	dim.set_anchors_preset(Control.PRESET_FULL_RECT)
 	dim.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(dim)
+	_root = dim
 
 	var heading := _label(&"Title", Color(1, 0.89, 0.58))
 	heading.text = title

@@ -20,6 +20,8 @@ func _ready() -> void:
 	await _test_every_game_is_discovered()
 	await _test_the_games_do_not_collide()
 	await _test_the_boot_scene_is_a_game()
+	await _test_the_rank_bands_cover_everything()
+	await _test_saves_do_not_mix_games()
 
 	get_tree().quit(report("CABINET"))
 
@@ -110,6 +112,87 @@ func _test_the_boot_scene_is_a_game() -> void:
 			"the project boots into %s, which is not one of the games (%s)"
 			% [boot, ", ".join(_names(games))])
 	print("  boots into  %s" % boot.get_file().get_basename())
+	await _frames(1)
+
+
+## The letter table has to be total and ordered: every possible normalised
+## score gets exactly one band, better scores never get worse letters, and no
+## band is unreachable (a band nobody can land in is a letter that does not
+## exist).
+func _test_the_rank_bands_cover_everything() -> void:
+	var seen: Dictionary = {}
+	var previous := -1
+	var outside := -1
+	var went_backwards := -1
+	# Swept, then asserted ONCE. Checking inside the loop put two thousand
+	# entries on the tally and buried every other check in the suite -- a
+	# check count should say how many things are guaranteed, not how many
+	# times a loop ran.
+	for value in range(0, 1001):
+		var index := Rank.index(value)
+		if index < 0 or index >= Rank.BANDS.size():
+			outside = value
+		elif previous >= 0 and index > previous:
+			went_backwards = value
+		previous = index
+		seen[Rank.letter(value)] = true
+	_check(outside < 0,
+			"normalised %d fell outside the band table" % outside)
+	_check(went_backwards < 0,
+			"normalised %d lands in a worse band than %d did"
+			% [went_backwards, went_backwards - 1])
+
+	for band: Array in Rank.BANDS:
+		_check(seen.has(String(band[1])),
+				"no score between 0 and 1000 earns a %s -- the band is "
+				% band[1] + "unreachable, so the letter does not exist")
+	_check(Rank.letter(0) == "D" and Rank.letter(1000) == "SS",
+			"the ends of the scale are %s and %s"
+			% [Rank.letter(0), Rank.letter(1000)])
+
+	# A par run is a B: normalised_from_duration() puts par at 500.
+	_check(Rank.letter(500) == "B",
+			"a par run earns %s, not the B the bands are built around"
+			% Rank.letter(500))
+	# And "new letter" compares bands, not numbers.
+	_check(Rank.is_new_letter(760, 740),
+			"crossing from S's band into the one above did not read as new")
+	_check(not Rank.is_new_letter(999, 900),
+			"two scores inside SS both claimed a new letter")
+	print("  ranks       %s" % " ".join(PackedStringArray(
+			Rank.BANDS.map(func(b: Array) -> String:
+				return "%s>=%d" % [b[1], b[0]]))))
+	await _frames(1)
+
+
+## Two games, two tables. They shared one while there was one game, and when
+## the second arrived both kept writing to it -- so a card showed the other
+## game's best, and two incomparable scales were sorted together.
+func _test_saves_do_not_mix_games() -> void:
+	Save.clear()
+	Save.submit(&"wind_leaf", 9000, 700)
+	Save.submit(&"acorn_storm", 300, 480)
+
+	_check(Save.best(&"wind_leaf") == 9000,
+			"wind_leaf's best came back as %d" % Save.best(&"wind_leaf"))
+	_check(Save.best(&"acorn_storm") == 300,
+			"acorn_storm's best came back as %d -- the big score from the "
+			% Save.best(&"acorn_storm") + "other game is leaking across")
+	_check(Save.best(&"nothing_here") == 0,
+			"a game with no runs reported a best")
+
+	# The letter comes from normalised, which is not the sort key, so a later
+	# run with fewer points but a longer life must still raise the best rank.
+	Save.submit(&"acorn_storm", 120, 820)
+	_check(Save.best(&"acorn_storm") == 300,
+			"a lower-scoring run replaced the best score")
+	_check(Save.best_normalised(&"acorn_storm") == 820,
+			"best_normalised came back as %d, so a better RANK earned on a "
+			% Save.best_normalised(&"acorn_storm") + "lower score was lost")
+
+	Save.clear()
+	_check(Save.best(&"wind_leaf") == 0, "clear() left scores behind")
+	print("  saves       kept apart per game, best rank tracked separately")
 	await _frames(1)
 
 
