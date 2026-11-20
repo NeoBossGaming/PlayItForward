@@ -162,6 +162,14 @@ func _teach() -> void:
 		# lands instead of at the end of a fixed wait.
 		var waited := 0.0
 		while waited < SLIDE_SECONDS and not _skipped:
+			# A scene change pulls this card out of the tree a frame before it
+			# is freed, so a coroutine parked here wakes up detached and
+			# get_tree() hands back null. There is nothing left to show, but
+			# it printed a script error every time the debug key switched
+			# games -- and errors nobody is meant to read are how the real
+			# ones get missed.
+			if not is_inside_tree():
+				return
 			await get_tree().process_frame
 			waited += get_process_delta_time()
 		if _skipped:

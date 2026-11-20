@@ -116,10 +116,24 @@ attract. During a polish round the loop is play, change, play, and every second
 of shell between those is friction.
 
 - **F5** restarts instantly, from anywhere.
+- **F4** switches to the next game.
 - **F3** toggles slow motion (0.35×), for looking at a frame of animation.
 
-That is the whole debug surface, and it replaces a menu that was mostly about
-choosing between games. Both keys are inert outside a debug build.
+That is the whole debug surface, and all three keys are inert outside a debug
+build.
+
+**F4 exists because there is no Router any more.** Each game starts itself and
+reloads itself on replay, so with two games the boot scene was the only one
+reachable without a terminal — and six more are coming. It is deliberately a
+debug key rather than a picker: a picker would be the first brick of the shell
+that was parked on purpose, and an exported cabinet must not grow one by
+accident.
+
+`Dev` finds the games rather than listing them, by the convention below, and
+clears `StartCard.tutorial_seen` on the way so the game you land on teaches its
+own lesson. Without that, arriving at Acorn Storm after Riverleap's card would
+skip Acorn Storm's intro entirely — which is the thing you are most likely to
+have pressed the key to look at.
 
 ### Score feedback
 
@@ -247,6 +261,23 @@ A first-timer is taught; a replay goes straight to the countdown; and
 enough that whoever presses next is probably a different person. A cabinet runs
 all day, so a flag set once per process would teach the first player of the
 morning and nobody else.
+
+### The folder name is load-bearing
+
+**One game per folder under `src/minigames/`, in a scene named after its
+folder.** `wind_leaf/wind_leaf.tscn` is a game; `wind_leaf/leaf.tscn` and
+`acorn_storm/faller.tscn` are pieces one is built from. Test suites follow the
+same idea: `tests/*_test.tscn`, one per game.
+
+Two things discover by it rather than holding a list — `Dev`'s game cycle and
+`tools/run_tests.sh` — so adding game three means adding a folder, not editing
+files nobody thinks to look at. With six games still to return, a
+hand-maintained list would rot.
+
+The catch is that a folder whose scene is named something else is **silently
+unreachable**: it runs, its own suite passes, and the cycle simply never offers
+it. `tests/cabinet_test.gd` exists to turn that silence into a failure, and was
+verified by breaking the convention on purpose and watching it fail.
 
 ### Endless games are compared on how long you lasted
 
@@ -1140,7 +1171,16 @@ Both suites run bots at **133 / 216 / 300 ms of reaction lag**, because a bot
 that reacts on the frame a thing spawns measures a game a machine plays rather
 than the one a person does.
 
-Seven notes that cost real time to learn:
+### And a third suite, for what sits between them
+
+`tests/cabinet_test.gd` holds the properties that belong to no single game, so
+neither game's suite can: every minigame folder yields exactly one reachable
+game and nothing that is not a game is picked up; every game's root extends
+`MiniGame`, reports a non-empty `id` that no other game shares, and declares a
+positive `par_score`; and the boot scene in `project.godot` is one of them, so a
+rename cannot quietly leave the project opening a blank window.
+
+Eight notes that cost real time to learn:
 
 - **A screenshot is not a substitute for an assertion, and vice versa.** This
   round needed both, in opposite directions. The inverted draw order was
@@ -1174,6 +1214,13 @@ Seven notes that cost real time to learn:
   arithmetic. Two rounds went into "fixing" that before the question turned
   out to be the wrong one. A guarantee is about a decision, so test it where
   the decision is taken.
+- **A harness that stands an object up alone can hide what it does in place.**
+  Acorn Storm's intro slides were checked by building the card on its own and
+  screenshotting it, which looked right. Over the actual game the player
+  character stands at the centre of the clearing — directly under the card's
+  text, making a third figure on a slide whose whole point is two. Nothing saw
+  it until there was a key that switched games and the card came up over a
+  running scene.
 - **A measurement of the director must not be cut short by the game.** Three
   of Acorn Storm's checks jump the clock to the end of the curve and then
   count what spawns; left alone, the bar empties partway through and the game

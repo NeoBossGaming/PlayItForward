@@ -3,36 +3,58 @@
 The first adventure for the **Play It Forward** charity arcade cabinet, built in
 Godot 4.7 for a Raspberry Pi 4/5.
 
-**Right now this project is one game.** Four earlier rounds built eight
+**Right now this project is two games.** Four earlier rounds built eight
 minigames and a whole cabinet shell around them; none of them got finished
-properly, because the work was always split eight ways. So it is stripped back
-to **Riverleap**, which gets polished until it is genuinely good before anything
-else returns. Everything parked is in `main`'s history and listed at the end of
+properly, because the work was always split eight ways. So it was stripped back
+to one, and games return **one at a time, each polished until it is genuinely
+good**: **Riverleap** first, then **Acorn Storm**. Everything still parked is in
+`main`'s history and listed at the end of
 [`docs/GAME_DESIGN.md`](docs/GAME_DESIGN.md).
 
 ```bash
-godot --path .              # play -- boots straight into the game
+godot --path .              # play -- boots straight into Riverleap
 godot --path . --editor     # edit
-tools/run_tests.sh          # headless soak suite
+tools/run_tests.sh          # headless soak suites, one per game
 ```
 
-**Controls** — stick or arrows/WASD to hop left and right. That is the whole
-game.
+There is no menu, by choice. The cabinet shell that picked games is parked, so
+**F4 cycles between them** while you play — a debug key, not a picker, and inert
+in an exported build. To open one directly:
 
-**Debug keys**, in debug builds only: **F5** restarts instantly, **F3** toggles
-slow motion.
+```bash
+godot --path . src/minigames/acorn_storm/acorn_storm.tscn
+```
 
-## Riverleap
+**Debug keys**, in debug builds only: **F5** restarts instantly, **F4** switches
+to the next game, **F3** toggles slow motion.
+
+## Riverleap — *hop*
 
 The sun slept through the dawn, and it has always woken to the river chimes. The
 wind has stopped, so somebody has to cross and ring them by hand.
 
-Five leaves drift downstream and you hop between them for about a minute. A leaf
-that shakes is about to sink — telegraphed three ways at once, because this has
-to read on a scuffed screen from a few feet back. Leaves always come back, so
-the row can never be wiped out, and **you cannot lose**: going in the water
-costs points and a second and a half, never the run. Chimes float past and chain
-up to ×5; splashing costs the chain as well as the points.
+Five leaves ride a river that never ends, and you hop between them for as long
+as you can hold on. A pad that shakes is about to sink — telegraphed three ways
+at once, because this has to read on a scuffed screen from a few feet back. Pads
+always come back, so the row can never be wiped out. Hornets fly at you (jump
+them) and herons dive (jumping will not help; move). The river takes all five
+lives and the run is over.
+
+**Controls** — stick or arrows/WASD plus the button to hop left and right;
+button alone jumps on the spot. That is the whole game.
+
+## Acorn Storm — *dodge, catch*
+
+Stand in a clearing under an oak in a gale. Things fall out of the canopy.
+
+**The vitality bar never stops falling** — slowly at first, fast enough to empty
+in twelve seconds by the end — and sunfruit is the only thing that fills it. A
+hot ticked **ring** on the grass means an acorn is coming; a filled gold **disc**
+means sunfruit. The two differ by shape before colour, so they separate at a
+glance and in greyscale. Acorns aim at where you will be, so standing still goes
+from unwise to fatal.
+
+**Controls** — stick or arrows/WASD to move, button to sprint.
 
 **Fonts** — Press Start 2P and Pixelify Sans, both under the SIL Open Font
 License; the licence files ship beside them in `assets/game/fonts/`.

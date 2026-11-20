@@ -194,6 +194,15 @@ func _ready() -> void:
 	if get_tree().current_scene == self:
 		finished.connect(_on_run_finished)
 		await get_tree().process_frame
+		# She stands at the centre of the clearing, which is exactly where the
+		# card's text goes -- and the controls slide already has two figures
+		# on it, so a third standing between them muddies the one thing it is
+		# teaching. The clearing, the canopy and the wind stay visible behind
+		# the card; only she steps out of the way.
+		#
+		# Not visible from a capture of the card on its own, which is how it
+		# was looked at before there was a key to switch games with.
+		_player.hide()
 		var card := AcornCard.new()
 		add_child(card)
 		await card.play()
@@ -206,6 +215,7 @@ func control_hint() -> String:
 
 func begin() -> void:
 	super.begin()
+	_player.show()
 	_player.unfreeze()
 	_hud.toast("LOOK UP", Color(1, 0.86, 0.55), 1.2)
 	# The first sunfruit lands before the first acorn, so "gold is good" is
