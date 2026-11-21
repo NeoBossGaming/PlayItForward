@@ -69,7 +69,7 @@ Every run ends with a **letter** — D through SS — stamped next to the score.
 It is cut from a shared 0–1000 scale, so a grade means the same thing in every
 game: a par run is a B, a good one an A.
 
-About **one run in five** also turns up a **golden prize** — a golden chime in
+About **one run in ten** also turns up a **golden prize** — a golden chime in
 Riverleap, a shining ball in Acorn Storm. It scores nothing and nothing
 depends on it yet; it is counted and saved, and what it unlocks is still to be
 decided.

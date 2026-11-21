@@ -14,21 +14,29 @@ extends RefCounted
 
 const SPARK := preload("res://assets/game/decor/spark.png")
 
-## Chance that a run contains one at all.
+## Chance that a run contains one at all. The target is **about one run in
+## ten ending with one in your hands.**
 ##
-## Higher than one in five on purpose, because **the target is one in five
-## COLLECTED**. A run that ends before the prize is due never sees it, and a
-## prize that appears still has to be caught, so the realised rate is a good
-## deal lower than this number. Tuned against measured bot runs rather than
-## guessed; see tests/cabinet_test.gd.
-const CHANCE := 0.34
+## It sat at 0.34 for a round, tuned against bot runs that collected under
+## half of what they were offered. That was the wrong instrument: a person who
+## sees SOMETHING BRIGHT and a glowing ball goes and gets it, so a human
+## converts nearly every offer, and Neo caught one on his first run. Bots
+## under-collect, which makes them useless for calibrating a reward whose
+## whole appeal is that a player will always chase it.
+##
+## So this is now set close to the rate it is meant to produce, with only a
+## small allowance for runs that end before the prize is due.
+const CHANCE := 0.13
 
 ## When in a run it may appear, in seconds of play. Starts after the opening
 ## so it is never the first thing a new player meets, and ends early enough
 ## that an ordinary run reaches it -- a window placed past the average run
 ## length would make the prize a reward for being good rather than lucky,
 ## which is the opposite of the point.
-const WINDOW := Vector2(16.0, 65.0)
+## Narrower than it was, because runs are much shorter now: a prize due at
+## 65s in a game whose ordinary run is 60-90s is one that frequently never
+## happens at all, which reads as the feature being broken rather than rare.
+const WINDOW := Vector2(14.0, 45.0)
 
 
 ## The play-time this run's prize should appear at, or -1 for "not this run".

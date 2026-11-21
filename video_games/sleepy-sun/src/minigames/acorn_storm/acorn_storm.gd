@@ -39,10 +39,15 @@ const FIELD := Rect2(46, 106, 388, 132)
 ## arriving. Riverleap arrived at it over two rounds of tuning; only the three
 ## numbers below are this game's.
 ##
-##   t=30s -> 0.10   t=60s -> 0.21   t=120s -> 0.52   t=180s -> 0.70
-const GENTLE_SECONDS := 75.0
+## Steepened twice. The first pass reached full pressure somewhere past three
+## minutes, which meant a player good enough to get there had already had two
+## minutes of the same thing -- "still too easy" was about the SHAPE as much
+## as the ceiling. Full pressure now arrives inside a minute and a half.
+##
+##   t=20s -> 0.13   t=40s -> 0.26   t=60s -> 0.44   t=90s -> 0.64   t=120s -> 0.76
+const GENTLE_SECONDS := 40.0
 const GENTLE_CEILING := 0.26
-const STEEP_TAU := 135.0
+const STEEP_TAU := 70.0
 
 ## Nothing falls while the wind is still getting up. Shorter than Riverleap's
 ## three seconds because there is no scrolling world to accelerate -- what
@@ -124,10 +129,47 @@ const FRUIT_MIN_TRIP := 26.0
 ##
 ##   mean trip, by band:  62  70  75  77  74 px   (it was 62 50 37)
 const FAR_BIAS := 0.8
+## How hard a sunfruit is steered back toward the middle of the clearing when
+## the player is out at an edge.
+##
+## Without it the game HERDS you into a wall and keeps you there. The spot was
+## picked as a uniform direction and then clamped into the field, and clamping
+## maps a whole half-plane of directions onto the boundary: with the player
+## pinned against the right edge, half of every roll got squashed flat, the
+## mean landing x came out at 409 against a field centre of 240, and **every**
+## accepted spot was in the outer quarter of the field. Nothing ever drew play
+## back out, so one drift to the edge and the rest of the run happened there.
+##
+## Two separate fixes. Candidates outside the field are now REJECTED and
+## resampled rather than clamped, which stops the pile-up; and this pulls the
+## direction inward on top of that, which is what actually brings the player
+## home. Zero in the middle, so it is a correction and not a leash.
+const CENTRE_PULL := 1.5
+## The golden prize lands inside this fraction of an ordinary sunfruit's
+## reachable range, and falls this much slower. It is a gift; the roll is what
+## makes it rare.
+const PRIZE_REACH := 0.55
+const PRIZE_FALL_BONUS := 1.4
+## Candidate spots tried before falling back. Higher than the eight it was,
+## because rejecting out-of-field candidates throws some away -- near a corner
+## a good fraction of rolls miss, and the fallback is much worse than a retry.
+const FRUIT_ATTEMPTS := 14
 
-const ACORN_INTERVAL := Vector2(1.25, 0.36)
+## The late game is harder through EXECUTION rather than arithmetic: more to
+## dodge, thrown faster, aimed tighter, and more of it standing between the
+## player and the fruit they need. The drain and the fruit's value are
+## deliberately untouched, so the supply still outpaces the drain and a
+## flawless player still cannot be killed by the maths alone -- that decision
+## stands from last round.
+##
+## Six at once was tried and backed off: with that many in the air there was
+## no safe route to a sunfruit, chasing them stopped paying for itself, and
+## the game slid back toward "just dodge" -- the exact failure the draining
+## bar was built to fix. Density has a ceiling set by the fruit having to
+## remain worth going for.
+const ACORN_INTERVAL := Vector2(1.10, 0.26)
 const FRUIT_INTERVAL := Vector2(2.10, 0.92)
-const ACORN_AT_ONCE := Vector2(1.0, 4.0)
+const ACORN_AT_ONCE := Vector2(1.0, 5.0)
 
 ## The first acorns come singly, slowly, and from further off. Learning that
 ## gold is good should not cost a life, so for the first stretch the bad half
@@ -145,7 +187,7 @@ const DEBUT_FALL_BONUS := 1.38
 ## inner radius never went below the hit radius, which meant a player who
 ## never moved could not be hit at all -- the soak suite caught it by running
 ## a motionless bot for 45 seconds and reporting zero hits.
-const AIM_JITTER := Vector2(74.0, 18.0)
+const AIM_JITTER := Vector2(74.0, 14.0)
 ## And the lead is what stops running in a straight line from working: late on,
 ## most of where you are going is where the acorn is already aimed.
 const AIM_LEAD := Vector2(0.25, 0.85)
@@ -169,7 +211,14 @@ const COMBO_MAX := 4
 ## more than its first two.
 const SCORE_PER_SECOND := Vector2(6.0, 26.0)
 ## A good run. Endless, so this is a DURATION; see normalised_score().
-const PAR_SECONDS := 120.0
+##
+## **Moved down with the difficulty, and that coupling is easy to miss.** The
+## letter on the results card is cut from run length against this number, so
+## making the game harder without touching it silently regrades everybody: at
+## par 120 a strong 90s run came out a C, which reads as the rank being broken
+## rather than as the game being hard. Anything that changes how long a run
+## lasts has to move this too.
+const PAR_SECONDS := 75.0
 
 const Z_PLAYER := 20
 
@@ -411,12 +460,22 @@ func _tick_golden(delta: float) -> void:
 	if play_time() < _golden_at:
 		return
 	_golden_at = -1.0
-	var seconds := fall_time(false)
-	var limit := maxf(reach(seconds) * REACH_MARGIN, FRUIT_MIN_TRIP + 6.0)
-	var spot := (_player.position
-			+ Vector2.RIGHT.rotated(randf() * TAU) * randf_range(FRUIT_MIN_TRIP, limit)) \
-			.clamp(FIELD.position, FIELD.end)
-	_drop(Faller.Kind.PRIZE, spot, seconds)
+	# Closer and slower than an ordinary sunfruit. The rarity is the gate --
+	# the prize should not ALSO be a dexterity test, and at a full fruit's
+	# distance a bot handed one caught it once in four tries. "Something
+	# bright appeared and I could not get to it" is a worse non-event than
+	# never seeing one.
+	var seconds := fall_time(false) * PRIZE_FALL_BONUS
+	var limit := maxf(reach(seconds) * REACH_MARGIN * PRIZE_REACH, FRUIT_MIN_TRIP + 6.0)
+	var spot := _player.position
+	for attempt in FRUIT_ATTEMPTS:
+		var candidate := _player.position \
+				+ Vector2.RIGHT.rotated(randf() * TAU) * randf_range(FRUIT_MIN_TRIP, limit)
+		# Rejected, not clamped, like every other placement -- see CENTRE_PULL.
+		if FIELD.has_point(candidate):
+			spot = candidate
+			break
+	_drop(Faller.Kind.PRIZE, spot.clamp(FIELD.position, FIELD.end), seconds)
 	_hud.toast("SOMETHING BRIGHT", Color(1, 0.9, 0.5), 1.1)
 
 
@@ -448,17 +507,22 @@ func _spawn_fruit() -> void:
 	var limit := maxf(reach(seconds) * REACH_MARGIN, FRUIT_MIN_TRIP + 6.0)
 	var best := Vector2.ZERO
 	var best_clearance := -1.0
-	for attempt in 8:
-		var angle := randf() * TAU
+	var inward := FIELD.get_center() - _player.position
+	# 0 in the middle of the clearing, approaching 1 in a corner.
+	var off_centre := clampf(inward.length() / (FIELD.size.length() * 0.5), 0.0, 1.0)
+	for attempt in FRUIT_ATTEMPTS:
+		var dir := Vector2.RIGHT.rotated(randf() * TAU)
+		if off_centre > 0.02:
+			dir = (dir + inward.normalized() * CENTRE_PULL * off_centre).normalized()
 		# Directed rather than uniform: the exponent falls from 1 to 0.4
 		# across the run, which drags the mean roll from the middle of the
 		# reachable range out toward its edge. See FAR_BIAS.
 		var roll := pow(randf(), 1.0 - FAR_BIAS * _intensity)
-		var distance := lerpf(FRUIT_MIN_TRIP, limit, roll)
-		var spot := (_player.position + Vector2.RIGHT.rotated(angle) * distance) \
-				.clamp(FIELD.position, FIELD.end)
-		# The clamp can drag a spot back toward the player, or onto a wall; if
-		# it moved far, this candidate is not the one that was asked for.
+		var spot := _player.position + dir * lerpf(FRUIT_MIN_TRIP, limit, roll)
+		# REJECTED, not clamped. See CENTRE_PULL: clamping is what put every
+		# sunfruit against the wall whenever the player was near one.
+		if not FIELD.has_point(spot):
+			continue
 		if _player.position.distance_to(spot) < FRUIT_MIN_TRIP:
 			continue
 		var clearance := _clearance(spot, seconds)
@@ -495,7 +559,15 @@ func _spawn_acorn() -> void:
 		# attempts -- the tight ones -- still win whenever they can.
 		var spread := jitter * (1.0 + 0.09 * float(attempt))
 		var offset := Vector2.RIGHT.rotated(randf() * TAU) * spread * sqrt(randf())
-		var spot := (predicted + offset).clamp(FIELD.position, FIELD.end)
+		var spot := predicted + offset
+		# Rejected rather than clamped, for the reason in CENTRE_PULL -- an
+		# acorn aimed at a player near a wall used to stack on that wall.
+		# No centre pull, though: acorns are supposed to come to you.
+		if not FIELD.has_point(spot):
+			spot = spot.clamp(FIELD.position, FIELD.end) if attempt == AIM_ATTEMPTS - 1 \
+					else Vector2.INF
+		if not spot.is_finite():
+			continue
 		if not escape_exists(seconds, spot):
 			continue
 		# A ring drawn on top of a disc says "danger" and "take it" about the

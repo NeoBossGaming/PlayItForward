@@ -220,19 +220,19 @@ func _test_the_golden_prize_is_rare_but_real() -> void:
 	_check(absf(rate - Golden.CHANCE) < 0.02,
 			"the prize was offered on %.0f%% of runs against the %.0f%% it "
 			% [rate * 100.0, Golden.CHANCE * 100.0] + "declares")
-	_check(rate > 0.2 and rate < 0.5,
+	_check(rate > 0.05 and rate < 0.25,
 			"an offer rate of %.0f%% cannot land near one collected run in "
-			% (rate * 100.0) + "five: too low and nobody sees one, too high "
-			+ "and it stops being rare")
+			% (rate * 100.0) + "ten: too low and nobody ever sees one, too "
+			+ "high and it stops being a prize")
 	_check(_window_breaks == 0,
 			"%d prizes were scheduled outside the window they declare"
 			% _window_breaks)
 	# The window has to sit inside a run an ordinary player actually reaches.
 	# A prize due at 90s in a game whose average run is 85s is a reward for
 	# being good, which is the opposite of what a lucky drop is for.
-	_check(Golden.WINDOW.y < 80.0,
+	_check(Golden.WINDOW.y < 55.0,
 			"the prize can be scheduled as late as %.0fs, past the point an "
-			% Golden.WINDOW.y + "ordinary run reaches")
+			% Golden.WINDOW.y + "ordinary run reaches -- runs are 60-90s now")
 	_check(Golden.WINDOW.x > 8.0,
 			"the prize can arrive %.0fs in, before the player has met the "
 			% Golden.WINDOW.x + "ordinary version of it")

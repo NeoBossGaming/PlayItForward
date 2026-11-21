@@ -37,6 +37,7 @@ const Z_BODY := 40
 ## the cabinet should feel fair rather than exacting.
 const HIT_RADIUS := 14.0
 const CATCH_RADIUS := 18.0
+const PRIZE_RADIUS := 24.0
 
 ## Where the body starts. The canopy's underside, so everything falls out of
 ## the leaves rather than out of nowhere -- which also means a thing landing
@@ -102,7 +103,12 @@ func seconds_left() -> float:
 
 
 func radius() -> float:
-	return HIT_RADIUS if kind == Kind.ACORN else CATCH_RADIUS
+	match kind:
+		Kind.ACORN: return HIT_RADIUS
+		# The rare one is forgiving. Rarity is what makes it a prize; missing
+		# by two pixels should not be what makes it a story.
+		Kind.PRIZE: return PRIZE_RADIUS
+		_: return CATCH_RADIUS
 
 
 func _process(delta: float) -> void:

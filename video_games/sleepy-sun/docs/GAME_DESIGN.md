@@ -307,10 +307,18 @@ decided yet; quietly making it worth points would be deciding.
 
 Two things that look like details and are not:
 
-- **"One in five" means collected, not offered.** A run can end before the
-  prize is due, and a prize that falls still has to be caught, so the roll sits
-  at 34% and the measured rate lands near 15%. Tuned against bot runs rather
-  than set to 0.2 and hoped over.
+- **"One in ten" means collected, not offered**, and bots are the wrong
+  instrument for measuring it. The roll sat at 34% for a round because bots
+  collected under half of what they were offered; a person who sees SOMETHING
+  BRIGHT and a glowing ball simply goes and gets it, and Neo caught one on his
+  first run. A reward whose whole appeal is that a player will always chase it
+  cannot be calibrated against players who do not. The roll is now 0.13, close
+  to the rate it is meant to produce, with a small allowance for runs that end
+  before the prize is due.
+- **It is a gift, not a dexterity test.** It lands inside 55% of a sunfruit's
+  reachable range, falls 40% slower, and has a wider catch radius. The roll is
+  what makes it rare. "Something bright appeared and I could not get to it" is
+  a worse non-event than never seeing one at all.
 - **It must be obvious in the air, not on the ground.** In Acorn Storm it
   shares the ordinary **filled-disc** mark rather than getting a third shape:
   the ground grammar is two symbols and a third would make the player learn
@@ -1024,6 +1032,30 @@ field. Biasing *within* the circle does what enlarging it could not.
 Mean trip now runs **66 74 78 77**, and `tests/acorn_test.gd` asserts that the
 second half of a run beats the first.
 
+### A safety clamp quietly herded the player into the wall
+
+The second distribution bug in this game, and the same shape as the first.
+
+A sunfruit's spot was a uniform direction **clamped** into `FIELD`. A clamp
+maps a whole half-plane of directions onto the boundary, so with the player
+against the right wall: half of every roll got flattened, the mean landing x
+came out at **409 against a field centre of 240**, and **every** accepted spot
+was in the outer quarter of the field. One drift to an edge and the rest of
+the run happened there -- which is exactly how Neo described it.
+
+Two fixes, because they do different jobs. Candidates outside the field are
+now **rejected and resampled** rather than clamped, which stops the pile-up;
+and the direction is **pulled toward the centre** in proportion to how far
+off-centre the player is (`CENTRE_PULL`), which is what actually brings them
+back. Rejection alone would only stop the game pushing outward.
+
+Worth generalising: **a clamp is not a neutral safety net.** It does not drop
+the out-of-range cases, it piles them all on the limit, and the result is a
+distribution with a spike exactly where nobody looks. Both of this game's
+distribution bugs -- the shrinking bubble and this one -- were invisible for
+the same reason: every test measured a *distance from the player*, and none
+measured *where on the field things actually land*.
+
 ### Fall time is the number everything hangs off
 
 `lerp(1.60, 0.95, intensity)` seconds from the canopy to the ground.
@@ -1117,11 +1149,25 @@ scrolled would read as a conveyor belt. Everything that moves here is **wind**:
 
 Bots at three reaction times, five runs each, chasing fruit and dodging:
 
-| reaction | mean | worst run |
-|---|---|---|
-| 133 ms | 200 s+ (never died inside the cap) | 200 s+ |
-| 216 ms | 188 s | 175 s |
-| 300 ms | 123 s | 115 s |
+Steepened a second time, after "still too easy": full pressure now arrives
+inside 90 s rather than past three minutes, and the ceiling went up with it --
+five acorns in the air instead of four, thrown faster and aimed tighter.
+
+`DRAIN` and `FRUIT_GAIN` were deliberately **not** touched, so the supply
+still outpaces the drain and a flawless player still cannot be killed by
+arithmetic. The extra difficulty is execution: more to dodge, and more of it
+standing between you and the fruit you need.
+
+Six at once was tried and backed off. At that density there was no safe route
+to a sunfruit, chasing stopped paying for itself, and the game slid back
+toward "just dodge" -- the exact failure the draining bar exists to fix.
+**Density has a ceiling set by the fruit having to stay worth going for.**
+
+| reaction | mean | worst run | before |
+|---|---|---|---|
+| 133 ms | 92 s | 80 s | 200 s+ (never died) |
+| 216 ms | 70 s | 59 s | 188 s |
+| 300 ms | 61 s | 48 s | 123 s |
 
 A 300 ms player is a stranger who has not worked out the controls, and
 two minutes is a real go for a credit — close enough to Riverleap's measured
@@ -1144,6 +1190,22 @@ Two notes on measuring it, both of which cost a round:
   millisecond. The lag models reaction, not reading a field, so treat these as
   an upper bound on an equivalent human.
 
+### Par moves with the difficulty, and that coupling is easy to miss
+
+`PAR_SECONDS` is what the letter on the results card is cut from. Making the
+game harder without moving it silently regrades everybody: at the old par of
+120 s a strong 90 s run came out a **C**, which reads as the rank being
+broken rather than as the game being hard.
+
+| run | par 120 | par 75 |
+|---|---|---|
+| 60 s | C | C |
+| 90 s | **C** | B |
+| 120 s | B | **A** |
+| 150 s | B | **S** |
+
+**Anything that changes how long a run lasts has to move this too.**
+
 ### Scoring
 
 70 per sunfruit at ×1, up to ×4 on a chain of twelve; a hit costs 60 and the
@@ -1151,7 +1213,7 @@ chain. Survival pays `lerp(6, 26, intensity)` per second, so the last half
 minute of a long run is worth more than its first two.
 
 The reported number is the sum. The **normalised** 0–1000 that goes alongside
-it is computed from how long the bar was held up, against a 120 s par — see
+it is computed from how long the bar was held up, against a 75 s par — see
 §5, *Endless games are compared on how long you lasted*.
 
 ### What the pictures caught that the tests could not
@@ -1331,6 +1393,22 @@ Eight notes that cost real time to learn:
   windows yielded eight samples, and the first instinct -- top the player's
   lives up so they survive -- changed nothing, because lives were never the
   limit. Find the real limit before working around the wrong one.
+- **Lag models reacting, not tracking -- and a lagged bot cannot stand
+  still.** Four rounds went into a flaky "can a prize be caught" check that
+  came out 1/4, 2/4, 4/4 at random. The prize was fine. A bot with 216 ms of
+  lag gets its "stop" command 23 px after it should have stopped, and its
+  correction equally late, so it orbits a 24 px catch radius and collection --
+  which is tested on the landing frame alone -- becomes a coin flip. It was
+  measured within **2.1 px** of a prize collecting nothing. A person tracks a
+  falling object and waits under it. Lag belongs on reactions to new
+  information; whether a slow player can get there in time is a separate
+  question that `reach()` already answers.
+- **Do not route a test through a heuristic it is not testing.** The same
+  check also failed because the chase bot *abandoned* the prize in its last
+  half second: margin shrinks as a target nears the ground, so an ordinary
+  sunfruit out-ranked it at the worst moment. Three attempts went into fixing
+  the bot before the obvious point landed -- the bot was never the thing under
+  test, and the check now walks straight at the prize.
 - **Ask a guarantee at the moment it is made.** The cornering check started
   out sampling every frame and reported dead ends on a game that had none: an
   acorn a fifth of a second from landing leaves nobody anywhere to go, by

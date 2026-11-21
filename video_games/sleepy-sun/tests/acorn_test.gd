@@ -43,6 +43,11 @@ const MAX_SECONDS := 200.0
 const REACTIONS := [133, 216, 300]
 ## Runs per reaction time. One of anything in a game this random is an anecdote.
 const TRIALS := 5
+## How close the bot gets before it stops walking. Must be under the catch
+## radius, or it parks just outside what it was aiming for.
+const ARRIVE := 9.0
+## True once the bot has reached its target and is holding position on it.
+var _arrived: bool = false
 
 ## What the last bot run did, so a survival number that looks wrong can be
 ## explained rather than guessed at.
@@ -78,6 +83,7 @@ func _ready() -> void:
 	_step("the launch is quiet");             await _test_the_launch_is_quiet()
 	_step("gold before red");                 await _test_gold_before_red()
 	_step("fruit is reachable");              await _test_fruit_is_always_reachable()
+	_step("fruit leads you off the wall");  await _test_fruit_leads_off_the_wall()
 	_step("never cornered");                  await _test_there_is_always_somewhere_to_stand()
 	_step("marks do not stack");              await _test_marks_do_not_stack()
 	_step("the drain");                       await _test_the_bar_drains_gently_then_not()
@@ -85,6 +91,7 @@ func _ready() -> void:
 	_step("a run must end");                  await _test_a_run_must_end()
 	_step("ignoring fruit is fatal");         await _test_ignoring_fruit_is_fatal()
 	_step("the opening is survivable");       await _test_the_opening_is_survivable()
+	_step("the golden can be caught"); await _test_the_golden_can_be_caught()
 	_step("the opening card");                await _test_the_opening_card()
 	_step("")
 
@@ -320,6 +327,76 @@ func _test_fruit_is_always_reachable() -> void:
 			"%d of %d sunfruit landed out of walking reach" % [failures, checked])
 	print("  reach       %d sunfruit, worst used %.0f%% of the walk" \
 			% [checked, worst * 100.0])
+
+
+## A player at the edge of the clearing has to be given a reason to leave it.
+##
+## The spot used to be a uniform direction CLAMPED into the field, and a clamp
+## maps a whole half-plane of directions onto the boundary. Pinned against the
+## right wall, every accepted sunfruit landed in the outer quarter of the
+## field and the mean landing x was 409 against a centre of 240 -- so a single
+## drift to an edge kept the rest of the run there. Neo found it by playing;
+## no check here could have, because every test measured how FAR fruit landed
+## from the player and none measured WHERE on the field it landed.
+func _test_fruit_leads_off_the_wall() -> void:
+	var bounds: Rect2 = field()
+	var centre := bounds.get_center()
+	# Each wall in turn, plus a corner, which is the worst case for a clamp.
+	var spots: Array[Vector2] = [
+		Vector2(bounds.position.x + 6.0, centre.y),
+		Vector2(bounds.end.x - 6.0, centre.y),
+		Vector2(centre.x, bounds.position.y + 4.0),
+		Vector2(centre.x, bounds.end.y - 4.0),
+		Vector2(bounds.end.x - 6.0, bounds.end.y - 4.0),
+	]
+	var worst_outward := -999.0
+	var worst_where := ""
+	for pinned: Vector2 in spots:
+		var game: Node = await _start()
+		game.elapsed = launch_over() + 45.0
+		var seen: Dictionary = {}
+		var total := Vector2.ZERO
+		var count := 0
+		var played := 0.0
+		while played < 24.0:
+			await _frames(1)
+			game._vitality = 1.0
+			# Held against the wall, which is the state being tested: the
+			# player cannot be relied on to walk back by themselves, and the
+			# complaint was precisely that nothing invited them to.
+			game._player.position = pinned
+			game._player.velocity = Vector2.ZERO
+			played += get_process_delta_time()
+			for child in game._fallers.get_children():
+				var faller := child as Faller
+				if faller == null or seen.has(faller.get_instance_id()):
+					continue
+				seen[faller.get_instance_id()] = true
+				if faller.kind != Faller.Kind.SUNFRUIT:
+					continue
+				total += faller.position
+				count += 1
+		_drop(game)
+		_check(count > 8,
+				"only %d sunfruit measured against one wall" % count)
+		if count <= 0:
+			continue
+		var mean: Vector2 = total / float(count)
+		# Positive means the average fruit sits further OUT than the player --
+		# the game actively holding them against the wall.
+		var outward := (pinned - centre).normalized().dot(mean - pinned)
+		if outward > worst_outward:
+			worst_outward = outward
+			worst_where = "%.0f,%.0f" % [pinned.x, pinned.y]
+	_check(worst_outward < 0.0,
+			"pinned at %s the average sunfruit landed %.0fpx FURTHER from the "
+			% [worst_where, worst_outward] + "middle than the player was -- "
+			+ "the clearing is herding them into the wall")
+	_check(worst_outward < -12.0,
+			"the average sunfruit only pulls the player %.0fpx back toward "
+			% -worst_outward + "the middle, which is not enough to be a "
+			+ "reason to move")
+	print("  edges       worst wall pulls %.0fpx inward" % -worst_outward)
 
 
 ## Being cornered is this game's version of Riverleap's whole row going under:
@@ -609,20 +686,84 @@ func _test_the_opening_is_survivable() -> void:
 					+ "an average")
 	print("  difficulty  " + line.strip_edges())
 
-	# Measured across every bot run the suite has driven, which is the only
-	# honest way to state "about one run in five": the roll is 34%, and a run
-	# that ends before the prize is due or fails to reach it takes that down.
+	# Reported, NOT asserted. At a 13% roll over seventeen runs, "at least one
+	# was caught" fails by chance about one run in ten -- and it did, before
+	# the rate was even lowered. A test that fails on the dice is worse than
+	# no test: it trains everyone to re-run the suite. Collectability is
+	# asserted deterministically in _test_the_golden_can_be_caught() instead,
+	# and this is left as a measurement.
 	var rate := float(_golden_runs) / float(maxi(_runs, 1))
 	_check(_runs >= 15,
 			"only %d bot runs to measure the prize rate over" % _runs)
-	_check(_golden_runs > 0,
-			"no bot run in %d ever caught a golden prize -- it may be "
-			% _runs + "unreachable, or never scheduled inside a real run")
-	_check(rate < 0.6,
-			"%.0f%% of runs ended with a golden, which is not rare"
-			% (rate * 100.0))
-	print("  golden      caught in %d of %d bot runs (%.0f%%)"
-			% [_golden_runs, _runs, rate * 100.0])
+	print("  golden      caught in %d of %d bot runs (%.0f%%, roll is %.0f%%)"
+			% [_golden_runs, _runs, rate * 100.0, Golden.CHANCE * 100.0])
+
+
+## A prize that is offered must be gettable. Forced rather than rolled, so the
+## check is about whether the thing WORKS rather than about whether it turned
+## up -- the roll is deliberately rare, and rarity and correctness are two
+## different questions that should not share one assertion.
+func _test_the_golden_can_be_caught() -> void:
+	var caught := 0
+	var trials := 4
+	for trial in trials:
+		var game: Node = await _start()
+		game.elapsed = launch_over() + 20.0
+		game._golden_at = 0.0           # due immediately
+		# No reaction lag here, and that is the point. A lagged bot cannot
+		# stand still: its "stop" arrives 0.216s after it was on the spot, by
+		# which time it has walked 23px past, and the correction is late too,
+		# so it oscillates either side of a 24px catch radius and collects
+		# roughly half the time. A person tracks a falling object and waits
+		# under it; the lag models reacting to NEW information, not continuous
+		# tracking of something already being watched.
+		#
+		# Whether a lagged player can get there in time is a different
+		# question, and reach() already answers it by subtracting a full
+		# reaction from every fall.
+		var aim := Vector2.ZERO
+		var played := 0.0
+		while played < 6.0:
+			await _frames(1)
+			game._vitality = 1.0        # not a survival test
+			# And no acorns. Acorns aim at the player, so a bot spends the
+			# whole window fleeing one and never closes on the prize -- which
+			# made this measure "can a bot catch a prize WHILE dodging",
+			# a harder and much vaguer question than the one being asked.
+			game._acorn_timer = 999.0
+			played += get_process_delta_time()
+			# Walks STRAIGHT at the prize, rather than going through
+			# _decide(). The question is "if a player goes for this, can they
+			# get it", and routing it through the full chase heuristic
+			# imported every quirk of that heuristic instead: it abandoned
+			# the prize in its last half second, because margin shrinks as a
+			# target nears the ground and an ordinary sunfruit out-ranked it.
+			# Three rounds of bot surgery chased that before the obvious
+			# point landed -- the bot was never the thing under test.
+			aim = _toward_prize(game)
+			_steer(aim)
+		caught += 1 if game._goldens > 0 else 0
+		_release_all()
+		_drop(game)
+	_check(caught == trials,
+			"a bot walking straight at a prize it was handed caught %d of "
+			% caught + "%d -- it is landing somewhere unreachable, or not "
+			% trials + "landing at all")
+	print("  golden      caught %d of %d when offered one" % [caught, trials])
+
+
+## Straight at the prize, stopping once on it. Nothing else.
+func _toward_prize(game: Node) -> Vector2:
+	for child in game._fallers.get_children():
+		var faller := child as Faller
+		if faller == null or faller.resolved or faller.kind != Faller.Kind.PRIZE:
+			continue
+		var offset: Vector2 = faller.position - game._player.position
+		# Stand still once under it and WAIT. Collection is tested on the
+		# landing frame alone, so a bot still walking at that instant misses
+		# what it is standing on -- measured, within 2.1px and no pickup.
+		return offset.normalized() if offset.length() > ARRIVE else Vector2.ZERO
+	return Vector2.ZERO
 
 
 ## The opening card: the lesson, then 3-2-1-GO.
@@ -693,6 +834,7 @@ func _bot(reaction_ms: int, chase: bool, limit: float) -> float:
 	var lag := float(reaction_ms) / 1000.0
 	var decisions: Array = []           # [due_time, direction]
 	_target = 0
+	_arrived = false
 	var clock := 0.0
 	var aim := Vector2.ZERO
 	# An Array, not a bool. GDScript lambdas capture locals by VALUE, so
@@ -765,10 +907,26 @@ func _decide(game: Node, chase: bool) -> Vector2:
 				fruit_at = faller.position
 				next_target = faller.get_instance_id()
 
+	if next_target != _target:
+		_arrived = false
 	_target = next_target if best_margin > 0.0 else 0
 	var want := Vector2.ZERO
 	if best_margin > 0.0:
-		want = (fruit_at - standing).normalized()
+		# Arrive and then STAY arrived, with hysteresis. A person walks under
+		# a falling thing and waits; a bot that re-decides every frame walks
+		# through it, is told 0.216s late to come back, overshoots, and
+		# orbits at roughly speed x lag. Measured, it got within 2.1px of a
+		# prize and still collected nothing -- because collection is tested
+		# on the LANDING frame alone, and where an orbiting bot happens to be
+		# at that instant is a coin flip. The flakiness was the harness, not
+		# the game.
+		var to_fruit := fruit_at - standing
+		var leave := ARRIVE * 2.2 if _arrived else ARRIVE
+		if to_fruit.length() > leave:
+			want = to_fruit.normalized()
+			_arrived = false
+		else:
+			_arrived = true
 	elif threat == Vector2.ZERO:
 		# Nothing to do: drift back toward the middle, where more of the field
 		# is within reach of whatever comes next.
