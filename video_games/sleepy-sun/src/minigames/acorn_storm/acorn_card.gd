@@ -41,8 +41,13 @@ func _faller(kind: Faller.Kind, at: Vector2) -> Faller:
 
 func _slide_controls() -> void:
 	slide_title("ACORN STORM", "stand under the oak. do not stand still.")
-	build_row(92.0, true, "STICK", "move", &"jump_right")
-	build_row(148.0, false, "BUTTON", "sprint", &"jump_up", true)
+	# High on the card, clear of the player. She starts at the centre of the
+	# clearing and is visible through the backdrop, so rows at the old 92/148
+	# ran straight through her -- which is why she was hidden for a round.
+	# Moving the text is the better half of that trade: the scene behind the
+	# card is meant to be seen.
+	build_row(74.0, true, "STICK", "move", &"jump_right")
+	build_row(122.0, false, "BUTTON", "sprint", &"jump_up", true)
 
 
 ## The one that matters. Both marks on screen at once, because the lesson is

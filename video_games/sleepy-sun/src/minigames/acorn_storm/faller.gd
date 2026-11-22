@@ -139,10 +139,13 @@ func _apply(t: float) -> void:
 	_body.scale = Vector2.ONE * lerpf(1.45, 0.9, t)
 	_body.rotation = t * (5.5 if kind == Kind.ACORN else 2.2)
 	if kind == Kind.PRIZE:
-		# Bigger, spinning and pulsing all the way down, so it is obviously
-		# not a sunfruit long before the mark could say so. At the same size
-		# as the ordinary pickup it read as a slightly whiter one.
-		_body.scale *= 1.45 + sin(life * 11.0) * 0.16
+		# Only slightly bigger. It used to be 1.45x, back when the prize was
+		# a white star and the goal was for it to be unmistakable; it is now
+		# a golden ACORN and the goal is the opposite -- telling it from an
+		# ordinary one is meant to be part of the challenge. Size is a strong
+		# tell, so most of it goes, leaving the gold, the glint and a slow
+		# pulse to carry the difference for a player who looks.
+		_body.scale *= 1.15 + sin(life * 9.0) * 0.1
 		_mark.modulate = Color(1.0, 0.98, 0.78)
 
 	# The ring tightening onto the spot IS the countdown; nothing else on

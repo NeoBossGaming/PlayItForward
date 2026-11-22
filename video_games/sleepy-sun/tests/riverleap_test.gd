@@ -57,6 +57,21 @@ static func _const(name: String) -> Variant:
 ## the same person rather than to two different imagined players.
 const REACTION := 0.25
 
+## Reaction times the difficulty is measured at, in milliseconds: a quick
+## player, an average one, and somebody who has never seen the cabinet. The
+## same three Acorn Storm uses, so the two games are described in the same
+## terms.
+const REACTIONS := [133, 216, 300]
+const TRIALS := 4
+## Cap on a single difficulty run. Deliberately shorter than MAX_SECONDS
+## above -- twelve runs at that length is minutes of wall clock for a number
+## that is already clear by two and a half.
+const DIFFICULTY_CAP := 150.0
+
+var _bot_lag: float = 0.0
+var _bot_clock: float = 0.0
+var _bot_queue: Array = []
+
 func _ready() -> void:
 	await _test_contract()
 	await _test_scrollers_agree()
@@ -75,6 +90,7 @@ func _ready() -> void:
 	await _test_the_opening_is_survivable()
 	await _test_a_run_must_end()
 	await _test_drowning_is_not_escapable()
+	await _test_how_hard_it_is()
 	await _test_the_river_comes_for_you()
 	await _test_your_own_pad_is_always_leavable()
 
@@ -740,6 +756,35 @@ func _time_card() -> float:
 	return seconds
 
 
+## How long a run actually lasts, by reaction time.
+##
+## Riverleap had no such measurement for four rounds: its only bot reacted on
+## the frame it saw something, so "is this too steep" could not be answered
+## with a number and every tuning pass was a guess. Acorn Storm has had this
+## since it shipped, which is why its curve could be argued about honestly.
+func _test_how_hard_it_is() -> void:
+	var line := ""
+	for reaction: int in REACTIONS:
+		var total := 0.0
+		var worst := 9999.0
+		for trial in TRIALS:
+			var game := (load(SCENE) as PackedScene).instantiate() as MiniGame
+			var run := await _play(game, DIFFICULTY_CAP, true, false,
+					float(reaction) / 1000.0)
+			total += float(run["survived"])
+			worst = minf(worst, float(run["survived"]))
+			game.free()
+			await _frames(2)
+		var mean := total / float(TRIALS)
+		line += "%dms %.0fs (worst %.0fs)   " % [reaction, mean, worst]
+		if reaction == REACTIONS[-1]:
+			_check(mean >= OPENING_FLOOR,
+					"a %dms player held on %.0fs on average, under the %.0fs "
+					% [reaction, mean, OPENING_FLOOR] + "a stranger should "
+					+ "get for their credit")
+	print("  difficulty  " + line.strip_edges())
+
+
 ## The river has to come for YOU, and more so as it goes. Uniform selection
 ## meant most of a run was other pads sinking somewhere else, which is pretty
 ## and not very threatening.
@@ -1022,7 +1067,12 @@ func _bot_step(game: MiniGame) -> void:
 			or bool(game.get("_ending")):
 		return
 
-	var direction := _bot_decide(game)
+	# Decided now, acted on `_bot_lag` later. With no lag the queue pops on
+	# the same frame, so a zero-lag run is exactly the bot this replaced.
+	_bot_queue.append([_bot_clock + _bot_lag, _bot_decide(game)])
+	var direction := BOT_WAIT
+	while not _bot_queue.is_empty() and float(_bot_queue[0][0]) <= _bot_clock:
+		direction = _bot_queue.pop_front()[1]
 	if direction == BOT_WAIT:
 		return
 	if direction != 0:
@@ -1101,8 +1151,12 @@ func _lane_has_hornet(hazards: Array, lane: int) -> bool:
 
 ## Drives a real run to its end or to `limit`. With `skilled` false nothing
 ## touches the controls, which is how the ending gets tested.
+## `lag` is the bot's reaction time in seconds. At 0 it decides on the same
+## frame it sees something, which measures a game a machine plays rather than
+## the one a person does -- and until now that was the only Riverleap bot
+## there was, so this game's difficulty had never actually been measured.
 func _play(game: MiniGame, limit: float, skilled: bool,
-		watch_corners := false) -> Dictionary:
+		watch_corners := false, lag := 0.0) -> Dictionary:
 	var received: Array = []
 	game.finished.connect(func(r: MiniGameResult) -> void: received.append(r))
 	add_child(game)
@@ -1110,11 +1164,15 @@ func _play(game: MiniGame, limit: float, skilled: bool,
 	game.begin()
 
 	_bot_phase = 0
+	_bot_lag = lag
+	_bot_queue.clear()
+	_bot_clock = 0.0
 	var cornered := 0
 	var clock := 0.0
 	var was_hopping := false
 	_since_landing = -1.0
 	while received.is_empty() and clock < limit:
+		_bot_clock = clock
 		if skilled:
 			_bot_step(game)
 		var hopping := bool(game.get("_hopping"))

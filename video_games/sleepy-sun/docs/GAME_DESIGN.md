@@ -319,13 +319,20 @@ Two things that look like details and are not:
   reachable range, falls 40% slower, and has a wider catch radius. The roll is
   what makes it rare. "Something bright appeared and I could not get to it" is
   a worse non-event than never seeing one at all.
-- **It must be obvious in the air, not on the ground.** In Acorn Storm it
-  shares the ordinary **filled-disc** mark rather than getting a third shape:
-  the ground grammar is two symbols and a third would make the player learn
-  one in the half second they have to act. What is *falling* carries the
-  difference -- white-hot core, hard gold rim, long beams, and bigger than the
-  ordinary pickup. Drawn at the same size it read as "a slightly whiter
-  sunfruit", which is the one thing it must not be.
+- **In Acorn Storm, telling it apart is now part of the game.** It began as a
+  white-hot star, unmistakable in the air -- and Neo asked for the opposite:
+  *"make the acorns kinda hard to distinguish from the golden ball so that's
+  also part of the challenge (but not too hard)."* So the prize is a **golden
+  acorn**: the same silhouette as the thing that hurts you, in gold, with a
+  four-point glint and only a slight size difference.
+
+  The ambiguity is deliberately confined to the **air**. On the ground the
+  marks still differ by shape -- hot ticked ring means move, filled disc means
+  take it -- so a player who checks always gets a straight answer and the game
+  never lies to them. What the change costs is a glance, which is exactly the
+  challenge that was asked for. A third mark shape would have crossed the
+  line, because it would make the player learn a new symbol in the half second
+  they have to act.
 
 ### Endless games are compared on how long you lasted
 
@@ -1147,31 +1154,34 @@ scrolled would read as a conveyor belt. Everything that moves here is **wind**:
 
 ### How hard it actually is
 
+Raised twice more after shipping, both times on "still too easy".
+
+**The curve first.** Full pressure now arrives inside 90 s rather than past
+three minutes, with five acorns in the air instead of four, thrown faster and
+aimed tighter. Six at once was tried and backed off: at that density there was
+no safe route to a sunfruit, chasing stopped paying for itself, and the game
+slid back toward "just dodge" -- the exact failure the draining bar exists to
+fix. **Density has a ceiling set by the fruit having to stay worth going for.**
+
+**Then the rate, not the curve.** Fruit, acorns and the drain all climb
+together at the top end, so there is more to do every second and less room to
+coast. Moving them in step is the point: the drain alone would be harsher
+without being busier, and the fruit alone would be easier. The ratio between
+supply and drain is preserved, so a flawless player still cannot be killed by
+arithmetic.
+
 Bots at three reaction times, five runs each, chasing fruit and dodging:
 
-Steepened a second time, after "still too easy": full pressure now arrives
-inside 90 s rather than past three minutes, and the ceiling went up with it --
-five acorns in the air instead of four, thrown faster and aimed tighter.
-
-`DRAIN` and `FRUIT_GAIN` were deliberately **not** touched, so the supply
-still outpaces the drain and a flawless player still cannot be killed by
-arithmetic. The extra difficulty is execution: more to dodge, and more of it
-standing between you and the fruit you need.
-
-Six at once was tried and backed off. At that density there was no safe route
-to a sunfruit, chasing stopped paying for itself, and the game slid back
-toward "just dodge" -- the exact failure the draining bar exists to fix.
-**Density has a ceiling set by the fruit having to stay worth going for.**
-
-| reaction | mean | worst run | before |
+| reaction | mean | worst run | at launch |
 |---|---|---|---|
-| 133 ms | 92 s | 80 s | 200 s+ (never died) |
-| 216 ms | 70 s | 59 s | 188 s |
-| 300 ms | 61 s | 48 s | 123 s |
+| 133 ms | 84 s | 71 s | 200 s+ (never died) |
+| 216 ms | 63 s | 51 s | 188 s |
+| 300 ms | 49 s | 40 s | 123 s |
 
-A 300 ms player is a stranger who has not worked out the controls, and
-two minutes is a real go for a credit — close enough to Riverleap's measured
-118 s that the two games sit on the same normalised table honestly.
+A 300 ms player is a stranger who has not worked out the controls. They get
+about fifty seconds here against **126 s in Riverleap** -- the two games are
+deliberately not equally hard, and the normalised table accounts for it
+through each game's own `PAR_SECONDS` rather than by matching their lengths.
 
 **A perfect reactor does not die**, and that is what the two guarantees above
 promise: fruit always lands within reach, and there is always somewhere to
@@ -1409,6 +1419,20 @@ Eight notes that cost real time to learn:
   sunfruit out-ranked it at the worst moment. Three attempts went into fixing
   the bot before the obvious point landed -- the bot was never the thing under
   test, and the check now walks straight at the prize.
+- **A game with no difficulty measurement cannot be tuned, only guessed at.**
+  Riverleap went four rounds without one: its bot reacted instantly, so "too
+  steep" could not be turned into a number. The first real measurement showed
+  it was never especially lethal -- a 216 ms bot survived the whole cap, and a
+  300 ms stranger lasted more than twice as long as in Acorn Storm. The
+  complaint was about the *ramp*, not the ceiling, and without the numbers the
+  obvious fix would have been to lower a ceiling that was not the problem.
+  **"Too hard" and "ramps too fast" are different complaints.**
+- **Syntax-check a new test before running it, every time.** This document
+  already says a headless Godot whose main scene fails to parse spins forever
+  instead of exiting. It happened again anyway -- five minutes of a pegged CPU
+  and an empty log -- because a new constant collided with one already in the
+  file. The lesson was written down and still not applied; `--check-only
+  --script` costs a second.
 - **Ask a guarantee at the moment it is made.** The cornering check started
   out sampling every frame and reported dead ends on a game that had none: an
   acorn a fifth of a second from landing leaves nobody anywhere to go, by

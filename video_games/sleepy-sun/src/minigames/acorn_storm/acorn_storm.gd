@@ -64,7 +64,12 @@ const VITALITY_START := 0.68
 ## Per second, at intensity 0 and 1. The opening is nearly free -- about a
 ## hundred seconds to empty if you never catch anything -- and the late game
 ## empties a full bar in roughly twelve.
-const DRAIN := Vector2(0.0085, 0.082)
+## Raised at the top end together with the fruit rate below, deliberately in
+## step. Raising the drain alone would make the late game harsher without
+## making it busier, and raising the fruit alone would make it easier; moving
+## both keeps the ratio -- the supply still outpaces the drain -- while there
+## is simply more happening every second and less room to coast.
+const DRAIN := Vector2(0.0085, 0.108)
 ## What one sunfruit puts back, before the combo bonus. Two fruit a second is
 ## a lot to ask at the end; one is not quite enough.
 const FRUIT_GAIN := 0.102
@@ -167,8 +172,8 @@ const FRUIT_ATTEMPTS := 14
 ## the game slid back toward "just dodge" -- the exact failure the draining
 ## bar was built to fix. Density has a ceiling set by the fruit having to
 ## remain worth going for.
-const ACORN_INTERVAL := Vector2(1.10, 0.26)
-const FRUIT_INTERVAL := Vector2(2.10, 0.92)
+const ACORN_INTERVAL := Vector2(1.10, 0.21)
+const FRUIT_INTERVAL := Vector2(2.10, 0.62)
 const ACORN_AT_ONCE := Vector2(1.0, 5.0)
 
 ## The first acorns come singly, slowly, and from further off. Learning that
@@ -282,15 +287,12 @@ func _ready() -> void:
 	if get_tree().current_scene == self:
 		finished.connect(_on_run_finished)
 		await get_tree().process_frame
-		# She stands at the centre of the clearing, which is exactly where the
-		# card's text goes -- and the controls slide already has two figures
-		# on it, so a third standing between them muddies the one thing it is
-		# teaching. The clearing, the canopy and the wind stay visible behind
-		# the card; only she steps out of the way.
-		#
-		# Not visible from a capture of the card on its own, which is how it
-		# was looked at before there was a key to switch games with.
-		_player.hide()
+		# She stays VISIBLE behind the card. She was hidden for a round,
+		# because she stands at the centre of the clearing and the card's
+		# control rows ran straight through her -- but a character who is
+		# simply absent until the countdown ends reads as a bug, which is
+		# exactly how Neo reported it. The rows moved up instead; see
+		# AcornCard._slide_controls().
 		var card := AcornCard.new()
 		add_child(card)
 		await card.play()
@@ -303,7 +305,6 @@ func control_hint() -> String:
 
 func begin() -> void:
 	super.begin()
-	_player.show()
 	_player.unfreeze()
 	_hud.toast("LOOK UP", Color(1, 0.86, 0.55), 1.2)
 	# The first sunfruit lands before the first acorn, so "gold is good" is

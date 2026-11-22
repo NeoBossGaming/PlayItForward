@@ -70,9 +70,11 @@ It is cut from a shared 0–1000 scale, so a grade means the same thing in every
 game: a par run is a B, a good one an A.
 
 About **one run in ten** also turns up a **golden prize** — a golden chime in
-Riverleap, a shining ball in Acorn Storm. It scores nothing and nothing
-depends on it yet; it is counted and saved, and what it unlocks is still to be
-decided.
+Riverleap, a golden acorn in Acorn Storm. The acorn one deliberately looks
+much like the thing that hurts you — spotting it is part of the challenge,
+though the mark on the ground always tells you the truth. It scores nothing
+and nothing depends on it yet; it is counted and saved, and what it unlocks is
+still to be decided.
 
 **Fonts** — Press Start 2P and Pixelify Sans, both under the SIL Open Font
 License; the licence files ship beside them in `assets/game/fonts/`.

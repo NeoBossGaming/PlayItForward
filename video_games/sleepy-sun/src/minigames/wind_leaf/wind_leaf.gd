@@ -51,9 +51,18 @@ const ROW_Y := 206.0
 ## constants: the shake interval, the telegraph, how many pads go at once and
 ## every hazard clock all read it, so stretching it eases all of them together
 ## and keeps their relationship intact.
-const GENTLE_SECONDS := 75.0
+## Stretched again, after "the difficulty curve is too steep". Measuring it
+## properly for the first time showed the river was never especially LETHAL --
+## a 216ms bot survived the whole 150s cap and a 300ms stranger lasted 108s,
+## against 49s in Acorn Storm. What was wrong was the ramp: the pace, the
+## shake interval and both hazards all climb together, so the middle of a run
+## turned frantic long before it needed to.
+##
+## The ceiling is untouched. The same late game is still there; it now takes
+## roughly a minute longer to arrive.
+const GENTLE_SECONDS := 100.0
 const GENTLE_CEILING := 0.30
-const STEEP_TAU := 150.0
+const STEEP_TAU := 215.0
 
 ## The shore's speed. The opening is now THREE TIMES what it was last round
 ## (68) and six times the original crossing's 34: a river that is already

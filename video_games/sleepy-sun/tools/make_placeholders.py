@@ -1038,7 +1038,37 @@ def golden_prize():
         return img
 
     save(star(26, 4, 0.44), "wind_leaf/chime_gold.png")
-    save(star(26, 4, 0.44), "acorn_storm/prize.png")
+
+    # --- Acorn Storm's prize: a GOLDEN ACORN ------------------------------
+    # Same silhouette as an ordinary acorn, in gold. It used to be the star
+    # above, which was unmistakable in the air -- and Neo asked for the
+    # opposite: "make the acorns kinda hard to distinguish from the golden
+    # ball so that's also part of the challenge (but not too hard)".
+    #
+    # The ambiguity is deliberately only in the AIR. On the ground the marks
+    # still differ by shape (hot ring = move, gold disc = take it), so a
+    # player who checks always has a reliable answer and the game never lies
+    # to them. What it costs is a glance, which is the challenge that was
+    # asked for. A four-point sparkle rides on top so "not too hard" holds:
+    # it is the same shape as an acorn, not the same object.
+    W = H = 20
+    img, d = canvas(W, H)
+    gold_dark, gold, gold_lit = (186, 138, 40, 255), (236, 190, 72, 255), (255, 236, 160, 255)
+    d.ellipse([3, 7, 16, 19], fill=gold_dark)          # nut
+    d.ellipse([5, 9, 13, 15], fill=gold)
+    d.ellipse([6, 10, 10, 13], fill=gold_lit)          # highlight
+    d.rectangle([2, 2, 17, 9], fill=(142, 104, 30, 255))   # cap
+    d.rectangle([3, 3, 16, 6], fill=gold)
+    d.rectangle([9, 0, 10, 3], fill=(120, 88, 26, 255))    # stalk
+    # The one cue that is not an acorn: a hard four-point glint.
+    px = img.load()
+    for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+        for step in (1, 2):
+            x, y = 9 + dx * step, 12 + dy * step
+            if 0 <= x < W and 0 <= y < H:
+                px[x, y] = (255, 252, 226, 255 if step == 1 else 150)
+    px[9, 12] = (255, 255, 248, 255)
+    save(img, "acorn_storm/prize.png")
 
     # A spark the prize sheds as it travels, and throws on collection.
     img, _ = canvas(6, 6)
