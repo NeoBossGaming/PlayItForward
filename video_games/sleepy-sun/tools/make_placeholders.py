@@ -109,6 +109,15 @@ KEEP = {
     "decor/foam.png", "decor/twig.png", "decor/driftleaf.png",
     "decor/streak.png",
     "decor/dust.png",
+    # --- Hush Meadow ---
+    "hush_meadow/meadow.png", "hush_meadow/meadow_shade.png",
+    "hush_meadow/grass_0.png", "hush_meadow/grass_1.png",
+    "hush_meadow/grass_2.png", "hush_meadow/grass_cover.png",
+    "hush_meadow/bird_0.png", "hush_meadow/bird_1.png",
+    "hush_meadow/dew.png", "hush_meadow/dew_gold.png",
+    "hush_meadow/petal.png", "hush_meadow/hedge.png", "hush_meadow/rock.png",
+    "hush_meadow/mote.png",
+    "ui/icon_eye.png",
     "ui/icon_flag.png", "ui/icon_clock.png", "ui/pip.png",
     "ui/heart_full.png", "ui/heart_half.png", "ui/heart_empty.png",
     "ui/vignette.png", "ui/alarm_frame.png", "ui/shadow_small.png",
@@ -1492,13 +1501,322 @@ def decor_props():
     save(img, "decor/cloud.png")
 
 
+# ---------------------------------------------------------------- hush meadow
+
+def hush_meadow_art():
+    """Hush Meadow: a meadow that scrolls past you, and the cover growing in it.
+
+    The sprite that has to work here is the grass clump, because the player's
+    entire survival is the question "am I inside a patch". A clump has to read
+    as something you can be INSIDE, seen from directly above, which is not
+    what a handful of blades does on its own. Three things together get there:
+
+      * it is taller than it is wide, so it reads as growth standing up rather
+        than as a stain on the ground
+      * the base is dark. The shadow between stems is the cue that there is a
+        gap down there big enough to stand in
+      * the silhouette is ragged, because a smooth oval is a bush, and a bush
+        is a thing you walk around rather than into
+
+    Under every clump the game also lays `grass_cover.png`, a soft dark
+    ellipse. The parked version borrowed `village/glow.png` for this and it is
+    worth drawing on purpose: blades over green do not read as cover by
+    themselves, and a hiding place the player cannot see is worse than no
+    hiding place at all. It is drawn white so the game can tint it, and it is
+    drawn slightly SMALLER than the concealment rect the game uses -- see
+    PATCH_HALF in hush_meadow.gd. Anywhere that looks like cover has to BE
+    cover; the reverse is a game that lies to you at the only moment it
+    matters.
+    """
+    import math as _m
+    rng = random.Random(7700)
+
+    # Cooler and bluer than Acorn Storm's clearing on purpose. Two games on
+    # mown green at 480px wide would read as the same place.
+    MEADOW      = (62, 108, 72, 255)
+    MEADOW_DARK = (44, 84, 58, 255)
+    MEADOW_LIT  = (88, 140, 88, 255)
+    STEM        = (74, 124, 70, 255)
+    # Well below MEADOW_DARK (44, 84, 58). At its first value it was within a
+    # few points of the ground tone and the clump had no base at all -- and
+    # the dark gap between stems is the entire reason a clump reads as
+    # something you can be inside rather than a smear on the grass.
+    STEM_DARK   = (22, 46, 32, 255)
+    STEM_LIT    = (132, 178, 104, 255)
+    SEEDHEAD    = (198, 206, 140, 255)
+
+    # --- the meadow floor -------------------------------------------------
+    # 176px against the shade layer's 240, and the two scroll at different
+    # rates. Different size AND different speed is the thing that actually
+    # kills a grid; a bigger tile on its own only makes the grid bigger.
+    W = H = 176
+    img, _ = canvas(W, H, MEADOW)
+    px = img.load()
+
+    def soft_patch(cx, cy, r, colour, strength):
+        for y in range(-r, r + 1):
+            for x in range(-r, r + 1):
+                d2 = (x * x + y * y) / float(r * r)
+                if d2 >= 1.0:
+                    continue
+                if rng.random() > strength * (1.0 - d2):
+                    continue
+                px[(cx + x) % W, (cy + y) % H] = colour
+
+    for _ in range(16):
+        soft_patch(rng.randrange(W), rng.randrange(H), rng.randrange(20, 44),
+                   MEADOW_DARK, 0.5)
+    for _ in range(13):
+        soft_patch(rng.randrange(W), rng.randrange(H), rng.randrange(16, 36),
+                   MEADOW_LIT, 0.45)
+
+    # Blades: short upright strokes, no mark long enough for the eye to match
+    # across a seam. Denser than the clearing's -- this is unmown meadow.
+    for _ in range(2100):
+        x, y = rng.randrange(W), rng.randrange(H)
+        length = rng.randrange(1, 5)
+        lean = rng.choice((-1, 0, 0, 1))
+        tone = MEADOW_LIT if rng.random() < 0.5 else MEADOW_DARK
+        for i in range(length):
+            px[(x + lean * i) % W, (y - i) % H] = tone
+
+    # Flowers, a few. They are the thing that says "meadow" rather than
+    # "lawn", and they are single pixels so they cannot form a pattern.
+    # Dimmer and fewer than the first pass, which put 150 near-white pixels on
+    # the field and made the meadow look like a star chart.
+    for _ in range(80):
+        x, y = rng.randrange(W), rng.randrange(H)
+        px[x, y] = rng.choice((
+            (186, 192, 152, 255), (176, 164, 184, 255), (196, 186, 132, 255)))
+    save(img, "hush_meadow/meadow.png")
+
+    # --- the shade layer --------------------------------------------------
+    # Cloud shadow crossing the meadow. Kept light: the game's readability
+    # rests on seeing where the grass patches are, and a dark soup over the
+    # top of them costs exactly the thing the player needs.
+    DW = DH = 240
+    field = [[0.0] * DW for _ in range(DH)]
+    for _ in range(20):
+        cx, cy = rng.randrange(DW), rng.randrange(DH)
+        radius = rng.randrange(34, 84)
+        weight = rng.uniform(-1.0, 1.0)
+        for y in range(-radius, radius + 1):
+            for x in range(-radius, radius + 1):
+                d2 = (x * x + y * y) / float(radius * radius)
+                if d2 >= 1.0:
+                    continue
+                field[(cy + y) % DH][(cx + x) % DW] += weight * (1.0 - d2) ** 2
+    peak = max(abs(v) for row in field for v in row) or 1.0
+    img, _ = canvas(DW, DH)
+    for y in range(DH):
+        for x in range(DW):
+            v = field[y][x] / peak
+            colour = (232, 242, 210) if v >= 0 else (24, 42, 30)
+            a = abs(v) * (24 if v >= 0 else 30)
+            if a < 2.0:
+                continue
+            img.putpixel((x, y), (*colour, int(a)))
+    save(img, "hush_meadow/meadow_shade.png")
+
+    # --- the cover disc ---------------------------------------------------
+    # White, so the game tints it. Soft-edged so overlapping clumps merge into
+    # one patch instead of showing their seams.
+    #
+    # A plain radial falloff was the first attempt and it was a mistake: it
+    # peaks at one pixel in the middle and fades the whole way out, so the
+    # patch has no EDGE, and where the patch ends is the only thing about it
+    # the player actually needs to know. This is flat across the middle and
+    # then drops off fast, which gives the boundary something to be.
+    CW, CH = 64, 44
+    img, _ = canvas(CW, CH)
+    px = img.load()
+    PLATEAU = 0.52
+    for y in range(CH):
+        for x in range(CW):
+            dx = (x + 0.5 - CW / 2.0) / (CW / 2.0)
+            dy = (y + 0.5 - CH / 2.0) / (CH / 2.0)
+            dist = _m.sqrt(dx * dx + dy * dy)
+            if dist >= 1.0:
+                continue
+            a = 1.0 if dist <= PLATEAU else \
+                (1.0 - (dist - PLATEAU) / (1.0 - PLATEAU)) ** 1.1
+            px[x, y] = (255, 255, 255, int(a * 255))
+    save(img, "hush_meadow/grass_cover.png")
+
+    # --- three grass clumps -----------------------------------------------
+    # 28 x 34: taller than wide, which is most of why it reads as standing up.
+    for variant in range(3):
+        GW, GH = 28, 34
+        img, _ = canvas(GW, GH)
+        px = img.load()
+        base_y = GH - 3
+        stems = 13 + variant * 2
+
+        # The dark base first -- the gap between stems, which is the part that
+        # says "you could be in there".
+        for y in range(GH - 11, GH):
+            for x in range(GW):
+                dx = (x + 0.5 - GW / 2.0) / (GW / 2.0 - 1.0)
+                dy = (y - (GH - 11)) / 11.0
+                if dx * dx + (1.0 - dy) * (1.0 - dy) * 0.5 > 1.0:
+                    continue
+                if rng.random() < 0.34:
+                    continue
+                px[x, y] = STEM_DARK
+
+        # Then the stems, fanning out, with a lit tip on most of them. Heights
+        # vary a lot on purpose: an even top edge reads as a hedge.
+        for i in range(stems):
+            spread = (i / float(stems - 1)) * 2.0 - 1.0
+            x0 = int(GW / 2 + spread * (GW / 2 - 3) * rng.uniform(0.55, 1.0))
+            height = int(rng.uniform(0.45, 1.0) * (GH - 6))
+            lean = spread * rng.uniform(0.10, 0.34)
+            for step in range(height):
+                x = int(round(x0 + lean * step))
+                y = base_y - step
+                if not (0 <= x < GW and 0 <= y < GH):
+                    continue
+                near_tip = step > height - 4
+                px[x, y] = STEM_LIT if near_tip else (
+                    STEM if rng.random() < 0.72 else STEM_DARK)
+            # A seedhead on some, which is the detail that reads at 3x.
+            if rng.random() < 0.45:
+                tx = int(round(x0 + lean * height))
+                ty = base_y - height
+                for oy in range(-2, 1):
+                    if 0 <= tx < GW and 0 <= ty + oy < GH:
+                        px[tx, ty + oy] = SEEDHEAD
+        save(img, "hush_meadow/grass_%d.png" % variant)
+
+    # --- the patrol bird --------------------------------------------------
+    # Drawn NOSE-UP, because PatrolBird._apply_facing() rotates from -Y.
+    #
+    # Facing has to be legible at a glance: this is a stealth game and which
+    # way a bird is looking is the single most important fact on the screen.
+    # So the head end carries two cues that the tail end cannot -- a pale head
+    # and a bright beak -- rather than relying on the silhouette, which at 18
+    # pixels is nearly symmetrical either way round.
+    for frame in range(2):
+        BW, BH = 20, 22
+        img, d = canvas(BW, BH)
+        lift = 0 if frame == 0 else 3          # wings up, then level
+        d.polygon([(10, 3), (14, 9), (12, 19), (8, 19), (6, 9)],
+                  fill=P["bird"])                              # body
+        # Wings, swept back. The two frames differ only in how far down the
+        # tips sit, so nothing translates and the flap cannot read as a jitter.
+        d.polygon([(7, 8), (1, 11 + lift), (2, 14 + lift), (8, 13)],
+                  fill=P["bird_light"])
+        d.polygon([(13, 8), (19, 11 + lift), (18, 14 + lift), (12, 13)],
+                  fill=P["bird_light"])
+        d.polygon([(8, 18), (10, 21), (12, 18)], fill=P["bird"])   # tail
+        d.ellipse([7, 1, 12, 7], fill=(146, 152, 176, 255))        # pale head
+        d.polygon([(10, 0), (8, 3), (12, 3)], fill=P["beak"])      # beak
+        d.point((8, 4), P["ink"])
+        d.point((11, 4), P["ink"])
+        save(img, "hush_meadow/bird_%d.png" % frame)
+
+    # --- dew, and the golden one ------------------------------------------
+    # Cool blue-white, deliberately outside the gold vocabulary the other two
+    # games use: Riverleap's chimes are pale and Acorn Storm's sunfruit is
+    # gold, so a third warm pickup would read as one of theirs.
+    def droplet(bulb, mid, rim, glint):
+        DWW, DHH = 11, 14
+        img, d = canvas(DWW, DHH)
+        d.polygon([(5, 0), (2, 7), (8, 7)], fill=bulb)        # the point
+        d.ellipse([1, 4, 9, 13], fill=bulb)                   # the bulb
+        d.ellipse([2, 6, 7, 11], fill=mid)
+        d.ellipse([3, 7, 5, 9], fill=rim)                     # highlight
+        if glint:
+            # Four points, the same cue the other prizes carry. Same
+            # silhouette as ordinary dew -- telling it apart is a glance, not
+            # a different object, exactly as the golden acorn works.
+            px = img.load()
+            for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+                for step in range(1, 4):
+                    x, y = 5 + dx * step, 8 + dy * step * 1.1
+                    x, y = int(x), int(y)
+                    if 0 <= x < DWW and 0 <= y < DHH and px[x, y][3] == 0:
+                        px[x, y] = (255, 246, 206, int(230 - step * 56))
+        return img
+
+    save(droplet((142, 196, 224, 255), (196, 228, 244, 255),
+                 (246, 253, 255, 255), False), "hush_meadow/dew.png")
+    save(droplet((206, 158, 52, 255), (244, 206, 96, 255),
+                 (255, 246, 198, 255), True), "hush_meadow/dew_gold.png")
+
+    # --- petal, the open-ground pickup ------------------------------------
+    PW, PH = 11, 11
+    img, d = canvas(PW, PH)
+    d.polygon([(5, 0), (9, 4), (7, 10), (3, 10), (1, 4)], fill=P["petal"])
+    d.polygon([(5, 2), (7, 5), (5, 8), (3, 5)], fill=(255, 244, 206, 255))
+    save(img, "hush_meadow/petal.png")
+
+    # --- sight blockers ---------------------------------------------------
+    # Hedges and rocks are what _line_blocked() samples against, so they have
+    # to look solid: something you cannot see past has to look like something
+    # you cannot see past, or being safe feels arbitrary.
+    HW, HH = 30, 22
+    img, d = canvas(HW, HH)
+    d.ellipse([0, 5, HW - 1, HH - 1], fill=(30, 58, 34, 255))
+    d.ellipse([2, 2, HW - 5, HH - 5], fill=P["hedge"])
+    px = img.load()
+    for _ in range(170):
+        x, y = rng.randrange(HW), rng.randrange(HH)
+        if px[x, y][3] == 0:
+            continue
+        px[x, y] = (58, 100, 54, 255) if rng.random() < 0.6 else (34, 64, 38, 255)
+    for _ in range(14):
+        x, y = rng.randrange(3, HW - 3), rng.randrange(2, 9)
+        px[x, y] = (214, 206, 162, 255)          # a few pale buds on top
+    save(img, "hush_meadow/hedge.png")
+
+    RW, RH = 24, 18
+    img, d = canvas(RW, RH)
+    d.ellipse([0, 5, RW - 1, RH - 1], fill=P["rock_dark"])
+    d.ellipse([1, 2, RW - 5, RH - 5], fill=P["rock"])
+    d.ellipse([5, 4, RW - 12, RH - 10], fill=(148, 148, 158, 255))
+    save(img, "hush_meadow/rock.png")
+
+    # --- the "something is in here" mote ----------------------------------
+    # Drawn white so the game tints it: cool for dew, gold for the prize.
+    #
+    # It started as decor/glint.png, which is a horizontal streak, and on a
+    # real frame it read as a stray UI line sitting on the grass rather than
+    # as something to go and get. A four-point sparkle is the shape every
+    # other "this is worth having" cue in the project already uses.
+    MW = MH = 11
+    img, _ = canvas(MW, MH)
+    px = img.load()
+    c = (MW - 1) / 2.0
+    for y in range(MH):
+        for x in range(MW):
+            dx, dy = x - c, y - c
+            dist = _m.sqrt(dx * dx + dy * dy)
+            if dist <= 1.4:
+                px[x, y] = (255, 255, 255, 255)
+    for dx, dy in ((0, -1), (0, 1), (-1, 0), (1, 0)):
+        for step in range(2, 6):
+            x, y = int(c + dx * step), int(c + dy * step)
+            if 0 <= x < MW and 0 <= y < MH:
+                px[x, y] = (255, 255, 255, int(250 - (step - 2) * 55))
+    save(img, "hush_meadow/mote.png")
+
+    # --- the nerve meter's icon -------------------------------------------
+    # An eye, because what the bar measures is being looked at.
+    WHITE = (255, 255, 255, 255)
+    img, d = canvas(9, 9)
+    d.polygon([(0, 4), (4, 1), (8, 4), (4, 7)], fill=WHITE)
+    d.ellipse([3, 3, 5, 5], fill=(28, 26, 38, 255))
+    save(img, "ui/icon_eye.png")
+
+
 def main() -> None:
     water_tiles(); bank_edge(); ripple()
     lotus_pads(); chime(); hazards()
     village_tiles(); tree(); treeline()
     ui_bits(); hud_icons(); heart_segments(); alarm_frame(); vignette(); scrim()
     player_jump_frames(); control_pictograms(); acorn_storm_art()
-    golden_prize()
+    golden_prize(); hush_meadow_art()
     decor_motes(); decor_props()
     made = sorted(p.relative_to(OUT).as_posix() for p in OUT.rglob("*.png"))
     print(f"assets/game now holds {len(made)} sprites")

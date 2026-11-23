@@ -48,6 +48,7 @@ const METER_ICONS := {
 	&"time": "res://assets/game/ui/icon_clock.png",
 	&"far bank": "res://assets/game/ui/icon_flag.png",
 	&"vitality": "res://assets/game/ui/icon_leaf.png",
+	&"nerve": "res://assets/game/ui/icon_eye.png",
 }
 
 @onready var _score: Label = $Root/Score

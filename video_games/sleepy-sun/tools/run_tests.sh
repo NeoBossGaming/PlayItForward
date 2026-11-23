@@ -47,10 +47,36 @@ errors_in() {
     | grep -av "ALSA\|audio driver\|init_output_device\|set_use_vsync"
 }
 
+# Syntax first, and the suite only runs if it passed. A headless Godot whose
+# main scene fails to PARSE does not exit -- it spins at 99% CPU producing an
+# empty log, which looks exactly like a slow machine. That has now cost this
+# project three separate afternoons, the last one in the same session that
+# wrote the warning into the design doc, because the check and the run went
+# into one shell line and the run started anyway. A safeguard that does not
+# gate anything is not a safeguard.
+#
+# --check-only cannot see autoload singletons (Audio, Save, Dev...), so those
+# identifiers are not errors here; a real syntax error is anything else.
+check_syntax() {
+  "$GODOT" --headless --path "$PROJECT" --check-only --script "tests/$1.gd" 2>&1 \
+    | grep -aE "Parse Error|Compile Error" \
+    | grep -av "Identifier not found:" \
+    | grep -av "Failed to compile depended"
+}
+
 for suite in $suites; do
   name=$(basename "$suite" .tscn)
   echo
   echo "=== $name ==="
+  if [ -f "$PROJECT/tests/$name.gd" ]; then
+    bad=$(check_syntax "$name")
+    if [ -n "$bad" ]; then
+      echo "--- $name does not parse; NOT running it ---"
+      echo "$bad" | head -10
+      status=1
+      continue
+    fi
+  fi
   log=$(mktemp)
   "$GODOT" --headless --fixed-fps 60 --path "$PROJECT" "tests/$name.tscn" >"$log" 2>&1
   code=$?

@@ -1,0 +1,57 @@
+[gd_scene load_steps=8 format=3]
+
+[ext_resource type="Script" path="res://src/minigames/hush_meadow/hush_meadow.gd" id="1"]
+[ext_resource type="PackedScene" path="res://src/core/player.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://src/ui/hud.tscn" id="3"]
+[ext_resource type="Script" path="res://src/core/scrolling_texture.gd" id="4"]
+[ext_resource type="Script" path="res://src/core/game_camera.gd" id="5"]
+[ext_resource type="Texture2D" path="res://assets/game/hush_meadow/meadow.png" id="6"]
+[ext_resource type="Texture2D" path="res://assets/game/hush_meadow/meadow_shade.png" id="7"]
+
+[node name="HushMeadow" type="Node2D"]
+script = ExtResource("1")
+id = &"hush_meadow"
+par_score = 2400
+
+[node name="World" type="Node2D" parent="."]
+
+; --- the meadow --------------------------------------------------------------
+; This ground DOES move, which is the one thing that separates this game from
+; Acorn Storm's fixed clearing. Both layers' scroll is driven per frame from
+; the curve, so the numbers here are only the starting state.
+[node name="Ground" type="Sprite2D" parent="World"]
+position = Vector2(240, 135)
+texture = ExtResource("6")
+script = ExtResource("4")
+area = Vector2i(504, 318)
+
+; The anti-tiling layer: 240px against the ground's 176, travelling at 0.62x
+; its rate. Different size AND different speed, so the two periods never line
+; up over any distance a player will watch. A bigger ground tile on its own
+; would only have made the grid bigger.
+[node name="Shade" type="Sprite2D" parent="World"]
+position = Vector2(240, 135)
+z_index = 1
+texture = ExtResource("7")
+script = ExtResource("4")
+area = Vector2i(504, 318)
+
+[node name="Props" type="Node2D" parent="."]
+
+; No z_index on these three. Patches set their own blade and cover layers, and
+; a value here would be ADDED to both -- which is how this project once drew a
+; hazard over an airborne player and inverted its own rule.
+[node name="Patches" type="Node2D" parent="."]
+
+[node name="Pickups" type="Node2D" parent="."]
+
+[node name="Birds" type="Node2D" parent="."]
+
+[node name="Player" parent="." instance=ExtResource("2")]
+position = Vector2(240, 172)
+
+[node name="Camera" type="Camera2D" parent="."]
+position = Vector2(240, 135)
+script = ExtResource("5")
+
+[node name="HUD" parent="." instance=ExtResource("3")]

@@ -1,13 +1,14 @@
 # Sleepy Sun — Design & Planning Document
 
-**Status: stripped to one game.** Four earlier rounds built eight minigames, a
+**Status: three games.** Four earlier rounds built eight minigames, a
 card draw, an attract screen, a results screen and seventeen cutscenes. All of
 it works and all of it is in `main`'s history — but none of it was *finished*,
 because the budget was always split eight ways.
 
-So the project is now one game at a time: **Riverleap**, polished until it is
-genuinely good, then the next one, and only then the shell that holds them.
-Everything parked is listed in §9, with the commit it lives in.
+So the project is now one game at a time, each polished until it is genuinely
+good: **Riverleap**, then **Acorn Storm**, then **Hush Meadow** — and only then
+the shell that holds them. Everything still parked is listed in §10, with the
+commit it lives in.
 
 ---
 
@@ -1255,7 +1256,146 @@ tests caught an un-hittable player that looked perfectly fine.
 
 ---
 
-## 8. Testing
+## 8. Hush Meadow (`hush_meadow`) — *forage*
+
+A meadow that slides down the screen and off the bottom while you work it.
+Endless; the run ends when the **nerve meter** fills.
+
+Game three, and the first one restored from the parked eight rather than built
+from nothing. What came back was `PatrolBird` — a drawn cone of sight,
+suspicion as a slow fill, and a fix for a facing twitch — and one line from the
+old header, flagged there as the important one and never actually load-bearing:
+**dew only appears once you are standing inside a grass patch**. Everything
+else, including the five-section meadow and the following camera, was thrown
+away.
+
+### The two decisions the rest falls out of
+
+**The meadow scrolls.** Grass drifts down and leaves, so the patch you are
+standing in has a few seconds left in it. Cover is a route, not a den. It is
+also what keeps this game from being Acorn Storm with different sprites — that
+one is a bounded field you move around inside, and so was the parked version of
+this one.
+
+**Nerve rises always, and only pickups bring it down.** Standing in grass
+nearly freezes the rise; it never lowers it. Hiding buys time and never
+progress, so a player who only hides loses slowly rather than living forever —
+which is the hole every "cover restores you" stealth design has.
+
+Together they make one loop:
+
+> run to a patch → hidden, the rise freezes → dew reveals *because* you are
+> inside → collect it, nerve drops → the patch is already sliding off → cross
+> open ground to the next one, exposed, with a cone sweeping toward you.
+
+Structurally this is Acorn Storm's loop — a meter that runs out on its own and
+a pickup that is the only thing holding it back — which is the part of that
+game that works. What is new is that the pickup is **somewhere you have to go**
+rather than something that comes to you.
+
+| state | nerve |
+|---|---|
+| open ground, unseen | +0.022/s → +0.070/s |
+| inside a bird's cone | **+0.42/s** |
+| inside grass | +0.016/s — frozen, never lowered |
+| dew collected | −0.42 |
+| petal collected | −0.09 |
+| spotted | +0.18, a swoop, a stun, −100 points |
+
+Note what the two ends of the open rate do to the value of cover: early,
+hiding is worth about 1.4× standing in the open; late it is worth 4.4×. Cover
+mattering **more** as the meadow runs out of it falls out of those two numbers
+rather than needing a rule of its own.
+
+### The meadow is spaced, not counted
+
+The director held a target *number* of live patches for a round, and it does
+not work. Each new patch is planted above the last, so the queue stretches
+hundreds of pixels off the top of the screen and most of the quota sits
+somewhere nobody can see: a target of **seven measured as 2.2 patches actually
+on the field**, and lowering it to three changed almost nothing.
+
+Density in **space** is the right control for a scrolling world — the river
+works the same way. `PATCH_GAP` runs **52 px → 128 px** of meadow between
+stands of grass, which is about four patches on the field early and under two
+late. That one change is the whole late game: cover goes from 82 px away from
+an average spot to 191 px.
+
+### Where the late game's pressure is allowed to come from
+
+Not from the meter and not from the meadow being sparser still, because both
+are capped by an arithmetic floor: **the dew on offer has to be worth more
+nerve per second than the open meadow costs**, at every point on the curve, or
+a run ends on a sum rather than on anything the player did. That check sat at
+**0.97×** once and would have shipped exactly that game.
+
+Birds were the obvious remaining lever and they are a trap. Going from five to
+seven does shorten runs — but it shortens the *foraging* run and lengthens the
+*hiding* one, because crossing open ground is precisely what birds punish. It
+pays the cautious player and undoes the thing the design is for. Birds stayed
+at **1 → 5**.
+
+### The guarantee, with a second half
+
+Every game here rejects a placement that would corner the player. This one's
+version is harder, because cover **expires**:
+
+> there is always a patch she can reach at walking pace, minus a slow human's
+> reaction time, that will **still be on the field when she arrives**, and that
+> is not currently inside a cone.
+
+Reaching it is solved as an **interception**, not a distance — the patch is
+moving toward a player below it and away from one above it, and treating it as
+stationary is wrong in both directions.
+
+The floor is checked **every frame**, not only while topping the meadow up,
+and that distinction is the whole fix. Late on the meadow holds three patches,
+so the quota is met while all three are behind her, under an eye, or about to
+go over the edge: the count is fine and there is nowhere to go. It measured as
+a 2.03 s dead end before the check moved.
+
+### Two things that were invisible until somebody looked
+
+**Dew in an overlapped patch never revealed.** The reveal compared the patch
+against the one `patch_at()` returns, and `patch_at()` answers with the first
+match. Patches overlap, so wherever two stands of grass touched, the single
+rule this game is built on failed silently. It is asked of each patch now.
+
+**A patch holding dew has to be visible from outside it.** Dew is invisible
+until you are inside, so with nothing marking which patch is worth entering
+there is no way to *choose* one — and since the meadow carries fresh cover to
+you anyway, the best play is to stand still and let it arrive. The first
+marker shaded the cover disc, which lies under thirty-odd blades at 58 % alpha
+on dark green and could not be seen at all. It is a pale mote **above** the
+grass now, gold for the prize. What it says is that something is there, never
+what: walking in is still the only way to find out.
+
+### How hard it actually is
+
+Bots at three reaction times, six runs each:
+
+| | 133 ms | 216 ms | 300 ms |
+|---|---|---|---|
+| survived | 119 s | 119 s | 108 s |
+
+`PAR_SECONDS` is **120**, set from that table rather than guessed, so a
+two-minute run is a B and four minutes is an S.
+
+Reaction time matters less here than in either other game, and that is honest
+rather than a tuning failure: nothing in this game has to be dodged on reflex.
+What it costs you is route planning — which patch, by which line, past which
+cone.
+
+The strategy claim is measured on **dew per second**, not on how long a run
+lasted. Survival time cannot carry it: six pairs of whole runs on one unchanged
+build gave hiding 61 s / 87 s / 96 s against foraging 137 s / 102 s / 88 s, so
+the claim came out true, false and true on the same code. Dew rate is stable
+and is the claim anyway, since dew is the only thing that lowers the meter:
+foraging finds **0.177 dew/s against hiding's 0.062**.
+
+---
+
+## 9. Testing
 
 ```
 tools/run_tests.sh          # or GODOT=/path/to/godot tools/run_tests.sh
@@ -1352,6 +1492,43 @@ row, not by asking the game.
 Both suites run bots at **133 / 216 / 300 ms of reaction lag**, because a bot
 that reacts on the frame a thing spawns measures a game a machine plays rather
 than the one a person does.
+
+### What Hush Meadow's suite holds
+
+`tests/hush_test.gd`. Its first assertion is the one the file exists for:
+
+- **Reachable, surviving, unwatched cover always exists** — the scroller's
+  version of "never cornered", and strictly harder than either other game's
+  because cover **expires**. Computed in the test from the patches, the scroll
+  rate and the cones, and solved as an interception rather than a distance. A
+  momentary gap is allowed and a long one is not: the instant a patch crosses
+  the bottom edge there can honestly be a beat with nothing usable, and
+  asserting zero gaps would report dead ends on a game that has none. It also
+  counts the director's **rescue** placements, because a flood of them means
+  the meadow is too sparse to play and the floor is propping the game up
+  rather than protecting the player.
+- **Dew only shows in cover**, and only to somebody actually inside the patch
+  holding it. This is the rule the whole game hangs off, and the check caught
+  it failing wherever two patches overlapped.
+- **The concealment rect is never smaller than what is drawn.** Written
+  against the clump sprite's real size rather than against the constants, and
+  it immediately caught grass drawn 32 px above centre inside a rect that hid
+  26 — six pixels of what looked like cover that was decoration. Anywhere that
+  looks like cover has to be cover; the other way round is a game that lies to
+  the player at the only moment it matters.
+- **Dew can outpace the nerve rise**, at four points on the curve, or a run
+  ends on arithmetic rather than on anything the player did. It sat at 0.97×
+  once.
+- **Hiding is not a strategy** — measured on **dew per second**, not on how
+  long runs lasted, and the reason why is its own lesson below.
+- **A hovering bird's facing does not twitch**, which is a regression test for
+  a bug the restored file already carried a fix for.
+- **Cover gets further away across a run** — probed from fixed points, because
+  the forage bot walks toward the nearest patch by definition and so cannot
+  measure one.
+- Plus the curve, the two ground layers staying on different periods and
+  rates, grass drawing over a concealed player, a cone being on her long
+  enough to react to, the golden being catchable, and a run ending once.
 
 ### And a third suite, for what sits between them
 
@@ -1484,18 +1661,58 @@ Eight notes that cost real time to learn:
   the process may not exit cleanly after `get_tree().quit()` — the screenshots
   are still written, so capture in the background and reap it.
 
+- **Put the lag on the decision, not on the steering.** A bot whose whole
+  steering vector is delayed is not a slow player, it is a bad walker, and it
+  produced a difficulty table reading 47 s / 59 s / 35 s across *rising*
+  reaction times — pure noise. A person tracks what they chose continuously;
+  the delay is in noticing there is something new to choose. Worse, a bot that
+  re-decides every frame turns lag into **commitment**: the laggier bot stuck
+  with one target longer and so played *better*. It re-decides only when its
+  target is gone, it has arrived, or something is looking at it.
+- **A delayed decision can name something that is already gone.** The lag
+  queue holds node references, and a reaction time is easily long enough for
+  the dew it named to be collected. Assigning a freed instance into a typed
+  `Node2D` throws at the assignment, and passing one to a typed *parameter*
+  throws at the call — so `is_instance_valid()` inside the callee is too late.
+  Both read as every bot "surviving" 0.0 seconds.
+- **Pick the quantity that is stable, not the one that sounds like the
+  claim.** "Hiding is not a strategy" is naturally a statement about how long
+  runs last — and six pairs of whole runs on one unchanged build gave hiding
+  61 s / 87 s / 96 s against foraging 137 s / 102 s / 88 s. The claim came out
+  true, false and true on the same code, and two rounds of tuning went into
+  chasing that variance. Dew per second is stable, and since dew is the only
+  thing that lowers the meter it is the same claim. **If a measurement swings
+  more than the effect you are tuning, stop tuning and change the
+  measurement.**
+- **A sample that is skipped is a sample that is biased.** The "cover gets
+  further away" probe returned infinity when nothing was in range and the
+  caller skipped it — which threw away exactly the frames the late meadow is
+  made of, so the measurement only ever saw the moments cover happened to be
+  near. A meadow that doubles its distance to cover measured flat at 93 px
+  against 90 px. The worst case has to be *recorded* as a number, not dropped.
+- **Check the syntax, then run only if it passed.** This document already says
+  twice that a headless Godot whose main scene fails to parse spins at 99 %
+  CPU on an empty log. It happened a third time, in the same session that
+  wrote the second warning down — because the check and the run went into one
+  shell line, the check printed its failure, and the run started anyway. A
+  safeguard that does not gate anything is not a safeguard. `tools/` now has
+  the two in the right order.
+- **Verify an anchor before you edit on it.** Three scripted edits in a row
+  aborted on a string that did not match, each one costing a full suite run to
+  notice. Read the file, then edit.
+
 ---
 
-## 9. Parked, not cancelled
+## 10. Parked, not cancelled
 
 All present in `main` at `876d449` and restorable with
 `git checkout 876d449 -- <path>`:
 
-- **Seven minigames.** Hush Meadow (stealth forage), Echo Hollow (walk a
-  remembered pattern), Riverstrike (lead a moving fish, bottles block the bolt),
-  Acorn Storm (dodge, catch), Firefly Lantern (your multiplier is how little
-  light you have left), Temple Bell (rhythm, then rhythm while running errands),
-  Crow Watch (defend a field whose tally only goes down).
+- **Five minigames.** Echo Hollow (walk a remembered pattern), Riverstrike
+  (lead a moving fish, bottles block the bolt), Firefly Lantern (your
+  multiplier is how little light you have left), Temple Bell (rhythm, then
+  rhythm while running errands), Crow Watch (defend a field whose tally only
+  goes down). Riverleap, Acorn Storm and Hush Meadow have come back.
 - **The shell**: slot-machine card draw, attract screen with idle states,
   results screen with a rank stamp.
 - **The lore**: eight gifts, seventeen cutscenes as data (`src/data/lore.gd`),
