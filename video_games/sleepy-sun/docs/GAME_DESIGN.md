@@ -1433,6 +1433,21 @@ Eight notes that cost real time to learn:
   and an empty log -- because a new constant collided with one already in the
   file. The lesson was written down and still not applied; `--check-only
   --script` costs a second.
+- **A suite that prints an engine error and passes is lying to you.** The
+  results card dereferenced a null viewport on *every* replay press, in both
+  4.6 and 4.7, for several rounds. Nothing failed, for two compounding
+  reasons: no test drove the end-of-run path at all -- every suite instances
+  its game as a CHILD, and the card only appears when the game is the running
+  scene -- and even when an error is printed, the exit code only reflects the
+  check tally. `tools/run_tests.sh` now fails the run on any engine error,
+  and `tests/cabinet_test.gd` drives the card for every game.
+- **A test of a teardown has to tear something down.** The first version of
+  that card test pressed the button and passed with the bug deliberately
+  restored, because the card stayed parented to the test node: nothing was
+  destroyed, so `get_viewport()` was fine. The handler now removes the card
+  from the tree, as a scene reload does, and re-breaking the fix fails the
+  run. **Verify a regression test by re-breaking the thing it is for** --
+  otherwise it is a test of the happy path wearing a bug report's name.
 - **Ask a guarantee at the moment it is made.** The cornering check started
   out sampling every frame and reported dead ends on a game that had none: an
   acorn a fifth of a second from landing leaves nobody anywhere to go, by

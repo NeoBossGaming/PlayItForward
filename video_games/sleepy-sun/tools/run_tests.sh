@@ -36,12 +36,32 @@ if [ -z "$suites" ]; then
   exit 1
 fi
 
+# A suite that prints a script error but asserts nothing about it used to
+# PASS: the engine logs the error and carries on, and the exit code only
+# reflects the check tally. A null-dereference on every results-card press
+# went unnoticed that way for several rounds, because no test drove that path
+# and nothing would have failed if one had. Any engine-level error now fails
+# the run, whether or not a check noticed.
+errors_in() {
+  grep -aE "SCRIPT ERROR|Cannot call method|Invalid access|Invalid call|Parse Error|Condition \"" "$1" \
+    | grep -av "ALSA\|audio driver\|init_output_device\|set_use_vsync"
+}
+
 for suite in $suites; do
   name=$(basename "$suite" .tscn)
   echo
   echo "=== $name ==="
-  "$GODOT" --headless --fixed-fps 60 --path "$PROJECT" "tests/$name.tscn" 2>&1 | quiet
-  [ "${PIPESTATUS[0]}" -ne 0 ] && status=1
+  log=$(mktemp)
+  "$GODOT" --headless --fixed-fps 60 --path "$PROJECT" "tests/$name.tscn" >"$log" 2>&1
+  code=$?
+  quiet <"$log"
+  [ "$code" -ne 0 ] && status=1
+  if errors_in "$log" >/dev/null; then
+    echo "--- engine errors in $name (a passing tally does not excuse these) ---"
+    errors_in "$log" | head -20
+    status=1
+  fi
+  rm -f "$log"
 done
 
 echo

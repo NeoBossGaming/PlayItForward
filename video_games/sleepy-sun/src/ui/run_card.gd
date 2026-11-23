@@ -41,8 +41,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event.is_action_pressed(&"act") or event.is_action_pressed(&"start") \
 			or event.is_action_pressed(&"back"):
 		_ready_for_input = false
-		replay.emit()
+		# Marked handled BEFORE the signal, not after. The handler reloads the
+		# scene this card lives inside, so once `replay` returns the card is
+		# out of the tree and get_viewport() is null -- which threw a script
+		# error on EVERY replay press, in both 4.6 and 4.7. On a cabinet that
+		# is invisible; in the editor it pops the debugger, which takes focus
+		# from the game window and is why Neo could never read his own score.
 		get_viewport().set_input_as_handled()
+		replay.emit()
 
 
 ## `lines` is an array of [label, value] pairs, in the game's own words.

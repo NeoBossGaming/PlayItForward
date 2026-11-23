@@ -23,6 +23,7 @@ func _ready() -> void:
 	await _test_the_rank_bands_cover_everything()
 	await _test_saves_do_not_mix_games()
 	await _test_the_golden_prize_is_rare_but_real()
+	await _test_the_results_card_survives_a_press()
 
 	get_tree().quit(report("CABINET"))
 
@@ -248,6 +249,66 @@ var _window_breaks: int = 0
 func _check_window(at: float) -> void:
 	if at < Golden.WINDOW.x or at > Golden.WINDOW.y:
 		_window_breaks += 1
+
+
+## The end of a run, which until now NOTHING covered.
+##
+## Every suite instances its game as a child, and the results card only
+## appears when the game IS the running scene -- so `_on_run_finished`, the
+## card, the rank stamp and the save write were all untested, and a null
+## dereference on every single replay press lived there for several rounds.
+## Neo found it by playing: in the editor the error pops the debugger, which
+## takes focus from the game window, so he could never read his own score.
+##
+## Driven here directly rather than by finishing a real run, because the
+## property is about the CARD, not about how the game got there.
+func _test_the_results_card_survives_a_press() -> void:
+	for scene in Dev.discover_games():
+		var card := RunCard.new()
+		add_child(card)
+		var replays: Array = []
+		# The handler TEARS THE CARD OUT OF THE TREE, exactly as the real one
+		# does by reloading the scene the card is parented to. Without this
+		# the test is not reproducing the situation at all: the card stays in
+		# the tree, get_viewport() is fine, and re-breaking the bug on
+		# purpose did not fail the suite. A test of a teardown has to tear
+		# something down.
+		card.replay.connect(func() -> void:
+			replays.append(true)
+			if card.is_inside_tree():
+				card.get_parent().remove_child(card))
+		card.show_run("TEST", 1234, [
+			["held on", "1:05"],
+			["a thing", "7"],
+			# A tinted row, which only the golden prize produces and which
+			# therefore almost never runs.
+			["GOLDEN", "x1", Color(1, 0.86, 0.4)],
+		], 900, 640, 400)
+
+		# Wait out the count-up, the stamp and the staggered rows.
+		var waited := 0.0
+		while waited < 6.0 and not card._ready_for_input:
+			await _frames(1)
+			waited += get_process_delta_time()
+		_check(card._ready_for_input,
+				"%s's results card never became pressable" % scene)
+
+		# The press. Its handler tears the card's own scene down in the real
+		# game, so anything the card touches AFTER emitting is on borrowed
+		# time -- which is exactly what broke.
+		_send(&"act", true)
+		await _frames(2)
+		_send(&"act", false)
+		await _frames(2)
+		_check(replays.size() == 1,
+				"%s's card reported %d replays for one press"
+				% [scene, replays.size()])
+		_check(not card._ready_for_input,
+				"%s's card is still accepting presses after replaying"
+				% scene)
+		card.free()
+		await _frames(2)
+	print("  results     card builds, stamps and replays for every game")
 
 
 func _game_folders() -> PackedStringArray:
