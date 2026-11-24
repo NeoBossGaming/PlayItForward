@@ -93,9 +93,23 @@ func _ready() -> void:
 	_step("the opening is survivable");       await _test_the_opening_is_survivable()
 	_step("the golden can be caught"); await _test_the_golden_can_be_caught()
 	_step("the opening card");                await _test_the_opening_card()
+	_step("the art is pixel art");            await _test_the_art_is_pixel_art()
 	_step("")
 
 	get_tree().quit(report("ACORN STORM"))
+
+
+# --- the art -----------------------------------------------------------------
+
+## The two layers that fill the screen must not drift back to noise. Both
+## shipped at a mean run of 2 px -- thousands of single-pixel random strokes --
+## and every check passed, because nothing was asking; Neo had to say it looked
+## "too realistic for a 2d pixel game". Riverleap's water, the reference, is
+## 20. Measured by SoakBase.mean_run(); see make_placeholders.py for the rules
+## that get the number up.
+func _test_the_art_is_pixel_art() -> void:
+	_check_grain("res://assets/game/acorn_storm/clearing.png", 10.0)
+	_check_grain("res://assets/game/acorn_storm/canopy_shade.png", 10.0)
 
 
 # --- the contract ------------------------------------------------------------

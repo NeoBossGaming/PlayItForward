@@ -74,6 +74,14 @@ upscaled hand-drawn exports. `tools/make_placeholders.py` fills the gaps; its
 it cannot resurrect art for a parked game. Both scripts' outputs are committed,
 so opening the project needs no build step.
 
+Several sprites in one game are drawn from **one random stream**, in order. A
+redrawn sprite that takes a different number of draws re-randomises every
+sprite after it, silently. That is why `_acorn_floor_v1()` and
+`_hush_floor_v1()` still run when the floors they drew are gone: their names
+are not in `KEEP`, so nothing is written, but their draws keep the canopy and
+the hedge byte-identical. After any regeneration, `git status` should list only
+the sprites you meant to change.
+
 ---
 
 ## 4. Architecture
@@ -242,6 +250,38 @@ A bigger tile on its own only makes the grid bigger. And anything that must
 be *wider than the screen* — Acorn Storm's canopy band — should simply be drawn
 wider than the screen, because a tile with no period is the cheapest fix there
 is.
+
+### The ground is drawn in shapes, not grain
+
+Neo, on the two games after Riverleap: *"the assets look too realistic for a
+2d pixel game."* It was not the palette — every sprite was already four to six
+colours. It was **grain**: how often the colour changes from one pixel to the
+next along a row. Riverleap's water is a few big deliberate blobs and short
+streaks, a mean run of **20 px**. Acorn Storm's clearing and Hush Meadow's
+meadow were thousands of single-pixel random strokes, **2.0 and 1.8 px**, and
+fine random grain is exactly what a camera produces. Every check passed,
+because nothing was asking.
+
+The rules every large layer is now built by, in `tools/make_placeholders.py`:
+
+- **Shapes, then motifs.** A few big hard-edged zones from a thresholded field,
+  close together in value so they give the ground shape without reading as
+  camouflage; then a handful of small hand-defined tufts *stamped* at random
+  places. Detail is repetition of deliberate shapes, never per-pixel chance.
+- **Nothing alone.** No lone pixel in a zone map; every mark is a cluster.
+- **Ordered dither, never random alpha.** A soft edge is two fixed alpha steps
+  with a 4×4 Bayer pattern between them, in a narrow band. The cover disc went
+  from 208 alpha levels to 2.
+
+Targets: a ground or shade tile **≥ 10 px**, a grass clump or cover disc
+**≥ 6 px**. `SoakBase.mean_run()` measures the imported texture, and both
+suites assert it on their layers. It is the only objective check on "does this
+look retro", and it found the problem.
+
+Two things the pictures caught and the number could not: a tuft cleanup pass
+run after stamping erased every tuft's tips to dots, and five-pixel cross
+flowers sprinkled Hush Meadow with small copies of the dew mote — the one cross
+on that ground that is supposed to mean something.
 
 ### Speed is sold with the camera, not with shake
 
@@ -1258,8 +1298,8 @@ tests caught an un-hittable player that looked perfectly fine.
 
 ## 8. Hush Meadow (`hush_meadow`) — *forage*
 
-A meadow that slides down the screen and off the bottom while you work it.
-Endless; the run ends when the **nerve meter** fills.
+A meadow that slides down the screen and off the bottom while you work it, and
+carries you with it. Endless; the run ends when the **nerve meter** fills.
 
 Game three, and the first one restored from the parked eight rather than built
 from nothing. What came back was `PatrolBird` — a drawn cone of sight,
@@ -1271,11 +1311,12 @@ away.
 
 ### The two decisions the rest falls out of
 
-**The meadow scrolls.** Grass drifts down and leaves, so the patch you are
-standing in has a few seconds left in it. Cover is a route, not a den. It is
-also what keeps this game from being Acorn Storm with different sprites — that
-one is a bounded field you move around inside, and so was the parked version of
-this one.
+**The meadow scrolls, and she rides it.** Grass drifts down and leaves, so the
+patch you are standing in has a few seconds left in it — and so do you, because
+standing still rides you to the bottom edge. Cover is a route, not a den, and
+the meadow is a current to walk against. It is also what keeps this game from
+being Acorn Storm with different sprites — that one is a bounded field you move
+around inside, and so was the parked version of this one.
 
 **Nerve rises always, and only pickups bring it down.** Standing in grass
 nearly freezes the rise; it never lowers it. Hiding buys time and never
@@ -1298,6 +1339,7 @@ rather than something that comes to you.
 | open ground, unseen | +0.022/s → +0.070/s |
 | inside a bird's cone | **+0.42/s** |
 | inside grass | +0.016/s — frozen, never lowered |
+| pinned against the bottom edge | **+0.75/s** — overrides grass and cones |
 | dew collected | −0.42 |
 | petal collected | −0.09 |
 | spotted | +0.18, a swoop, a stun, −100 points |
@@ -1316,10 +1358,18 @@ somewhere nobody can see: a target of **seven measured as 2.2 patches actually
 on the field**, and lowering it to three changed almost nothing.
 
 Density in **space** is the right control for a scrolling world — the river
-works the same way. `PATCH_GAP` runs **52 px → 128 px** of meadow between
-stands of grass, which is about four patches on the field early and under two
-late. That one change is the whole late game: cover goes from 82 px away from
-an average spot to 191 px.
+works the same way. `PATCH_GAP` runs **46 px → 92 px** of meadow between stands
+of grass: 3.6 patches on the field early, 2.8 late, and cover from 69 px away
+from an average spot to 108 px.
+
+It was 52 → 128 while the meadow ran at 18 → 52 px/s, and the gap had to move
+with the scroll, because patches **arrive** at `scroll / gap` per second. When
+the scroll slowed to 16 → 38 for the change below, the old gap starved the
+meadow — late dew worth 0.98× the open rise — and even at 100 the bots found 9 %
+less dew per second than before, which is exactly how far arrivals had fallen.
+46 → 92 puts arrivals back where they were. The late game's thinning is gentler
+in space than it was (108 px, not 191) because the pressure moved: holding your
+ground against 38 px/s is now most of it.
 
 ### Where the late game's pressure is allowed to come from
 
@@ -1344,15 +1394,67 @@ version is harder, because cover **expires**:
 > reaction time, that will **still be on the field when she arrives**, and that
 > is not currently inside a cone.
 
-Reaching it is solved as an **interception**, not a distance — the patch is
-moving toward a player below it and away from one above it, and treating it as
-stationary is wrong in both directions.
+Reaching it is a walk, plus a wait for anything not on the field yet. She and
+the patches ride the same meadow, so relative to the grass she is only ever
+walking: distance over `WALK`. But the field stops her at its top edge, so a
+patch still above it is not a short walk away — it is a wait at that edge for
+the meadow to bring it down. `reach_time()` takes the longer of the two.
+
+That second term is not the old interception coming back; for anything already
+on the field it is zero. It is what the first distance-only version missed, and
+the bot found it the hard way: it walked up to the top edge to wait for grass
+that had not arrived, which is where birds come in, and died in ten seconds.
 
 The floor is checked **every frame**, not only while topping the meadow up,
 and that distinction is the whole fix. Late on the meadow holds three patches,
 so the quota is met while all three are behind her, under an eye, or about to
 go over the edge: the count is fine and there is nowhere to go. It measured as
 a 2.03 s dead end before the check moved.
+
+### She rides the meadow, and the bottom edge bites
+
+Neo, after playing it: *"the player does not follow the scrolling, rather goes
+up along with the camera — I think this is a bug."* It was. `_scroll_world()`
+moved patches, props, blockers, pickups and birds, the camera is fixed, and the
+player was not in the list — so the ground slid out from under a figure pinned
+to the screen and grass passed through her like scenery. Things on the ground
+move with the ground. `hush_test.gd` now checks she moves exactly as far as a
+patch does, and it was verified by deleting the one line that carries her.
+
+The fix Neo chose has a second half. Carried, a player who never touches the
+stick reaches the bottom edge about six seconds after GO, so the edge became the
+meadow's one boundary: **pinned against it, nerve rises at 0.75/s** — nearly
+twice what a bird's eye costs, in grass or out, because riding a patch down to
+the edge and sitting in it is exactly the safe corner this design removes. The
+HUD's edge alarm comes on from the first pinned frame and the first pin of a
+run says KEEP UP once. One push of the stick gets her off.
+
+This closed a real hole. Standing still used to be free — fresh cover arrived
+on its own — and now it costs ground, which is the relationship Riverleap has
+with its river and the reason Neo keeps citing that game as the one that feels
+right.
+
+What changed with it, and why each number moved:
+
+- **`WALK` 70 → 85, `SCROLL` 18 → 52 became 16 → 38.** Before, standing still
+  on screen meant being lifted up through the meadow for free at the scroll
+  speed, so her approach to new cover — which always arrives from the top — was
+  walk *plus* scroll: 122 px/s late. Riding takes that lift away. At the old
+  numbers she would have made 18 px/s of headway late on; now it is 47. A faster
+  walk (92) was measured and bought nothing, so it was not kept.
+- **`MERCY_SECONDS` 1.1 → 1.6.** After a spotting the bird swoops onto her, then
+  flies back along its lane. While she was pinned to the screen the meadow's
+  drift separated them during her mercy window; once they rode it together, a
+  bird whose lane ran the way she fled followed her with its cone on her and
+  caught her again the moment mercy ran out — 0.65 s of movement after the
+  stun, 55 px, inside a 78 px cone. Found in a traced run that died at 13 s.
+- **The bottom edge costs a stranger something.** A player who touches nothing
+  lasts **6 seconds** once the meadow is up to speed (the run is over about 8 s
+  after GO), against 35 s before. That is the
+  direct price of the rule Neo chose, and it is the one number here that runs
+  against the gentle-opening principle in §5. The alarm and KEEP UP are what
+  stand between a confused first-timer and it. If it proves harsh at the
+  cabinet, `NERVE_PINNED` is the single knob.
 
 ### Two things that were invisible until somebody looked
 
@@ -1372,14 +1474,31 @@ what: walking in is still the only way to find out.
 
 ### How hard it actually is
 
-Bots at three reaction times, six runs each:
+Bots at three reaction times, **twenty runs each**:
 
 | | 133 ms | 216 ms | 300 ms |
 |---|---|---|---|
-| survived | 119 s | 119 s | 108 s |
+| survived | 108 s | 85 s | 95 s |
 
-`PAR_SECONDS` is **120**, set from that table rather than guessed, so a
-two-minute run is a B and four minutes is an S.
+Pooled: mean 96 s, median 84 s, ten of the sixty at the suite's 170 s cap.
+`PAR_SECONDS` is **95**, set from that table, so par (a minute and a half) is a
+B and twice par, just over three minutes, is an S. It was 120 against a table
+of 119 / 119 / 108 before she rode the meadow; runs are shorter now because
+holding your ground is no longer free, which is the point, and par moved with
+them so nobody is silently regraded.
+
+Sixty runs, not the suite's eighteen, because eighteen swing too much to set a
+number from: the unchanged old build read 119 s on 4.7 and 136 s on 4.6 at the
+216 ms column. The comparison that was stable was **rates per 100 s of
+survival** — and by those the riding meadow is nearly the same game as before:
+
+| per 100 s | watched | spotted | dew | petals | pinned |
+|---|---|---|---|---|---|
+| before riding | 3.3 s | 10.1 | 19.6 | 20.2 | — |
+| riding, as shipped | 2.9 s | 9.1 | 19.2 | 21.6 | 0.17 s |
+
+Early deaths did not get more common: runs ending inside 45 s were 8 % of sixty
+against 17 % of eighteen before.
 
 Reaction time matters less here than in either other game, and that is honest
 rather than a tuning failure: nothing in this game has to be dodged on reflex.
@@ -1391,7 +1510,8 @@ lasted. Survival time cannot carry it: six pairs of whole runs on one unchanged
 build gave hiding 61 s / 87 s / 96 s against foraging 137 s / 102 s / 88 s, so
 the claim came out true, false and true on the same code. Dew rate is stable
 and is the claim anyway, since dew is the only thing that lowers the meter:
-foraging finds **0.177 dew/s against hiding's 0.062**.
+foraging finds **0.180 dew/s against hiding's 0.043** (0.177 against 0.062
+before riding — a hider who rides her patch to the edge now pays for it).
 
 ---
 
@@ -1500,7 +1620,8 @@ than the one a person does.
 - **Reachable, surviving, unwatched cover always exists** — the scroller's
   version of "never cornered", and strictly harder than either other game's
   because cover **expires**. Computed in the test from the patches, the scroll
-  rate and the cones, and solved as an interception rather than a distance. A
+  rate and the cones: a walk to the patch, or a wait for one not yet on the
+  field, whichever is longer. A
   momentary gap is allowed and a long one is not: the instant a patch crosses
   the bottom edge there can honestly be a beat with nothing usable, and
   asserting zero gaps would report dead ends on a game that has none. It also
@@ -1526,9 +1647,26 @@ than the one a person does.
 - **Cover gets further away across a run** — probed from fixed points, because
   the forage bot walks toward the nearest patch by definition and so cannot
   measure one.
+- **She rides the meadow** — after a second, she has moved exactly as far as a
+  patch has. The regression test for Neo's report, and the reason the suite's
+  reach maths may treat her as only walking. Verified by deleting the line that
+  carries her: it fails with the bug's own description.
+- **The edge bites** — pinned at the bottom, nerve rises well above a bird's
+  rate, the alarm is on, and a third of a second of pushing up frees her.
+  Verified by setting the pinned rate to the seen rate.
+- **The art is pixel art** — every large layer's mean run, measured on the
+  imported texture. Acorn Storm's suite holds the same check for its two.
 - Plus the curve, the two ground layers staying on different periods and
   rates, grass drawing over a concealed player, a cone being on her long
   enough to react to, the golden being catchable, and a run ending once.
+
+The bots carry more judgement than they did, and each piece was added because a
+traced death showed the bot doing something no person would: it re-decides
+when pinned (after its reaction time, as a person notices the alarm), never
+walks *down* to a patch that will carry it onto the edge, keeps a berth from
+birds rather than only from where they are looking, and does not wait at the
+top edge for grass that has not arrived. Without them the difficulty table
+measured a bot sitting on the edge.
 
 ### And a third suite, for what sits between them
 
@@ -1700,6 +1838,37 @@ Eight notes that cost real time to learn:
 - **Verify an anchor before you edit on it.** Three scripted edits in a row
   aborted on a string that did not match, each one costing a full suite run to
   notice. Read the file, then edit.
+
+- **Compare against a baseline measured the same way.** "Runs got 30 %
+  shorter" meant nothing until the unchanged build was checked out into a
+  worktree and run through the identical instrumentation. That comparison
+  overturned the first explanation (the bots had lived in the upper half of the
+  field all along) and pointed at the real one.
+- **Rates per unit time are stable where run lengths are not.** Ten runs per
+  reaction time swung ±25 s, enough that a strictly faster walk measured
+  *worse*. Watched-seconds, spottings, dew and edge-time per 100 s of survival
+  were steady across every sample and said the riding meadow was nearly the
+  same game as before -- and the one rate that had moved, dew, named the cause:
+  arrivals had fallen with the scroll.
+- **Trace the deaths before tuning the numbers.** Every early death was printed
+  frame by frame, and none was what it looked like from the summary. One was
+  the bot oscillating on the edge, one was a missing term in the game's own
+  reach maths (a patch above the field is a wait, not a walk), and one was a
+  mercy window that a change of reference frame had quietly shortened.
+- **A change of reference frame moves things far from where you changed it.**
+  Carrying the player was one line. It also removed a free lift toward new
+  cover, starved the meadow of arrivals once the scroll slowed, made a
+  distance-only reach wrong at the top edge, and took away the drift that used
+  to separate a swooping bird from her during mercy. Each surfaced as a
+  measurement or a trace, never as a failing check.
+- **The spin happened a fourth time.** A scratch scene copied into a baseline
+  worktree called a function the old code did not have, and a headless Godot
+  sat at 99 % CPU for the full ten-minute timeout. `run_tests.sh` gates its own
+  suites; anything run by hand needs the same `--check-only` first.
+- **A cold import cache is not a failure.** On a fresh clone the first import
+  errors because the theme loads before its fonts exist, so every suite passed
+  and the run said FAILED. `run_tests.sh` now warms a cold cache with one
+  unjudged import; the judged one still reports anything that stays broken.
 
 ---
 

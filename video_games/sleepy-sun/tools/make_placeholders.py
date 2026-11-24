@@ -137,6 +137,180 @@ def speckle(draw, rng, w, h, color, count):
         draw.point((rng.randrange(w), rng.randrange(h)), color)
 
 
+# --------------------------------------------------------------------------- grain
+#
+# What makes a sprite read as pixel art rather than as a photograph is GRAIN:
+# how often the colour changes from one pixel to the next along a row. Not the
+# palette -- every sprite here was already four to six colours, and the two
+# grounds that looked "too realistic" were among the smallest palettes in the
+# project. What they had was thousands of single-pixel random strokes, and fine
+# random grain is exactly what a camera produces.
+#
+#     sprite                          mean run of identical pixels
+#     shared/water.png (Riverleap)    20.0 px   <- the one that looks right
+#     acorn_storm/clearing.png         2.0 px   <- before this section existed
+#     hush_meadow/grass_cover.png      1.7 px, 208 alpha levels
+#
+# So the large layers are now built by these rules, and each game's suite
+# asserts the result with the same measurement (mean_run below):
+#
+#   * Shapes, then motifs. A few big hard-edged zones, then a handful of small
+#     hand-defined tufts STAMPED at random places. Detail comes from repeating
+#     deliberate shapes, never from per-pixel randomness.
+#   * Nothing alone. No lone pixel in a zone map; every mark is a cluster.
+#   * Ordered dither, never random alpha. A soft edge is two or three fixed
+#     alpha steps with a regular 4x4 Bayer pattern between them, in a narrow
+#     band -- so edges are hard and the dither is a texture, not static.
+
+BAYER4 = ((0, 8, 2, 10), (12, 4, 14, 6), (3, 11, 1, 9), (15, 7, 13, 5))
+
+
+def bayer(x: int, y: int) -> float:
+    """The ordered-dither threshold for this pixel, in (0, 1)."""
+    return (BAYER4[y % 4][x % 4] + 0.5) / 16.0
+
+
+def mean_run(img: Image.Image) -> float:
+    """Mean run of identical pixels along a row -- the grain measurement.
+    Riverleap's water is 20; anything under ~5 reads as noise at 3x."""
+    px = img.convert("RGBA").load()
+    w, h = img.size
+    changes = sum(px[x, y] != px[x + 1, y] for y in range(h) for x in range(w - 1))
+    return float("inf") if changes == 0 else (h * (w - 1)) / float(changes)
+
+
+def wrapped_field(rng, W, H, octaves, stretch=1.0):
+    """A seamless smooth field in -1..1: soft bumps that wrap at the edges.
+
+    `octaves` is [(count, min_radius, max_radius, weight)]. `stretch` widens
+    every bump into a horizontal swathe -- round zones were what made the first
+    clearing read as a pond full of lily pads, and a swathe reads as grass
+    combed by the wind."""
+    field = [[0.0] * W for _ in range(H)]
+    for count, rmin, rmax, scale in octaves:
+        for _ in range(count):
+            cx, cy = rng.randrange(W), rng.randrange(H)
+            r = rng.randrange(rmin, rmax)
+            rx = int(r * stretch)
+            weight = rng.uniform(-1.0, 1.0) * scale
+            for y in range(-r, r + 1):
+                for x in range(-rx, rx + 1):
+                    d2 = (x * x) / float(rx * rx) + (y * y) / float(r * r)
+                    if d2 >= 1.0:
+                        continue
+                    field[(cy + y) % H][(cx + x) % W] += weight * (1.0 - d2) ** 2
+    peak = max(abs(v) for row in field for v in row) or 1.0
+    return [[v / peak for v in row] for row in field]
+
+
+def stamp(px, W, H, motif, x0, y0, ink, wrap=True):
+    """Draw a hand-defined motif (rows of characters, "." for nothing), looking
+    each character up in `ink`. Wraps by default, so tiles stay seamless."""
+    for my, row in enumerate(motif):
+        for mx, ch in enumerate(row):
+            if ch not in ink:
+                continue
+            x, y = x0 + mx, y0 + my
+            if wrap:
+                x, y = x % W, y % H
+            elif not (0 <= x < W and 0 <= y < H):
+                continue
+            px[x, y] = ink[ch]
+
+
+def despeckle(img: Image.Image, wrap=True) -> None:
+    """No pixel on its own. One unlike both horizontal neighbours, which agree
+    with each other, takes their colour; so does one unlike all four."""
+    px = img.load()
+    src = img.copy().load()
+    W, H = img.size
+
+    def at(x, y):
+        if wrap:
+            return src[x % W, y % H]
+        return src[x, y] if 0 <= x < W and 0 <= y < H else CLEAR
+
+    for y in range(H):
+        for x in range(W):
+            c, l, r, u, d = at(x, y), at(x - 1, y), at(x + 1, y), at(x, y - 1), at(x, y + 1)
+            if l == r and c != l:
+                px[x, y] = l
+            elif c != l and c != r and c != u and c != d and u == d:
+                px[x, y] = u
+
+
+def stepped(v, x, y, cuts, band):
+    """How many of `cuts` the value is past. Within +-band of a cut the answer
+    is decided by the Bayer threshold, so a step has a narrow, regular dither
+    edge instead of a soft one. Keep the band narrow: dither is the costliest
+    texture there is by the grain measurement, a checkerboard being a run of 1."""
+    level = 0
+    for cut in cuts:
+        if v >= cut + band:
+            level += 1
+        elif v > cut - band:
+            if (v - (cut - band)) / (2.0 * band) > bayer(x, y):
+                level += 1
+            break
+        else:
+            break
+    return level
+
+
+def retro_ground(seed, W, zones, ink, cuts, tufts, tuft_count, extras=(),
+                 octaves=((26, 10, 24, 1.0), (34, 4, 9, 0.40)), stretch=2.2):
+    """A seamless ground tile: three close zones, then stamped tufts.
+
+    The zones (dark, base, lit) are deliberately close in value. Their job is
+    to give the ground SHAPE; at high contrast they read as camouflage and
+    give the tile's repeat away. The contrast lives in the tufts instead,
+    drawn from `ink` ("s" shadow, "h" highlight), which are few and deliberate.
+    `extras` is [(motif, count, [ink, ...])] for flowers, earth and the like."""
+    rng = random.Random(seed)
+    field = wrapped_field(rng, W, W, octaves, stretch)
+    img, _ = canvas(W, W)
+    px = img.load()
+    for y in range(W):
+        for x in range(W):
+            v = field[y][x]
+            px[x, y] = zones[0] if v < cuts[0] else (zones[2] if v > cuts[1] else zones[1])
+    # Cleaned BEFORE the tufts go down: a tuft's thin tips are the motif, and
+    # a cleanup pass after stamping erases them to dots.
+    despeckle(img)
+    px = img.load()
+    for _ in range(tuft_count):
+        stamp(px, W, W, rng.choice(tufts), rng.randrange(W), rng.randrange(W), ink)
+    for motif, count, inks in extras:
+        for _ in range(count):
+            chosen = rng.choice(inks)
+            stamp(px, W, W, motif, rng.randrange(W), rng.randrange(W), chosen)
+    return img
+
+
+def shade_layer(seed, W, lit, dark, lit_alpha, dark_alpha, cuts, band, octaves,
+                stretch=1.0):
+    """The second, larger ground layer that beats against the first so the
+    grid never shows: light and shadow in two hard alpha steps each, with an
+    ordered-dither edge between steps. Replaces a smooth falloff with 24-30
+    alpha levels, which read as an airbrush over pixel art."""
+    rng = random.Random(seed)
+    field = wrapped_field(rng, W, W, octaves, stretch)
+    img, _ = canvas(W, W)
+    px = img.load()
+    for y in range(W):
+        for x in range(W):
+            v = field[y][x]
+            if v >= 0.0:
+                n = stepped(v, x, y, cuts, band)
+                if n:
+                    px[x, y] = (*lit, lit_alpha[n - 1])
+            else:
+                n = stepped(-v, x, y, cuts, band)
+                if n:
+                    px[x, y] = (*dark, dark_alpha[n - 1])
+    return img
+
+
 # --------------------------------------------------------------------------- water
 
 def water_tiles():
@@ -712,6 +886,137 @@ def control_pictograms():
     save(img, "ui/arrow.png")
 
 
+def _acorn_floor_v1(rng):
+    """Acorn Storm's first clearing floor and shade layer. Writes nothing.
+
+    Kept for two reasons. It is the record of what NOISE looks like: 1,500
+    single-pixel blades and a 30-level alpha falloff, mean run 2.0 px, which
+    is what Neo meant by "too realistic for a 2d pixel game". And the canopy
+    is drawn after it from the same random stream, so its draws must still
+    happen for the canopy to stay byte-identical. Its file names are not in
+    KEEP, so save() discards both images.
+    """
+    # --- the clearing floor -----------------------------------------------
+    # 160px, not 32. The river taught this the hard way: a small tile across a
+    # wide field is a visible grid no amount of detail inside one tile hides.
+    #
+    # Texture is BLADES, not blobs. The first version laid down wide flat
+    # ellipses, and tiled across the screen it read as a pond covered in lily
+    # pads rather than as grass -- big hard-edged ovals are what a lily pad
+    # looks like from above, which this project has unfortunately drawn before
+    # and knows well. Short strokes at low contrast read as ground cover, and
+    # they have no shape large enough for the eye to match across the tile
+    # seam, which is the other half of why the grid disappeared.
+    W = H = 160
+    img, _ = canvas(W, H, P["grass"])
+    px = img.load()
+
+    def soft_patch(cx, cy, r, colour, strength):
+        for y in range(-r, r + 1):
+            for x in range(-r, r + 1):
+                d2 = (x * x + y * y) / float(r * r)
+                if d2 >= 1.0:
+                    continue
+                if rng.random() > strength * (1.0 - d2):
+                    continue
+                px[(cx + x) % W, (cy + y) % H] = colour
+
+    # Broad, very low contrast variation first, so the field is not flat.
+    for _ in range(14):
+        soft_patch(rng.randrange(W), rng.randrange(H), rng.randrange(18, 40),
+                   P["grass_dark"], 0.5)
+    for _ in range(12):
+        soft_patch(rng.randrange(W), rng.randrange(H), rng.randrange(14, 34),
+                   P["grass_lit"], 0.45)
+
+    # Then the blades. Mostly upright, one to three pixels, in both directions
+    # from the base tone so the texture reads at a distance without any one
+    # stroke being visible.
+    for _ in range(1500):
+        x, y = rng.randrange(W), rng.randrange(H)
+        length = rng.randrange(1, 4)
+        lean = rng.choice((-1, 0, 0, 1))
+        tone = P["grass_lit"] if rng.random() < 0.5 else P["grass_dark"]
+        for i in range(length):
+            px[(x + lean * i) % W, (y - i) % H] = tone
+    # A little bare earth showing through.
+    for _ in range(90):
+        x, y = rng.randrange(W), rng.randrange(H)
+        for i in range(rng.randrange(1, 4)):
+            px[(x + i) % W, y] = (104, 92, 62, 255)
+    save(img, "acorn_storm/clearing_v1.png")
+
+    # --- the shade layer --------------------------------------------------
+    # 224px against the floor's 160, drifting at a different rate. Two periods
+    # that never line up is what actually killed the river's grid; a bigger
+    # tile on its own only makes the grid bigger.
+    #
+    # Kept light. At its first strength it turned the whole clearing into a
+    # dark green soup that the player and both ground marks had to fight to
+    # be seen against -- and the marks are the game.
+    DW = DH = 224
+    field = [[0.0] * DW for _ in range(DH)]
+    for _ in range(22):
+        cx, cy = rng.randrange(DW), rng.randrange(DH)
+        radius = rng.randrange(30, 78)
+        weight = rng.uniform(-1.0, 1.0)
+        for y in range(-radius, radius + 1):
+            for x in range(-radius, radius + 1):
+                d2 = (x * x + y * y) / float(radius * radius)
+                if d2 >= 1.0:
+                    continue
+                field[(cy + y) % DH][(cx + x) % DW] += weight * (1.0 - d2) ** 2
+    peak = max(abs(v) for row in field for v in row) or 1.0
+    img, _ = canvas(DW, DH)
+    for y in range(DH):
+        for x in range(DW):
+            v = field[y][x] / peak
+            colour = (236, 244, 206) if v >= 0 else (28, 44, 24)
+            a = abs(v) * (26 if v >= 0 else 30)
+            if a < 2.0:
+                continue
+            img.putpixel((x, y), (*colour, int(a)))
+    save(img, "acorn_storm/canopy_shade_v1.png")
+
+
+def acorn_storm_ground():
+    """The clearing floor and the shade through the leaves, at retro grain.
+
+    Mown grass in big hard-edged swathes, with short tufts stamped over it and
+    a little bare earth -- see the grain section at the top of this file for
+    the rules, and acorn_test.gd for the assertion that holds them.
+
+    The two-period rule is unchanged: 160px floor under a 224px shade layer
+    that drifts with the wind, so the repeat never lines up.
+    """
+    # Short and wide: this is mown grass, and Hush Meadow's tall tufts are
+    # what tells the two games apart at a glance.
+    short_tufts = [
+        ["h.h", ".s."],
+        ["h..h", ".ss."],
+        [".h.h", "h.s.", ".ss."],
+        ["h.h.h", ".sss."],
+    ]
+    earth = {"e": (104, 92, 62, 255), "d": (86, 76, 52, 255)}
+    img = retro_ground(
+        5200, 160,
+        zones=[(66, 110, 54, 255), P["grass"], (84, 136, 66, 255)],
+        ink={"s": (52, 88, 44, 255), "h": (110, 160, 78, 255)},
+        cuts=(-0.28, 0.20), tufts=short_tufts, tuft_count=120,
+        extras=[(["eee.", "deee", ".dd."], 5, [earth]),
+                ([".ee", "eed", "dd."], 5, [earth])])
+    save(img, "acorn_storm/clearing.png")
+
+    # Kept light, as the first version learned: at full strength it turned
+    # the clearing into a soup that both ground marks had to fight -- and the
+    # marks are the game.
+    img = shade_layer(
+        5250, 224, lit=(236, 244, 206), dark=(28, 44, 24),
+        lit_alpha=(14, 24), dark_alpha=(18, 30), cuts=(0.28, 0.58), band=0.035,
+        octaves=[(22, 30, 78, 1.0), (16, 10, 22, 0.25)], stretch=1.2)
+    save(img, "acorn_storm/canopy_shade.png")
+
+
 def acorn_storm_art():
     """The clearing, and the two things that fall into it.
 
@@ -799,87 +1104,11 @@ def acorn_storm_art():
     d.polygon([(9, 2), (13, 1), (10, 4)], fill=(96, 150, 70, 255))
     save(img, "acorn_storm/sunfruit.png")
 
-    # --- the clearing floor -----------------------------------------------
-    # 160px, not 32. The river taught this the hard way: a small tile across a
-    # wide field is a visible grid no amount of detail inside one tile hides.
-    #
-    # Texture is BLADES, not blobs. The first version laid down wide flat
-    # ellipses, and tiled across the screen it read as a pond covered in lily
-    # pads rather than as grass -- big hard-edged ovals are what a lily pad
-    # looks like from above, which this project has unfortunately drawn before
-    # and knows well. Short strokes at low contrast read as ground cover, and
-    # they have no shape large enough for the eye to match across the tile
-    # seam, which is the other half of why the grid disappeared.
-    W = H = 160
-    img, _ = canvas(W, H, P["grass"])
-    px = img.load()
-
-    def soft_patch(cx, cy, r, colour, strength):
-        for y in range(-r, r + 1):
-            for x in range(-r, r + 1):
-                d2 = (x * x + y * y) / float(r * r)
-                if d2 >= 1.0:
-                    continue
-                if rng.random() > strength * (1.0 - d2):
-                    continue
-                px[(cx + x) % W, (cy + y) % H] = colour
-
-    # Broad, very low contrast variation first, so the field is not flat.
-    for _ in range(14):
-        soft_patch(rng.randrange(W), rng.randrange(H), rng.randrange(18, 40),
-                   P["grass_dark"], 0.5)
-    for _ in range(12):
-        soft_patch(rng.randrange(W), rng.randrange(H), rng.randrange(14, 34),
-                   P["grass_lit"], 0.45)
-
-    # Then the blades. Mostly upright, one to three pixels, in both directions
-    # from the base tone so the texture reads at a distance without any one
-    # stroke being visible.
-    for _ in range(1500):
-        x, y = rng.randrange(W), rng.randrange(H)
-        length = rng.randrange(1, 4)
-        lean = rng.choice((-1, 0, 0, 1))
-        tone = P["grass_lit"] if rng.random() < 0.5 else P["grass_dark"]
-        for i in range(length):
-            px[(x + lean * i) % W, (y - i) % H] = tone
-    # A little bare earth showing through.
-    for _ in range(90):
-        x, y = rng.randrange(W), rng.randrange(H)
-        for i in range(rng.randrange(1, 4)):
-            px[(x + i) % W, y] = (104, 92, 62, 255)
-    save(img, "acorn_storm/clearing.png")
-
-    # --- the shade layer --------------------------------------------------
-    # 224px against the floor's 160, drifting at a different rate. Two periods
-    # that never line up is what actually killed the river's grid; a bigger
-    # tile on its own only makes the grid bigger.
-    #
-    # Kept light. At its first strength it turned the whole clearing into a
-    # dark green soup that the player and both ground marks had to fight to
-    # be seen against -- and the marks are the game.
-    DW = DH = 224
-    field = [[0.0] * DW for _ in range(DH)]
-    for _ in range(22):
-        cx, cy = rng.randrange(DW), rng.randrange(DH)
-        radius = rng.randrange(30, 78)
-        weight = rng.uniform(-1.0, 1.0)
-        for y in range(-radius, radius + 1):
-            for x in range(-radius, radius + 1):
-                d2 = (x * x + y * y) / float(radius * radius)
-                if d2 >= 1.0:
-                    continue
-                field[(cy + y) % DH][(cx + x) % DW] += weight * (1.0 - d2) ** 2
-    peak = max(abs(v) for row in field for v in row) or 1.0
-    img, _ = canvas(DW, DH)
-    for y in range(DH):
-        for x in range(DW):
-            v = field[y][x] / peak
-            colour = (236, 244, 206) if v >= 0 else (28, 44, 24)
-            a = abs(v) * (26 if v >= 0 else 30)
-            if a < 2.0:
-                continue
-            img.putpixel((x, y), (*colour, int(a)))
-    save(img, "acorn_storm/canopy_shade.png")
+    # --- the clearing floor and its shade ---------------------------------
+    # Redrawn at retro grain in acorn_storm_ground(). The first versions still
+    # RUN, because everything below is drawn from this same random stream:
+    # skip their draws and the canopy silently re-randomises.
+    _acorn_floor_v1(rng)
 
     # --- rock -------------------------------------------------------------
     W, H = 22, 16
@@ -1503,34 +1732,15 @@ def decor_props():
 
 # ---------------------------------------------------------------- hush meadow
 
-def hush_meadow_art():
-    """Hush Meadow: a meadow that scrolls past you, and the cover growing in it.
+def _hush_floor_v1(rng):
+    """Hush Meadow's first floor, shade, cover disc and clumps. Writes nothing.
 
-    The sprite that has to work here is the grass clump, because the player's
-    entire survival is the question "am I inside a patch". A clump has to read
-    as something you can be INSIDE, seen from directly above, which is not
-    what a handful of blades does on its own. Three things together get there:
-
-      * it is taller than it is wide, so it reads as growth standing up rather
-        than as a stain on the ground
-      * the base is dark. The shadow between stems is the cue that there is a
-        gap down there big enough to stand in
-      * the silhouette is ragged, because a smooth oval is a bush, and a bush
-        is a thing you walk around rather than into
-
-    Under every clump the game also lays `grass_cover.png`, a soft dark
-    ellipse. The parked version borrowed `village/glow.png` for this and it is
-    worth drawing on purpose: blades over green do not read as cover by
-    themselves, and a hiding place the player cannot see is worse than no
-    hiding place at all. It is drawn white so the game can tint it, and it is
-    drawn slightly SMALLER than the concealment rect the game uses -- see
-    PATCH_HALF in hush_meadow.gd. Anywhere that looks like cover has to BE
-    cover; the reverse is a game that lies to you at the only moment it
-    matters.
+    Kept for the same two reasons as _acorn_floor_v1(): it is the record of
+    what noise looks like -- 2,100 single-pixel blades (mean run 1.8 px), and a
+    cover disc airbrushed through 208 alpha levels (1.7 px) -- and the hedge is
+    drawn after it from the same random stream. Its names are not in KEEP.
     """
     import math as _m
-    rng = random.Random(7700)
-
     # Cooler and bluer than Acorn Storm's clearing on purpose. Two games on
     # mown green at 480px wide would read as the same place.
     MEADOW      = (62, 108, 72, 255)
@@ -1588,7 +1798,7 @@ def hush_meadow_art():
         x, y = rng.randrange(W), rng.randrange(H)
         px[x, y] = rng.choice((
             (186, 192, 152, 255), (176, 164, 184, 255), (196, 186, 132, 255)))
-    save(img, "hush_meadow/meadow.png")
+    save(img, "hush_meadow/meadow_v1.png")
 
     # --- the shade layer --------------------------------------------------
     # Cloud shadow crossing the meadow. Kept light: the game's readability
@@ -1616,7 +1826,7 @@ def hush_meadow_art():
             if a < 2.0:
                 continue
             img.putpixel((x, y), (*colour, int(a)))
-    save(img, "hush_meadow/meadow_shade.png")
+    save(img, "hush_meadow/meadow_shade_v1.png")
 
     # --- the cover disc ---------------------------------------------------
     # White, so the game tints it. Soft-edged so overlapping clumps merge into
@@ -1641,7 +1851,7 @@ def hush_meadow_art():
             a = 1.0 if dist <= PLATEAU else \
                 (1.0 - (dist - PLATEAU) / (1.0 - PLATEAU)) ** 1.1
             px[x, y] = (255, 255, 255, int(a * 255))
-    save(img, "hush_meadow/grass_cover.png")
+    save(img, "hush_meadow/grass_cover_v1.png")
 
     # --- three grass clumps -----------------------------------------------
     # 28 x 34: taller than wide, which is most of why it reads as standing up.
@@ -1686,7 +1896,200 @@ def hush_meadow_art():
                 for oy in range(-2, 1):
                     if 0 <= tx < GW and 0 <= ty + oy < GH:
                         px[tx, ty + oy] = SEEDHEAD
+        save(img, "hush_meadow/grass_v1_%d.png" % variant)
+
+
+def hush_meadow_ground():
+    """The meadow, its cloud shadow, and the cover a patch is built from.
+
+    Cooler and bluer than Acorn Storm's clearing, and UNMOWN: taller fan tufts
+    and a scatter of flowers, each a deliberate two-by-two bud rather than a
+    lone bright pixel. The first pass put 150 near-white single pixels on the
+    field and it looked like a star chart; these are dim and few for the same
+    reason.
+
+    And NOT crosses. They were five-pixel plus signs for one round, and in a
+    capture the meadow was sprinkled with small copies of the dew mote -- a
+    four-point sparkle whose whole job is to say "dew is in this patch" from
+    across the field. On this ground a cross means that and nothing else.
+
+    176px floor under a 240px shade layer, scrolling at different rates, so
+    the two periods never line up -- hush_test.gd asserts both halves of that.
+    """
+    fans = [
+        ["h.h.h", ".sss."],
+        [".h.h.", "h.s.h", ".sss."],
+        ["h..h", ".ss."],
+        ["h...h", ".h.h.", "..s.."],
+        [".h..", "h.h.", ".ss."],
+        ["..h.", ".h.h", ".ss."],
+    ]
+    flowers = [{"p": (186, 192, 152, 255), "c": (214, 196, 128, 255)},
+               {"p": (176, 164, 184, 255), "c": (214, 196, 128, 255)}]
+    img = retro_ground(
+        7800, 176,
+        zones=[(55, 99, 67, 255), (62, 108, 72, 255), (70, 118, 78, 255)],
+        ink={"s": (42, 80, 56, 255), "h": (98, 148, 94, 255)},
+        cuts=(-0.30, 0.18), tufts=fans, tuft_count=200,
+        extras=[(["pp", "cp"], 9, flowers)])
+    save(img, "hush_meadow/meadow.png")
+
+    # Cloud shadow. Kept light: the game rests on seeing where the patches
+    # are, and a dark soup over them costs exactly what the player needs.
+    img = shade_layer(
+        7850, 240, lit=(232, 242, 210), dark=(24, 42, 30),
+        lit_alpha=(14, 24), dark_alpha=(18, 32), cuts=(0.28, 0.58), band=0.035,
+        octaves=[(20, 34, 84, 1.0), (14, 12, 26, 0.25)], stretch=1.4)
+    save(img, "hush_meadow/meadow_shade.png")
+
+    # --- the cover disc ---------------------------------------------------
+    # White, so the game tints it, and drawn slightly SMALLER than the
+    # concealment rect (PATCH_HALF in patch.gd): anywhere that looks like
+    # cover has to BE cover.
+    #
+    # Where the patch ENDS is the only thing about it the player needs to
+    # know, so this is a hard-edged ellipse: solid to 80% of the radius, then
+    # a rim dithered with the Bayer pattern from full to nothing. Two alpha
+    # levels, 0 and 255. The version before was a radial airbrush through 208
+    # of them, which had no edge at all and read as a photograph's shadow.
+    CW, CH = 64, 44
+    CORE = 0.80
+    img, _ = canvas(CW, CH)
+    px = img.load()
+    for y in range(CH):
+        for x in range(CW):
+            dx = (x + 0.5 - CW / 2.0) / (CW / 2.0)
+            dy = (y + 0.5 - CH / 2.0) / (CH / 2.0)
+            dist = (dx * dx + dy * dy) ** 0.5
+            if dist >= 1.0:
+                continue
+            if dist <= CORE or 1.0 - (dist - CORE) / (1.0 - CORE) > bayer(x, y):
+                px[x, y] = (255, 255, 255, 255)
+    save(img, "hush_meadow/grass_cover.png")
+
+    # --- three grass clumps -----------------------------------------------
+    # 28 x 34, taller than wide, which is most of why it reads as growth
+    # standing up rather than a stain on the ground. hush_test.gd measures the
+    # concealment rect against this size, so it does not change.
+    #
+    # Built from a few WIDE blades -- six pixels at the root, never under two
+    # at the tip -- over one solid body, not thirteen one-pixel stems. Every
+    # blade edge costs two colour changes per row, and the stem version spent
+    # them so freely it measured 2.0 px, the grain of static. What says "you
+    # could be in there" now is the dark skirt along the root, and the dark
+    # cover disc the game lays under every patch.
+    #
+    # Seed chosen from a handful for all three clearing 6 px; the structure is
+    # what moved them there from 2, the seed only picks among its results.
+    STEM_DARK = (22, 46, 32, 255)
+    STEM      = (74, 124, 70, 255)
+    STEM_BACK = (52, 94, 56, 255)
+    STEM_LIT  = (132, 178, 104, 255)
+    SEEDHEAD  = (198, 206, 140, 255)
+    GW, GH = 28, 34
+    rng = random.Random(7792)
+
+    def blade(px, x0, base_y, width, height, lean, colour, tip):
+        """Tapered, solid, and never narrower than two pixels: a SHAPE."""
+        for step in range(height):
+            t = step / float(max(height - 1, 1))
+            w = max(2, int(round(width * (1.0 - t * 0.75))))
+            left = int(round(x0 + lean * t - w / 2.0))
+            y = base_y - step
+            for x in range(left, left + w):
+                if 0 <= x < GW and 0 <= y < GH:
+                    px[x, y] = tip if step >= height - 3 else colour
+
+    for variant in range(3):
+        img, _ = canvas(GW, GH)
+        px = img.load()
+        base_y = GH - 4
+
+        # The dark root: a skirt along the bottom, wider than the blades, so
+        # the clump stands IN something. The blades cover all but its rim.
+        for y in range(GH - 5, GH - 1):
+            half = (GW / 2.0 - 1.0) * (0.78 + 0.22 * (y - (GH - 5)) / 3.0)
+            for x in range(GW):
+                if abs(x + 0.5 - GW / 2.0) <= half:
+                    px[x, y] = STEM_DARK
+
+        # The back row, fanning out. Heights vary a lot on purpose: an even
+        # top edge reads as a hedge.
+        blades = []
+        count = (4, 5, 4)[variant]
+        for i in range(count):
+            spread = (i / float(count - 1)) * 2.0 - 1.0
+            x0 = GW / 2.0 + spread * (GW / 2.0 - 5) * rng.uniform(0.7, 1.0)
+            height = int(rng.uniform(0.55, 1.0) * (GH - 6))
+            lean = spread * rng.uniform(2.0, 6.0)
+            blades.append((x0, height, lean))
+        for x0, height, lean in blades:
+            blade(px, x0, base_y, 6, height, lean, STEM_BACK, STEM_BACK)
+
+        # Below where the blades part, the stand is one solid body -- a mass,
+        # not a row of sticks -- so the only gaps are up where the tips fan.
+        for y in range(base_y - 9, base_y + 1):
+            row = [x for x in range(GW)
+                   if px[x, y][3] > 0 and px[x, y] != STEM_DARK]
+            if row:
+                for x in range(min(row), max(row) + 1):
+                    px[x, y] = STEM_BACK
+
+        # Two front blades, one each side, so the lit tips frame the clump
+        # rather than speckling it.
+        for x0, height, lean in (blades[0], blades[-1]):
+            short = int(height * rng.uniform(0.6, 0.85))
+            blade(px, x0 + rng.choice((-1, 1)), base_y + 1, 6, short,
+                  lean * 0.8, STEM, STEM_LIT)
+
+        # One seedhead, on the tallest: the detail that reads at 3x.
+        x0, height, lean = max(blades, key=lambda b: b[1])
+        tx, ty = int(round(x0 + lean)), base_y - height + 1
+        for oy in (-1, 0):
+            for ox in (-1, 0):
+                if 0 <= tx + ox < GW and 0 <= ty + oy < GH:
+                    px[tx + ox, ty + oy] = SEEDHEAD
+
+        despeckle(img, wrap=False)
         save(img, "hush_meadow/grass_%d.png" % variant)
+
+
+def hush_meadow_art():
+    """Hush Meadow: a meadow that scrolls past you, and the cover growing in it.
+
+    The sprite that has to work here is the grass clump, because the player's
+    entire survival is the question "am I inside a patch". A clump has to read
+    as something you can be INSIDE, seen from directly above, which is not
+    what a handful of blades does on its own. Three things together get there:
+
+      * it is taller than it is wide, so it reads as growth standing up rather
+        than as a stain on the ground
+      * the base is dark. The shadow between stems is the cue that there is a
+        gap down there big enough to stand in
+      * the silhouette is ragged, because a smooth oval is a bush, and a bush
+        is a thing you walk around rather than into
+
+    Under every clump the game also lays `grass_cover.png`, a hard-edged dark
+    ellipse. The parked version borrowed `village/glow.png` for this and it is
+    worth drawing on purpose: blades over green do not read as cover by
+    themselves, and a hiding place the player cannot see is worse than no
+    hiding place at all. It is drawn white so the game can tint it, and it is
+    drawn slightly SMALLER than the concealment rect the game uses -- see
+    PATCH_HALF in hush_meadow.gd. Anywhere that looks like cover has to BE
+    cover; the reverse is a game that lies to you at the only moment it
+    matters.
+
+    The floor, shade, cover disc and clumps are drawn in hush_meadow_ground();
+    what is left here is the objects, which already had pixel-art grain.
+    """
+    import math as _m
+    rng = random.Random(7700)
+
+    # --- the floor, its shade, the cover disc and the clumps --------------
+    # Redrawn at retro grain in hush_meadow_ground(). The first versions still
+    # RUN, because the hedge below is drawn from this same random stream:
+    # skip their draws and it silently re-randomises.
+    _hush_floor_v1(rng)
 
     # --- the patrol bird --------------------------------------------------
     # Drawn NOSE-UP, because PatrolBird._apply_facing() rotates from -Y.
@@ -1817,6 +2220,7 @@ def main() -> None:
     ui_bits(); hud_icons(); heart_segments(); alarm_frame(); vignette(); scrim()
     player_jump_frames(); control_pictograms(); acorn_storm_art()
     golden_prize(); hush_meadow_art()
+    acorn_storm_ground(); hush_meadow_ground()
     decor_motes(); decor_props()
     made = sorted(p.relative_to(OUT).as_posix() for p in OUT.rglob("*.png"))
     print(f"assets/game now holds {len(made)} sprites")

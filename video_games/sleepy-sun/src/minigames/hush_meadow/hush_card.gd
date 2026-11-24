@@ -49,7 +49,9 @@ func _patch(at: Vector2) -> MeadowPatch:
 
 
 func _slide_controls() -> void:
-	slide_title("HUSH MEADOW", "the meadow is leaving. go with it.")
+	# "go with it" until the meadow started carrying her -- after which it was
+	# advice to ride off the bottom edge, the one thing that hurts.
+	slide_title("HUSH MEADOW", "the meadow carries you. walk against it.")
 	# High on the card, clear of the player: she stands in the middle of the
 	# field and is visible through the backdrop, and a row of text through her
 	# is how the last game's card got reported as a bug.
@@ -63,7 +65,12 @@ func _slide_controls() -> void:
 func _slide_cover() -> void:
 	slide_title("TALL GRASS HIDES YOU", "and slows you down. nothing is free.")
 	_patch(Vector2(138, 132))
-	var inside := figure(Vector2(138, 132), &"jump_down", 1.3, Z_FIGURE)
+	# Feet a little behind the patch's centre, so her head and shoulders show
+	# over the blades as they do in play. At the centre itself the solid
+	# clumps -- drawn as shapes since the art went to pixel grain, not as thin
+	# stems she showed through -- covered all of her but her shoes, and a slide
+	# about the DIFFERENCE between two figures had one.
+	var inside := figure(Vector2(138, 121), &"jump_down", 1.3, Z_FIGURE)
 	pose(inside, 0)
 	inside.modulate.a = 0.5
 	var outside := figure(Vector2(348, 132), &"jump_down", 1.3, Z_FIGURE)

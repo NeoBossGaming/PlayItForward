@@ -6,11 +6,13 @@ extends MiniGame
 ## Two decisions make this game what it is, and everything else follows from
 ## them.
 ##
-## **The meadow scrolls.** Grass drifts down the screen and off the bottom, so
-## the patch you are standing in has a few seconds left in it. Cover is a
-## route, not a den. It is also what keeps this game from being Acorn Storm
-## with different sprites -- that one is a bounded field you move around
-## inside, and so was the parked version of this one.
+## **The meadow scrolls, and carries her.** Grass drifts down the screen and off
+## the bottom, so the patch you are standing in has a few seconds left in it,
+## and so do you: standing still rides you to the bottom edge, where the nerve
+## climbs fast. Cover is a route, not a den, and the meadow is a current to
+## walk against. It is also what keeps this game from being Acorn Storm with
+## different sprites -- that one is a bounded field you move around inside,
+## and so was the parked version of this one.
 ##
 ## **Nerve rises always, and only pickups bring it down.** Standing in grass
 ## nearly freezes the rise; it never lowers it. So hiding buys time and never
@@ -57,10 +59,12 @@ const GENTLE_SECONDS := 45.0
 const GENTLE_CEILING := 0.28
 const STEEP_TAU := 80.0
 
-## Pixels per second the meadow slides. Well under the walk speed at both ends:
-## the player must always be able to outrun the ground, or cover stops being
-## something they can choose and starts being something that happens to them.
-const SCROLL := Vector2(18.0, 52.0)
+## Pixels per second the meadow slides -- and SHE slides with it, because she is
+## standing on it. Well under the walk speed at both ends: walking against the
+## meadow has to make real headway, or holding her ground stops being a choice
+## and starts being all she does. At the old 18 -> 52 against a walk of 70 she
+## would have made 18 px/s of headway late on, which is wading through glue.
+const SCROLL := Vector2(16.0, 38.0)
 ## The shade layer drifts at a different fraction AND is a different tile size
 ## (240 against 176), so the two periods never line up. Different size alone
 ## only makes the grid bigger. hush_test.gd asserts these stay unequal, because
@@ -68,7 +72,10 @@ const SCROLL := Vector2(18.0, 52.0)
 ## catch it.
 const SHADE_RATE := 0.62
 
-const WALK := 70.0
+## Raised from 70 when the meadow started carrying her: walking up a field
+## that moves down is the game now, and 85 against a late scroll of 38 leaves
+## 47 px/s of headway -- still more than half her walk spent going somewhere.
+const WALK := 85.0
 const SPRINT := 1.75
 ## A slow human. Subtracted from every reachability answer the director gives.
 const REACTION := 0.30
@@ -86,7 +93,17 @@ const REACTION := 0.30
 ## patches actually on the field, and lowering it to three changed almost
 ## nothing. A scrolling world is spaced, not counted -- the river works the
 ## same way.
-const PATCH_GAP := Vector2(52.0, 128.0)
+##
+## Both ends came in (52 -> 46, 128 -> 92) when the meadow slowed to 16 -> 38
+## px/s and started carrying her. Patches ARRIVE at scroll / gap per second,
+## so slowing the scroll without closing the gap starves the meadow: at the
+## old 128 the late dew on offer was worth 0.98x the open-ground rise, a run
+## ending on a sum, which hush_test.gd's supply check caught. At 100 that
+## check passed and the bots still found 9% less dew per second than before --
+## measured, not guessed -- because arrivals were down by just that much.
+## These two numbers put arrivals back where they were (0.35/s early, 0.41/s
+## late): riding changes how she has to move to collect, not what is on offer.
+const PATCH_GAP := Vector2(46.0, 92.0)
 ## Patches already grown when the game starts, so the first thing a player
 ## sees is a meadow rather than an empty field filling up.
 const SEED_PATCHES := 5
@@ -109,8 +126,16 @@ const RESCUE_WAIT := 1.6
 const BIRDS := Vector2(1.0, 5.0)
 const BIRD_SPEED := Vector2(23.0, 44.0)
 const SPRINT_NOISE_RADIUS := 72.0
-## After being spotted, nothing can see you. Long enough to get off the spot.
-const MERCY_SECONDS := 1.1
+## After being spotted, nothing can see you. Long enough to get off the spot --
+## which, after the stun, has to mean further than a cone reaches (78 px).
+##
+## 1.1 was enough while the meadow slid past a player pinned to the screen:
+## the swooping bird and its lane drifted away from her for free. Once she
+## rode the meadow they stayed together, and a bird whose lane ran the way she
+## fled followed her with its cone on her and caught her again the instant
+## this ran out -- 0.65s of movement after the stun, about 55 px. Traced in a
+## run that died at 13s. 1.6 leaves 1.15s, about 98 px at walking pace.
+const MERCY_SECONDS := 1.6
 const STUN_SECONDS := 0.45
 
 ## --- the nerve meter ---------------------------------------------------------
@@ -144,6 +169,21 @@ const DEW_CALM := 0.42
 ## is the one number that rewards foraging without also rewarding hiding --
 ## a player sitting in grass never walks over a petal.
 const PETAL_CALM := 0.09
+## Per second while she is pinned against the bottom edge, whatever else is
+## true -- in grass or not, watched or not. Well above NERVE_SEEN, because this
+## is the meadow's one boundary and it has to read as one: a player who lets
+## the ground carry her off the bottom is not hiding, she is leaving.
+##
+## It is what makes standing still cost something. Before the meadow carried
+## her, a player who never touched the stick stood in place while fresh cover
+## arrived for free; now the ground takes her to the edge in a few seconds, and
+## walking against it is the price of staying in the game. The same current
+## Riverleap's river is.
+const NERVE_PINNED := 0.75
+## How close to the bottom counts as pinned. She is clamped to exactly the
+## edge, so this only has to absorb a frame's rounding.
+const PIN_MARGIN := 1.0
+
 ## The worst thing that can happen, and still not instant death: about six of
 ## these fills the meter on its own. At 0.22 it was four, which on a game
 ## whose whole verb is crossing open ground punished the player for playing
@@ -173,9 +213,15 @@ const SCORE_PER_SECOND := Vector2(5.0, 22.0)
 ## on the results card silently regrades everybody: at par 75 a strong 90s run
 ## in the last game came out a C, which reads as the rank being broken rather
 ## than as the game being hard. Set from the measured table rather than
-## guessed -- competent bots land either side of two minutes, so a two-minute
-## run is a B and four minutes is an S.
-const PAR_SECONDS := 120.0
+## guessed.
+##
+## 120 while she stood still on the screen and the meadow came to her. Once it
+## carried her, holding her ground stopped being free and runs got shorter --
+## the point of the change -- so par moved with them: 60 bot runs at 133 /
+## 216 / 300 ms averaged 108 / 85 / 95s (pooled mean 96, median 84, ten runs
+## at the suite's cap). A run of a minute and a half is a B; twice par, just
+## over three minutes, is an S.
+const PAR_SECONDS := 95.0
 
 const BIRD_SCENE := preload("res://src/minigames/hush_meadow/bird.tscn")
 const PICKUP_SCENE := preload("res://src/minigames/hush_meadow/pickup.tscn")
@@ -206,6 +252,14 @@ var _blockers: Array[Rect2] = []
 
 var _concealed: bool = false
 var _watched: bool = false
+## Against the bottom edge with the meadow still pulling. See NERVE_PINNED.
+var _pinned: bool = false
+## Seconds spent pinned this run. Not shown to the player; the suite prints it,
+## because a bot that spends its life on the edge is a bot that is not playing.
+var _pinned_time: float = 0.0
+## The edge is explained once a run, the first time it happens. After that the
+## alarm says it, and a sentence every time would be a sentence nobody reads.
+var _pin_explained: bool = false
 
 var _score: int = 0
 var _dew: int = 0
@@ -276,9 +330,14 @@ func _process(delta: float) -> void:
 		return
 
 	_advance(delta)
+	# She has already walked this frame (physics runs before _process), so the
+	# meadow carries her from wherever her own step left her, and THEN the
+	# field holds her in. In the other order the clamp would let one frame of
+	# drift take her past the edge.
 	_scroll_world(delta)
 	_tick_stun(delta)
 	_player.position = _player.position.clamp(FIELD.position, FIELD.end)
+	_update_pinned(delta)
 	_update_concealment()
 	_update_birds(delta)
 	if _ending:
@@ -312,8 +371,15 @@ func scroll_speed() -> float:
 	return lerpf(SCROLL.x, SCROLL.y, _intensity) * launch_factor()
 
 
-## Everything that is part of the meadow travels together. The player does not:
-## she is the one thing standing still while the ground leaves.
+## Everything that is part of the meadow travels together -- and that includes
+## her. She is standing on it.
+##
+## She was left out of this list once, with a camera that does not move, so
+## the ground slid out from under a figure pinned to the screen and grass
+## passed through her like scenery. Neo read it as a bug and it was one:
+## things on the ground move with the ground. Riding it is also what makes
+## the meadow a current to walk against, as Riverleap's river is, instead of
+## a conveyor that delivers fresh cover to a player who never has to move.
 func _scroll_world(delta: float) -> void:
 	var speed := scroll_speed()
 	# Driven through `scroll` rather than add_offset() so ScrollingTexture wraps
@@ -325,6 +391,7 @@ func _scroll_world(delta: float) -> void:
 	var step := Vector2(0.0, speed * delta)
 	if step.y <= 0.0:
 		return
+	_player.position += step
 	for patch in _patches:
 		patch.position += step
 	for child in _props_root.get_children():
@@ -335,6 +402,22 @@ func _scroll_world(delta: float) -> void:
 		(child as Node2D).position += step
 	for bird in _birds:
 		bird.drift(step)
+
+
+## --- the edge ----------------------------------------------------------------
+
+## Pinned is "the field stopped her and the meadow is still pulling". Not while
+## stunned: being spotted already cost her, and a freeze she cannot walk out
+## of is not a decision she made.
+func _update_pinned(delta: float) -> void:
+	var pinned := sequence_started() and scroll_speed() > 0.0 and _stun <= 0.0 \
+			and not _ending and _player.position.y >= FIELD.end.y - PIN_MARGIN
+	if pinned:
+		_pinned_time += delta
+		if not _pin_explained:
+			_pin_explained = true
+			_hud.toast("KEEP UP", Color(1.0, 0.62, 0.5), 1.0)
+	_pinned = pinned
 
 
 ## --- cover -------------------------------------------------------------------
@@ -356,46 +439,43 @@ func patch_at(point: Vector2) -> MeadowPatch:
 	return null
 
 
-## Seconds for the player to walk from `from` onto a patch that is itself
-## sliding down the screen at `speed`. Solved as an interception rather than a
-## straight distance, because the patch is moving TOWARD a player below it and
-## away from one above it, and treating it as stationary is wrong in both
-## directions. INF if she cannot catch it at all.
-static func intercept_time(from: Vector2, target: Vector2, speed: float,
-		walk: float) -> float:
-	var d := target - from
+## Seconds for the player to get into a patch centred at `target`. The longer
+## of two things:
+##
+## * walking there -- a plain distance over walking pace, because she and the
+##   patch ride the same meadow, so relative to the grass she is only walking;
+## * waiting for it -- a patch planted above the field is not somewhere she can
+##   go. The field stops her at its top edge, so she can only stand there and
+##   wait for the meadow to bring it down within reach.
+##
+## This was a quadratic interception solve while she stood still and patches
+## came at her. Carrying her with the ground collapsed it to the distance --
+## and the distance alone was wrong in one place: it counted a patch still
+## above the screen as a short walk away. The bot believed it, walked up to the
+## top edge to wait for one, which is where the birds come in, and died in 10
+## seconds of being spotted. The second term is the field's edge, not the
+## interception coming back: for anything already on the field it is zero.
+## INF if she cannot walk at all.
+static func reach_time(from: Vector2, target: Vector2, walk: float,
+		speed: float) -> float:
 	if walk <= 0.0:
 		return INF
-	var a := speed * speed - walk * walk
-	var b := 2.0 * d.y * speed
-	var c := d.dot(d)
-	if absf(a) < 0.0001:
-		if absf(b) < 0.0001:
-			return 0.0 if c <= 0.0001 else INF
-		var linear := -c / b
-		return linear if linear >= 0.0 else INF
-	var disc := b * b - 4.0 * a * c
-	if disc < 0.0:
+	var walking := from.distance_to(target) / walk
+	# She is inside a patch once she is inside its rect, so it is in reach once
+	# its lower half has come onto the field.
+	var entry := FIELD.position.y - MeadowPatch.PATCH_HALF.y
+	if target.y >= entry:
+		return walking
+	if speed <= 0.0:
 		return INF
-	var root := sqrt(disc)
-	# Both roots spelled out rather than looped over a literal: a bare [a, b]
-	# is an untyped Array and everything built from it stops type-inferring,
-	# which takes the whole script down at parse time.
-	var first := (-b + root) / (2.0 * a)
-	var second := (-b - root) / (2.0 * a)
-	var best := INF
-	if first >= 0.0:
-		best = first
-	if second >= 0.0 and second < best:
-		best = second
-	return best
+	return maxf(walking, (entry - target.y) / speed)
 
 
 ## Can the player get into this patch, in time, without walking under an eye.
 ## The guarantee the director keeps, in one function so there is exactly one
 ## definition of it in the game.
 func patch_is_usable(patch: MeadowPatch, from: Vector2, speed: float) -> bool:
-	var reach := intercept_time(from, patch.position, speed, WALK)
+	var reach := reach_time(from, patch.position, WALK, speed)
 	if not is_finite(reach):
 		return false
 	if reach + REACTION > patch.life_left(speed, FIELD.end.y):
@@ -462,8 +542,10 @@ func _plant_patch(rescue: bool) -> void:
 	var x := 0.0
 
 	if rescue or usable_patches(_player.position) < COVER_FLOOR:
-		# Nothing on the field is gettable, so this one goes straight above her
-		# and comes down onto her -- the one placement that cannot fail.
+		# Nothing on the field is gettable, so this one goes straight above her:
+		# the shortest walk to anything new. It cannot fail on time, because
+		# she out-walks the scroll -- even from the bottom edge, the 211 px up
+		# to it take 2.5s and it lasts 5.5s at the latest pace.
 		#
 		# Counted rather than asserted away: a flood of these would mean the
 		# meadow has grown too sparse to play and the floor is propping the
@@ -752,7 +834,11 @@ func _tick_nerve(delta: float) -> void:
 	if not sequence_started():
 		return
 	var rise := 0.0
-	if _watched:
+	# The edge first: riding a patch down to the bottom and sitting in it is
+	# exactly the safe corner this rule exists to remove.
+	if _pinned:
+		rise = NERVE_PINNED
+	elif _watched:
 		rise = NERVE_SEEN
 	elif _concealed:
 		rise = NERVE_HIDDEN
@@ -774,8 +860,10 @@ func _refresh_bar() -> void:
 				clampf((_nerve - 0.5) / 0.4, 0.0, 1.0))
 	_hud.set_meter(calm, &"nerve", tint)
 	# Felt at the edge of vision rather than read as a sentence -- nobody reads
-	# a sentence while panicking.
-	_hud.set_alarm(1.0 if _nerve > 0.78 else 0.0)
+	# a sentence while panicking. On for the bottom edge too, from the first
+	# frame: that is the one place the meter can be falling fast while it still
+	# looks healthy, and the fix is a single push of the stick.
+	_hud.set_alarm(1.0 if _nerve > 0.78 or _pinned else 0.0)
 
 
 func _current_score() -> int:

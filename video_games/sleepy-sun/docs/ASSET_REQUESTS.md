@@ -10,6 +10,16 @@ stripped project wants, so re-running it cannot resurrect art for a parked game
 — but it **will overwrite** these paths. Once real art is in place, take that
 path out of `KEEP`.
 
+**Grain.** What makes a sprite read as pixel art is how often the colour
+changes along a row, not how many colours it has. Riverleap's water — the art
+everyone agrees looks right — has a mean run of 20 identical pixels; the two
+grounds that looked "too realistic" had 2. So large layers are drawn as big
+deliberate shapes with a few stamped details, never per-pixel noise, and soft
+edges are dithered in fixed steps rather than airbrushed. The test suites
+measure it (`SoakBase.mean_run()`): ground and shade tiles must reach **10 px**,
+Hush Meadow's grass clumps and cover disc **6 px**. A replacement that fails is
+telling you the same thing Neo did.
+
 Palette the placeholders use, if you want real art to sit alongside the rest
 before it is all replaced:
 
@@ -64,8 +74,8 @@ else is scenery.
 | `assets/game/acorn_storm/mark_good.png` | 34×34 | The other half, and it must differ from the ring **by shape before colour**: a *filled* gold disc with a bright rim. Check the pair in greyscale — an outline and a solid are still not the same thing with the colour taken out, which is the only version of this test that means anything on a scuffed cabinet screen or for a colourblind player. Its first draft faded toward the middle and came out a pale sage blob over the grass; it needs to be opaque enough to read as a promise, not a smudge. |
 | `assets/game/acorn_storm/acorn.png` · `sunfruit.png` | 18×18 | What falls. They are drawn at 1.45× at the canopy and 0.9× at the ground, so perspective is applied in code — draw them flat-on. **They must be separable in peripheral vision**, because the player is looking at the ground marks while these are in the air: the acorn is brown and angular with a flat cap, the sunfruit is round and bright with a highlight. |
 | `assets/game/acorn_storm/canopy.png` | 512×76 | The roof the storm comes out of. **Deliberately does not tile** — it is one band wider than the 480 screen so it can sway without running out of art, and the 112-wide tiling version it replaced put four copies of one silhouette across the top. Solid at the top, ragged along the bottom edge; the raggedness should come from overlapping leaf clumps, not from a fade or a dither, both of which were tried and read as haze and as static. No pinholes of sky inside the mass. |
-| `assets/game/acorn_storm/clearing.png` | 160×160 | The ground, tiled. 160 rather than 32 for the reason the river's water is 192: a small tile across a wide field is a visible grid that no amount of detail inside one tile hides. Texture it with **short grass strokes**, not blobs — the first version used wide flat hard-edged ellipses and tiled across the screen it read as a pond covered in lily pads. Strokes also have no shape large enough for the eye to match across the tile seam, which killed the grid as a side effect. |
-| `assets/game/acorn_storm/canopy_shade.png` | 224×224 | Dappled light through the leaves, at low contrast, drifting with the wind. **Keep it 224, not 160.** A different tile size from the ground, moving at a different rate, is the entire anti-repetition mechanism; match them and the grid comes back. Keep it **light**: at its first strength it turned the whole clearing into a dark green soup that the player and both ground marks had to fight to be seen against, and the marks are the game. |
+| `assets/game/acorn_storm/clearing.png` | 160×160 | The ground, tiled. 160 rather than 32 for the reason the river's water is 192: a small tile across a wide field is a visible grid that no amount of detail inside one tile hides. Draw it in **shapes**: a few broad, irregular swathes of slightly lighter and darker grass, close in value, then a scatter of small deliberate tufts. Two ways to get it wrong, both already shipped once: round hard-edged blobs (the first version — tiled, it read as a pond full of lily pads) and fine single-pixel strokes (the second — mean run 2.0 px, which reads as a photograph, and Neo said so). Stretch the swathes sideways, like grass combed by wind. The suite asserts a **mean run of ≥ 10 px** along rows; see "Grain" above. |
+| `assets/game/acorn_storm/canopy_shade.png` | 224×224 | Dappled light through the leaves, at low contrast, drifting with the wind. **Keep it 224, not 160.** A different tile size from the ground, moving at a different rate, is the entire anti-repetition mechanism; match them and the grid comes back. Keep it **light**: at its first strength it turned the whole clearing into a dark green soup that the player and both ground marks had to fight to be seen against, and the marks are the game. Two or three **hard alpha steps** with an ordered (Bayer) dither between them, not a smooth airbrushed falloff; asserted at ≥ 10 px mean run. |
 | `assets/game/acorn_storm/burst.png` | 24×24 | A soft white disc, tinted in code, for a catch and for a hit. Deliberately neither mark's shape: the moment something resolves should not look like the moment something is warned about. |
 | `assets/game/acorn_storm/squirrel.png` | 16×14 | Pops out of the canopy above where an acorn is coming from, for about half a second. The ground mark says where it will land; this says where it came from. |
 | `assets/game/acorn_storm/rock.png` | 22×16 | Scenery in the clearing. Purely decorative — nothing collides with it. |

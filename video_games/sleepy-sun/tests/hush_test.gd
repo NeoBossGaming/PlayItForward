@@ -61,6 +61,17 @@ const REACTIONS := [133, 216, 300]
 const TRIALS := 6
 ## How close the bot gets before it stops walking.
 const ARRIVE := 7.0
+## With nothing to walk at, the bot keeps itself above this fraction of the
+## field. A little below the middle, which is about where a person stands.
+const STATION := 0.55
+## Seconds of life a patch should have left when the bot gets there, by
+## preference. Below this it is a patch that delivers her onto the edge.
+const SPARE_LIFE := 2.0
+## Waiting in cover for a cone to look away is only worth it with this much
+## room above the bottom edge.
+const EDGE_ROOM := 14.0
+## How wide a berth the bot gives a bird's body when choosing a route.
+const BIRD_BERTH := 36.0
 ## The longest the player may be left with nowhere to go. Not zero: the instant
 ## a patch crosses the bottom edge there can honestly be a beat with nothing
 ## usable, and a player walking across open ground is MEANT to be exposed. A
@@ -109,6 +120,8 @@ func _ready() -> void:
 	_step("draw order");                  await _test_draw_order()
 	_step("the launch is quiet");         await _test_the_launch_is_quiet()
 	_step("dew only shows in cover");     await _test_dew_only_shows_in_cover()
+	_step("she rides the meadow");        await _test_she_rides_the_meadow()
+	_step("the edge bites");             await _test_the_edge_bites()
 	_step("there is always cover");       await _test_there_is_always_cover()
 	_step("dew outpaces the rise");       await _test_dew_can_outpace_the_rise()
 	_step("a cone gives you time");       await _test_a_cone_gives_you_time()
@@ -120,6 +133,7 @@ func _ready() -> void:
 	_step("cover thins out");             await _test_cover_thins_out()
 	_step("the golden can be caught");    await _test_the_golden_can_be_caught()
 	_step("the opening card");            await _test_the_opening_card()
+	_step("the art is pixel art");        await _test_the_art_is_pixel_art()
 	_step("")
 
 	get_tree().quit(report("HUSH MEADOW"))
@@ -270,6 +284,19 @@ func _test_the_launch_is_quiet() -> void:
 	_drop(game)
 
 
+## The layers that fill the screen must not drift back to noise. The meadow
+## shipped at a mean run of 1.8 px and the cover disc at 1.7 through 208 alpha
+## levels -- the grain of a photograph -- and every check passed, because
+## nothing was asking. Riverleap's water, the reference, is 20. A clump or a
+## cover disc is small and has an outline, so it is held to less than a tile.
+func _test_the_art_is_pixel_art() -> void:
+	_check_grain("res://assets/game/hush_meadow/meadow.png", 10.0)
+	_check_grain("res://assets/game/hush_meadow/meadow_shade.png", 10.0)
+	for i in 3:
+		_check_grain("res://assets/game/hush_meadow/grass_%d.png" % i, 6.0)
+	_check_grain("res://assets/game/hush_meadow/grass_cover.png", 6.0)
+
+
 # --- the rule the game is built on -------------------------------------------
 
 ## Dew is not on the meadow until the player is inside the patch holding it.
@@ -343,6 +370,84 @@ func _test_dew_only_shows_in_cover() -> void:
 	_drop(game)
 
 
+## The bug Neo reported: "the player does not follow the scrolling, rather goes
+## up along with the camera". The meadow slid down while she stayed pinned to
+## the screen, so grass passed through her like scenery. Things on the ground
+## move with the ground -- and _catch_time() above is only correct because
+## they do. Verified by re-breaking it.
+func _test_she_rides_the_meadow() -> void:
+	var game: Node = await _start()
+	await _play(game, launch_over() + 0.5)
+	# High on the field, so a second of drift cannot reach the clamp and stop
+	# her for a reason that has nothing to do with riding.
+	game._player.position = Vector2(field().get_center().x,
+			field().position.y + 20.0)
+	var patch: MeadowPatch = null
+	for candidate in game._patches:
+		if candidate.position.y < field().end.y - 60.0:
+			patch = candidate
+			break
+	_check(patch != null, "no patch to compare her drift against")
+	if patch == null:
+		_drop(game)
+		return
+	var she_was: float = game._player.position.y
+	var it_was := patch.position.y
+	await _play(game, 1.0)
+	var she_moved: float = game._player.position.y - she_was
+	var it_moved := patch.position.y - it_was
+	print("  riding     meadow moved %.1fpx in a second, she moved %.1fpx"
+			% [it_moved, she_moved])
+	_check(it_moved > 5.0, "the meadow only moved %.1fpx in a second" % it_moved)
+	_check(absf(she_moved - it_moved) < 0.5,
+			"the meadow moved %.1fpx and she moved %.1fpx -- the ground is "
+			% [it_moved, she_moved] + "sliding out from under her")
+	_drop(game)
+
+
+## The price of riding. Pinned against the bottom, nerve climbs faster than it
+## does under a bird's eye -- in grass or not, because riding a patch down to
+## the edge and sitting in it is exactly the safe corner the rule removes. The
+## alarm says so from the first frame, and one push of the stick is the cure.
+func _test_the_edge_bites() -> void:
+	var game: Node = await _start()
+	await _play(game, launch_over() + 0.3)
+	# Nothing can see her, so what is measured is the edge and only the edge.
+	game._mercy = 99.0
+	game._nerve = 0.0
+	game._player.position = Vector2(field().get_center().x, field().end.y)
+	await _frames(2)
+	_check(game._pinned, "a player at the bottom edge is not counted as pinned")
+	var alarm: CanvasItem = game._hud.get_node("Root/Alarm")
+	_check(alarm.modulate.a > 0.0, "pinned at the edge with no alarm showing")
+
+	var from: float = game._nerve
+	var clock := 0.0
+	while clock < 1.0:
+		await _frames(1)
+		clock += get_process_delta_time()
+	var rate: float = (game._nerve - from) / clock
+	print("  edge       nerve rose %.2f/s pinned, against %.2f/s seen"
+			% [rate, float(_const("NERVE_SEEN"))])
+	_check(rate > float(_const("NERVE_SEEN")) * 1.3,
+			"pinned at the edge raised nerve %.2f/s, barely more than a bird's "
+			% rate + "eye does -- the boundary does not read as one")
+
+	# One push gets her off.
+	_hold(&"move_up")
+	clock = 0.0
+	while clock < 0.3:
+		await _frames(1)
+		clock += get_process_delta_time()
+	_release_all()
+	_check(not game._pinned,
+			"a third of a second of pushing up did not get her off the edge")
+	_check(game._player.position.y < field().end.y - 8.0,
+			"pushing up for a third of a second only moved her to %.1f, edge %.1f"
+			% [game._player.position.y, field().end.y])
+	_drop(game)
+
+
 ## The assertion this file exists for.
 ##
 ## Sampled every frame of a driven run and computed HERE from the patches, the
@@ -374,7 +479,7 @@ func _test_there_is_always_cover() -> void:
 		# a test that passes for the wrong reason.
 		game._nerve = minf(game._nerve, 0.4)
 		aim_at = _choose(game, Mode.FORAGE)
-		_steer(_toward(game, aim_at))
+		_drive(game, aim_at)
 		if clock < launch_over():
 			continue
 		samples += 1
@@ -593,7 +698,7 @@ func _test_cover_thins_out() -> void:
 		clock += get_process_delta_time()
 		game._nerve = minf(game._nerve, 0.35)
 		aim_at = _choose(game, Mode.FORAGE)
-		_steer(_toward(game, aim_at))
+		_drive(game, aim_at)
 		if clock < launch_over() + 2.0:
 			continue
 		# Probed from fixed points across the field, NOT from the player.
@@ -651,7 +756,7 @@ func _test_the_golden_can_be_caught() -> void:
 			await _frames(1)
 			clock += get_process_delta_time()
 			game._nerve = minf(game._nerve, 0.3)
-			_steer(_toward(game, _choose(game, Mode.PRIZE)))
+			_drive(game, _choose(game, Mode.PRIZE))
 			if game._goldens > 0:
 				break
 		_release_all()
@@ -724,8 +829,10 @@ func _bot(reaction_ms: int, mode: Mode, limit: float) -> float:
 		# everything built from it stops inferring -- a PARSE error, which
 		# leaves a headless Godot spinning at 99% CPU on an empty log rather
 		# than exiting. That is the third time in this project.
+		# The edge is new information exactly as a cone is: the alarm comes
+		# on, and a person notices it a reaction time later and moves.
 		var settled: bool = is_instance_valid(aim_at) and not game._watched \
-				and _toward(game, aim_at) != Vector2.ZERO
+				and not game._pinned and _toward(game, aim_at) != Vector2.ZERO
 		if not settled and decisions.is_empty():
 			decisions.append([clock + lag, _choose(game, mode)])
 		while not decisions.is_empty() and float(decisions[0][0]) <= clock:
@@ -737,12 +844,12 @@ func _bot(reaction_ms: int, mode: Mode, limit: float) -> float:
 			# every forage bot "surviving" 0.0 seconds.
 			var chosen: Variant = decisions.pop_front()[1]
 			aim_at = chosen if is_instance_valid(chosen) else null
-		_steer(_toward(game, aim_at))
+		_drive(game, aim_at)
 	_release_all()
 
 	var held: float = game._survived
-	_last_run = "%d dew, %d petals, %d spotted" % [game._dew, game._petals,
-			game._spotted]
+	_last_run = "%d dew, %d petals, %d spotted, %.1fs pinned" % [game._dew,
+			game._petals, game._spotted, game._pinned_time]
 	_last_dew = game._dew
 	_last_spotted = game._spotted
 	_runs += 1
@@ -760,6 +867,13 @@ func _choose(game: Node, mode: Mode) -> Node2D:
 
 	if mode == Mode.PRIZE:
 		return game._gold_live if is_instance_valid(game._gold_live) else null
+
+	# Pinned against the bottom: nothing down here is worth it. No target, so
+	# _drive() walks her up -- the one push of the stick the alarm asks for.
+	# Without this the bot sat on the edge for over a second at a time, a
+	# whole death's worth of nerve, which measured the bot and not the game.
+	if game._pinned:
+		return null
 
 	# Being looked at beats everything: the nearest grass, cone or no cone.
 	if game._watched:
@@ -786,7 +900,7 @@ func _choose(game: Node, mode: Mode) -> Node2D:
 		# patch goes over the edge.
 		for child in standing.get_children():
 			var dew := child as MeadowPickup
-			if dew != null and dew.revealed:
+			if dew != null and dew.revealed and _clear_of_edge(dew):
 				return dew
 	# Nothing left where she is standing, so move on at once. An earlier
 	# version waited for the patch to start leaving before looking for the
@@ -801,9 +915,30 @@ func _choose(game: Node, mode: Mode) -> Node2D:
 	# bird and goes when it looks away.
 	if standing != null and goal != null \
 			and _route_watched(game, me, goal.position) \
-			and _life_left(standing, game.scroll_speed()) > 1.2:
+			and _life_left(standing, game.scroll_speed()) > 1.2 \
+			and me.y < field().end.y - EDGE_ROOM:
 		return standing
 	return goal
+
+
+## Walks at `target`, or -- with nothing to walk at -- holds station.
+##
+## The meadow carries her, so standing still is no longer free: it rides her to
+## the bottom edge. A person with nowhere in particular to go keeps herself off
+## it, and a bot that did not would be measuring the edge rather than the
+## meadow. Only with NO target, though: a bot riding the patch it chose is
+## doing what a hider does, and _choose() already moves it on before that
+## patch reaches the bottom.
+##
+## Short of full stick, so _steer() does not sprint. Holding your ground is not
+## a long crossing, and sprinting brings birds.
+func _drive(game: Node, target: Node2D) -> void:
+	var direction := _toward(game, target)
+	if not is_instance_valid(target):
+		var me: Vector2 = game._player.position
+		if me.y > field().position.y + field().size.y * STATION:
+			direction = Vector2(0.0, -0.8)
+	_steer(direction)
 
 
 ## Steering, recomputed every frame from where the target is NOW.
@@ -839,15 +974,45 @@ func _best_patch(game: Node, from: Vector2, urgent: bool,
 		var cost := t
 		if not urgent and _route_watched(game, from, patch.position):
 			cost += 6.0
+		# A bird NEAR it is a cone about to turn that way. A person keeps clear
+		# of birds, not only of where they are looking this frame -- and since
+		# the meadow started carrying her, climbing to meet new cover takes her
+		# up to where birds arrive. Without this the bot walked under the same
+		# bird three times in ten seconds to reach grass at the top edge.
+		if not urgent and _bird_near(game, patch.position, PatrolBird.VISION_RANGE):
+			cost += 5.0
+		if not urgent and _route_near_bird(game, from, patch.position):
+			cost += 3.0
+		# Not on the field yet. She cannot go up to meet it -- the field stops
+		# her at its top edge -- so choosing it means standing at that edge in
+		# the open until it arrives, which is where birds come in. Every early
+		# death traced in the riding meadow started that way. A person waits
+		# in the cover she has until the new grass is actually there.
+		if not urgent and patch.position.y < field().position.y:
+			cost += 4.0
 		# A shimmering patch is worth going out of the way for, which is what
 		# foraging IS. The bot reads the dew directly; the player reads the
 		# shimmer that marks it -- same information, see MeadowPatch.mark_dew.
+		# Somewhere she can STAY. A patch she reaches just before it reaches
+		# the bottom is a patch that carries her onto the edge; the guarantee
+		# counts it as usable, and it is, but a person does not walk DOWN to
+		# one. As a cost rather than a rule the bot oscillated: walk down to a
+		# low patch, get pinned, walk up, choose it again -- a run that died
+		# at 7s on the edge with nothing looking at it.
+		if not urgent and _life_left(patch, speed) - t < SPARE_LIFE:
+			continue
 		if want_dew and not _holds_dew(patch):
 			cost += 9.0
 		if cost < best_time:
 			best_time = cost
 			best = patch
 	return best
+
+
+## Not down where taking it means standing on the edge. A person who has seen
+## the alarm once leaves the last strip of the meadow alone.
+static func _clear_of_edge(thing: Node2D) -> bool:
+	return thing.global_position.y < field().end.y - EDGE_ROOM
 
 
 func _holds_dew(patch: MeadowPatch) -> bool:
@@ -866,12 +1031,28 @@ func _route_watched(game: Node, from: Vector2, to: Vector2) -> bool:
 	return false
 
 
+func _bird_near(game: Node, point: Vector2, radius: float) -> bool:
+	for bird in game._birds:
+		if bird.global_position.distance_to(point) < radius:
+			return true
+	return false
+
+
+## Does the straight line from `from` to `to` pass close under a bird, whichever
+## way it is facing.
+func _route_near_bird(game: Node, from: Vector2, to: Vector2) -> bool:
+	for i in range(1, 7):
+		if _bird_near(game, from.lerp(to, float(i) / 7.0), BIRD_BERTH):
+			return true
+	return false
+
+
 func _nearest_loose(game: Node, from: Vector2) -> MeadowPickup:
 	var best: MeadowPickup = null
 	var best_d := INF
 	for child in game._pickups_root.get_children():
 		var petal := child as MeadowPickup
-		if petal == null or not petal.revealed:
+		if petal == null or not petal.revealed or not _clear_of_edge(petal):
 			continue
 		var d: float = petal.global_position.distance_to(from)
 		if d < best_d:
@@ -907,33 +1088,26 @@ func _steer(direction: Vector2) -> void:
 # Deliberately NOT game.patch_is_usable(). A test that asks the game whether
 # the game is right cannot catch the game being wrong.
 
-## Seconds for the player to walk from `from` onto a patch that is itself
-## sliding down at `speed`. An interception, not a distance: the patch is
-## moving toward a player below it and away from one above it, and treating it
-## as stationary is wrong in both directions.
+## Seconds for the player to get into a patch: the longer of walking there --
+## distance over walking pace, since she and the patch ride the same meadow --
+## and waiting for a patch still above the field to come down within reach,
+## because the field's top edge stops her going up to meet it.
+##
+## This was an interception solve while she stood still and patches came at
+## her. _test_she_rides_the_meadow() is what makes the walking half true -- if
+## she stopped riding, this would silently be wrong again, and that check
+## would be the one to fail. The waiting half is what the first version of the
+## distance-only rule missed: a bot walked up to the top edge to wait for a
+## patch that was not there yet, which is where the birds come in.
 static func _catch_time(from: Vector2, target: Vector2, speed: float) -> float:
-	var w := walk()
-	var d := target - from
-	var a := speed * speed - w * w
-	var b := 2.0 * d.y * speed
-	var c := d.dot(d)
-	if absf(a) < 0.0001:
-		if absf(b) < 0.0001:
-			return 0.0 if c <= 0.0001 else INF
-		var linear := -c / b
-		return linear if linear >= 0.0 else INF
-	var disc := b * b - 4.0 * a * c
-	if disc < 0.0:
+	var walking := from.distance_to(target) / walk()
+	var half: Vector2 = _patch_const("PATCH_HALF")
+	var entry := field().position.y - half.y
+	if target.y >= entry:
+		return walking
+	if speed <= 0.0:
 		return INF
-	var root := sqrt(disc)
-	var first := (-b + root) / (2.0 * a)
-	var second := (-b - root) / (2.0 * a)
-	var best := INF
-	if first >= 0.0:
-		best = first
-	if second >= 0.0 and second < best:
-		best = second
-	return best
+	return maxf(walking, (entry - target.y) / speed)
 
 
 static func _life_left(patch: MeadowPatch, speed: float) -> float:

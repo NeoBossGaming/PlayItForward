@@ -65,15 +65,17 @@ shuffle.
 
 ## Hush Meadow — *forage*
 
-A meadow that slides down the screen and off the bottom while you work it.
-Tall grass hides you completely; **dew only appears once you are standing
+A meadow that slides down the screen and off the bottom while you work it —
+and carries you with it, so standing still drifts you toward the bottom edge,
+where your nerve goes fast. Walk against it. Tall grass hides you completely; **dew only appears once you are standing
 inside a patch**, and dew is the only thing that calms your nerve. So cover is
 somewhere to go rather than somewhere to hide — and the patch you are hiding
 in is already on its way off the screen.
 
 Birds patrol with a visible cone of sight. Being seen is expensive rather than
-fatal. The run ends when your nerve runs out, and the meadow thins as it goes:
-late on there are half as many places to be and twice as many eyes.
+fatal. The run ends when your nerve runs out, and the meadow gets harder as it
+goes: it moves faster, its cover grows further apart, and there are five pairs
+of eyes where there was one.
 
 **Controls** — stick or arrows/WASD to move, button to sprint. Sprinting is
 fast, costs stamina, and is loud enough that a bird will come and look.

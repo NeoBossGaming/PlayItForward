@@ -23,6 +23,14 @@ quiet() { grep -avE '^\[ *[0-9]+%|\[ DONE \]|^\[0m$|Godot Engine v|godotengine\.
 status=0
 
 echo "=== importing assets ==="
+# On a fresh clone the FIRST import reports errors that are not errors: the
+# project theme is loaded before the fonts it names have been imported, so
+# every suite passed and the run still said FAILED. A second import is clean.
+# So a cold cache gets one warm-up pass that is not judged; the pass that IS
+# judged still reports anything that stays broken.
+if [ ! -d "$PROJECT/.godot/imported" ]; then
+  "$GODOT" --headless --path "$PROJECT" --import >/dev/null 2>&1
+fi
 "$GODOT" --headless --path "$PROJECT" --import 2>&1 | grep -aiE 'error|failed' && status=1
 
 # Every tests/*_test.tscn is a suite, one per game, all standing on

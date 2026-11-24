@@ -86,6 +86,53 @@ static func effective_z(node: CanvasItem) -> int:
 	return total
 
 
+## --- grain ------------------------------------------------------------------
+##
+## Mean run of identical pixels along a row: the one objective check on "does
+## this read as pixel art". Riverleap's water is 20; Acorn Storm's clearing and
+## Hush Meadow's meadow shipped at 2.0 and 1.8 -- single-pixel random strokes,
+## which is the grain of a photograph -- and every check passed, because
+## nothing was asking. See the grain section of tools/make_placeholders.py.
+##
+## Read from the IMPORTED texture, because that is what gets drawn. Every
+## fully transparent pixel counts as the same nothing: the importer's
+## fix_alpha_border bleeds colour into them, and an invisible difference is
+## not grain.
+static func mean_run(path: String) -> float:
+	var image := (load(path) as Texture2D).get_image()
+	if image.is_compressed():
+		image.decompress()
+	var width := image.get_width()
+	var height := image.get_height()
+	var changes := 0
+	for y in height:
+		var previous := _visible(image.get_pixel(0, y))
+		for x in range(1, width):
+			var here := _visible(image.get_pixel(x, y))
+			if here != previous:
+				changes += 1
+			previous = here
+	if changes == 0:
+		return INF
+	return float(height * (width - 1)) / float(changes)
+
+
+static func _visible(colour: Color) -> Color:
+	return Color(0, 0, 0, 0) if colour.a8 == 0 else colour
+
+
+## Asserts a large layer has not drifted back to noise, and prints what it
+## measured so a near miss is visible before it is a failure.
+func _check_grain(path: String, at_least: float) -> void:
+	var run := mean_run(path)
+	print("  grain      %5.1f px  (needs %4.1f)  %s"
+			% [run, at_least, path.get_file()])
+	_check(run >= at_least,
+			"%s has a mean run of %.1f px, under %.1f -- fine random grain is "
+			% [path.get_file(), run, at_least]
+			+ "what reads as a photograph rather than as pixel art")
+
+
 ## Timing note for every suite that follows: headless at `--fixed-fps 60` runs
 ## UNTHROTTLED. Several seconds of game time pass in a few milliseconds of wall
 ## clock, so `Time.get_ticks_msec()` measures nothing useful. Accumulate
