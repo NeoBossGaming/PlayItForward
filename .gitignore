@@ -1,0 +1,3 @@
+# macOS Finder writes one of these into every folder it opens: icon positions
+# and view settings, nothing the project uses. Ignored everywhere in the repo.
+.DS_Store

@@ -32,6 +32,18 @@ par_score = 1800
 
 [node name="World" type="Node2D" parent="." unique_id=1514425654]
 
+; --- the river ---------------------------------------------------------------
+; The player is floating WITH the current, so in camera terms the surface does
+; not translate at all and the banks are what fly past. Life comes from the
+; layers over it, never from dragging the base along -- that reads as a
+; conveyor belt rather than a river.
+;
+; The base is deliberately at zero rather than merely slow. Textures snap a
+; whole pixel at a time under nearest filtering, and one game pixel is three
+; on screen at 1080p, so a surface creeping at 4px/s ticks visibly once a
+; quarter second. Anything that moves slowly here has to either not move or
+; twinkle while it does.
+
 [node name="Water" type="Sprite2D" parent="World" unique_id=1694191701]
 texture_repeat = 2
 position = Vector2(240, 135)
@@ -41,6 +53,10 @@ region_rect = Rect2(0, 0, 504, 318)
 script = ExtResource("4")
 area = Vector2i(504, 318)
 
+; Depth. Deliberately on a different tile size AND a different fraction of the
+; current from the surface above it: 256px at 0.38x against 192px at 0.45x.
+; Two patterns on periods that never line up is what stops the eye finding the
+; grid -- the bigger surface tile alone would only have made the grid bigger.
 [node name="WaterDepth" type="Sprite2D" parent="World" unique_id=1397020966]
 texture_repeat = 2
 position = Vector2(240, 135)
@@ -50,6 +66,9 @@ region_rect = Rect2(0, 0, 504, 318)
 script = ExtResource("4")
 area = Vector2i(504, 318)
 
+; The only animated layer in the river. Its frames share identical streak
+; positions and differ only in alpha, so nothing translates between them --
+; which is the whole reason a flipbook is safe here and was not on the base.
 [node name="WaterGlints" type="Sprite2D" parent="World" unique_id=2128672986]
 texture_repeat = 2
 position = Vector2(240, 135)
@@ -73,6 +92,9 @@ scale_range = Vector2(0.6, 1.1)
 sway = 5.0
 twinkle = true
 
+; Things the current carries. They drift only a little faster than the surface,
+; because they are floating alongside you rather than rushing past -- the turn
+; and the bob are what sell them as afloat.
 [node name="Streaks" type="Node2D" parent="World" unique_id=363428074]
 z_index = 1
 script = ExtResource("4b")
@@ -145,6 +167,10 @@ texture = ExtResource("d_driftleaf")
 [node name="DriftLeaf2" type="Sprite2D" parent="World/RiverLitter" unique_id=2131985379]
 position = Vector2(286, 12)
 texture = ExtResource("d_driftleaf")
+
+; --- the banks ---------------------------------------------------------------
+; Ground, waterline and props all read one speed, set every frame by
+; wind_leaf.gd, so they cannot drift out of step with each other again.
 
 [node name="TreelineLeft" type="Sprite2D" parent="World" unique_id=1937868557]
 texture_repeat = 2
