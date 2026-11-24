@@ -30,7 +30,7 @@ func _ready() -> void:
 
 func _process(delta: float) -> void:
 	if not _ready_for_input:
-w		return
+		return
 	_pulse += delta * 3.0
 	_hint.modulate.a = 0.55 + 0.45 * sin(_pulse)
 
