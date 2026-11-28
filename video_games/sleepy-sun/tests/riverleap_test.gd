@@ -90,6 +90,7 @@ func _ready() -> void:
 	await _test_the_opening_is_survivable()
 	await _test_a_run_must_end()
 	await _test_drowning_is_not_escapable()
+	await _test_mashing_tires_you()
 	await _test_how_hard_it_is()
 	await _test_the_river_comes_for_you()
 	await _test_your_own_pad_is_always_leavable()
@@ -764,15 +765,23 @@ func _time_card() -> float:
 ## since it shipped, which is why its curve could be argued about honestly.
 func _test_how_hard_it_is() -> void:
 	var line := ""
+	# Fatigue is for mashing. A player who jumps when a hornet comes and hops
+	# when a pad goes must never feel it, so every skilled run here is watched
+	# for it -- otherwise a tuning pass on fatigue could quietly make the
+	# ordinary game harder, and this table would be the only thing to notice.
+	var most_tired := 0.0
+	var free_at := 1.0
 	for reaction: int in REACTIONS:
 		var total := 0.0
 		var worst := 9999.0
 		for trial in TRIALS:
 			var game := (load(SCENE) as PackedScene).instantiate() as MiniGame
+			free_at = game.get_script().get_script_constant_map()["FATIGUE_FREE"]
 			var run := await _play(game, DIFFICULTY_CAP, true, false,
 					float(reaction) / 1000.0)
 			total += float(run["survived"])
 			worst = minf(worst, float(run["survived"]))
+			most_tired = maxf(most_tired, float(run["max_fatigue"]))
 			game.free()
 			await _frames(2)
 		var mean := total / float(TRIALS)
@@ -783,6 +792,12 @@ func _test_how_hard_it_is() -> void:
 					% [reaction, mean, OPENING_FLOOR] + "a stranger should "
 					+ "get for their credit")
 	print("  difficulty  " + line.strip_edges())
+	print("  fatigue     skilled bots peaked at %.2f, bites at %.2f"
+			% [most_tired, free_at])
+	_check(most_tired < free_at,
+			"a skilled bot reached fatigue %.2f, past the %.2f where jumps start "
+			% [most_tired, free_at] + "to shrink -- fatigue is taxing ordinary "
+			+ "play, not just mashing")
 
 
 ## The river has to come for YOU, and more so as it goes. Uniform selection
@@ -1035,6 +1050,73 @@ func _test_drowning_is_not_escapable() -> void:
 	await _frames(2)
 
 
+## Mashing the button used to be a shield. A jump keeps her in the air, a
+## hornet only hits a player on the pad, and a press made mid-air is buffered
+## for the landing -- so drumming it kept her off the pad about 76% of the time.
+## Fatigue exists to end that.
+##
+## Measured as the share of time in the air while mashing, fresh against after
+## several seconds of it, counted here from what the player is doing rather
+## than read off the game's own tiredness(). And it must never LOCK her out: a
+## spent jump is still a jump, or a button that does nothing while a hornet
+## comes down reads as the game cheating.
+func _test_mashing_tires_you() -> void:
+	var game := (load(SCENE) as PackedScene).instantiate() as MiniGame
+	add_child(game)
+	await _frames(3)
+	game.begin()
+	var free_at: float = game.get_script().get_script_constant_map()["FATIGUE_FREE"]
+
+	var fresh := Vector2.ZERO        # x: frames in the air, y: frames counted
+	var tired := Vector2.ZERO
+	var spent := 0.0
+	var wet := 0
+	var clock := 0.0
+	var i := 0
+	while clock < 7.0:
+		# The river is held in its launch, where _test_the_launch_is_quiet
+		# proves nothing sinks and nothing is thrown. The jump is under test,
+		# not the river: let a pad go under her and the water rests her legs,
+		# and a run on 4.6 measured fatigue 0.38 at the end for exactly that
+		# reason while mashing had worked perfectly.
+		game.elapsed = minf(game.elapsed, LAUNCH_OVER * 0.5)
+		_send(&"act", i % 2 == 0)
+		i += 1
+		await _frames(1)
+		clock += get_process_delta_time()
+		if bool(game.get("_in_water")):
+			wet += 1
+		spent = maxf(spent, float(game.get("_fatigue")))
+		var up := 1.0 if bool(game.get("_airborne")) else 0.0
+		if clock < 0.8:
+			fresh += Vector2(up, 1.0)
+		elif clock > 4.0:
+			tired += Vector2(up, 1.0)
+	_send(&"act", false)
+	game.free()
+	await _frames(2)
+
+	_check(wet == 0, "she was in the water for %d frames while the river was " % wet
+			+ "held in its launch -- the measurement is not of jumping alone")
+	var fresh_share := fresh.x / maxf(fresh.y, 1.0)
+	var tired_share := tired.x / maxf(tired.y, 1.0)
+	print("  fatigue     mashing: airborne %.0f%% fresh, %.0f%% after 4s  (fatigue %.2f)"
+			% [fresh_share * 100.0, tired_share * 100.0, spent])
+	_check(tired.y > 60.0, "only %d tired frames on a pad to measure" % int(tired.y))
+	_check(fresh_share > 0.6,
+			"a fresh player mashing was airborne only %.0f%% of the time -- the "
+			% (fresh_share * 100.0) + "jump itself has been weakened, not just spam")
+	_check(tired_share < 0.45,
+			"after four seconds of mashing she was still airborne %.0f%% of the "
+			% (tired_share * 100.0) + "time -- mashing is still a shield against hornets")
+	_check(tired_share > 0.1,
+			"a spent player mashing was airborne %.0f%% of the time -- fatigue has "
+			% (tired_share * 100.0) + "become a lockout, and a dead button reads as cheating")
+	_check(spent > free_at,
+			"seven seconds of mashing never took fatigue past %.2f, under the "
+			% spent + "%.2f where it starts to bite" % free_at)
+
+
 # --- the bot -----------------------------------------------------------------
 #
 # The control change makes this a state machine where it used to be one tap.
@@ -1169,6 +1251,7 @@ func _play(game: MiniGame, limit: float, skilled: bool,
 	_bot_clock = 0.0
 	var cornered := 0
 	var clock := 0.0
+	var tired := 0.0
 	var was_hopping := false
 	_since_landing = -1.0
 	while received.is_empty() and clock < limit:
@@ -1183,6 +1266,7 @@ func _play(game: MiniGame, limit: float, skilled: bool,
 		was_hopping = hopping
 		if watch_corners and _is_cornered(game):
 			cornered += 1
+		tired = maxf(tired, float(game.get("_fatigue")))
 		await _frames(1)
 		clock += get_process_delta_time()
 	_release_all()
@@ -1193,6 +1277,7 @@ func _play(game: MiniGame, limit: float, skilled: bool,
 		"lives": int(game.get("_life_halves")),
 		"dodged": int(game.get("_dodged")),
 		"cornered": cornered,
+		"max_fatigue": tired,
 	}
 
 

@@ -41,7 +41,9 @@ them) and herons dive (jumping will not help; move). The river takes all five
 lives and the run is over.
 
 **Controls** — stick or arrows/WASD plus the button to hop left and right;
-button alone jumps on the spot. That is the whole game.
+button alone jumps on the spot. That is the whole game. Jumping tires your
+legs: jump when a hornet comes and you will never notice, but mash the button
+and each jump gets lower and slower, and a bar under the hearts shows it.
 
 The river turns personal: early on your own pad is as likely to sink as any
 other, and by the end two sinks in three are the one you are standing on.
@@ -66,8 +68,9 @@ shuffle.
 ## Hush Meadow — *forage*
 
 A meadow that slides down the screen and off the bottom while you work it —
-and carries you with it, so standing still drifts you toward the bottom edge,
-where your nerve goes fast. Walk against it. Tall grass hides you completely; **dew only appears once you are standing
+and carries you with it, so standing still drifts you off the bottom of the
+screen, where your nerve goes fast. Walk against it; it speeds up the longer
+you last. Tall grass hides you completely; **dew only appears once you are standing
 inside a patch**, and dew is the only thing that calms your nerve. So cover is
 somewhere to go rather than somewhere to hide — and the patch you are hiding
 in is already on its way off the screen.
@@ -77,8 +80,11 @@ fatal. The run ends when your nerve runs out, and the meadow gets harder as it
 goes: it moves faster, its cover grows further apart, and there are five pairs
 of eyes where there was one.
 
-**Controls** — stick or arrows/WASD to move, button to sprint. Sprinting is
-fast, costs stamina, and is loud enough that a bird will come and look.
+**Controls** — stick or arrows/WASD to move, button to toss a pebble the way
+you are pushing. Any bird that hears it land flies over to look at it for a
+couple of seconds, so you can turn a cone away from where you want to go — or,
+thrown badly, pull it straight over you. One pebble every five seconds; the bar
+top-left shows when the next is ready. There is no sprint.
 
 ## All three games
 

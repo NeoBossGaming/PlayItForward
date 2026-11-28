@@ -115,6 +115,47 @@ const HOP_COOLDOWN := 0.10
 ## lasts. At 11 it was a slide with a shadow.
 const HOP_HEIGHT := 18.0
 const INPUT_BUFFER := 0.16
+
+## --- fatigue -----------------------------------------------------------------
+## Mashing the button used to be nearly a shield. A jump keeps her airborne for
+## JUMP_TIME, a hornet only hits a player on the pad, and the input buffer
+## honours a press made mid-air -- so drumming the button kept her off the pad
+## 76% of the time, and alternating hops 72%. The jump exists to answer ONE
+## hornet; held down it answered all of them.
+##
+## So each jump tires her legs and standing on a pad rests them. Below
+## FATIGUE_FREE nothing changes at all: riverleap_test.gd runs the skilled bots
+## through whole runs and asserts they never get there, because the point is to
+## make mashing stop paying, not to tax a player who jumps when a hornet comes.
+## Past it the jump gets lower and shorter and the beat before the next one
+## lengthens, until at full fatigue a mashed jump is in the air about a quarter
+## of the time. It never locks out: a tired jump is still a jump, because a
+## button that does nothing while a hornet comes down reads as the game
+## cheating rather than as being tired.
+const FATIGUE_JUMP := 0.24
+## A quarter of a jump. Hops cannot carry the weight, because busy honest play
+## is hop-heavy: late in a run the skilled bots make eight hops in five seconds
+## as pads go one after another, which is close to the rate of someone
+## hammering left-right. Anything that taxed that would tax real play. Mashing
+## hops is also a weak shield where mashing jumps was a strong one -- it lands
+## her on a pad in one lane or the other half the time, and sinking pads and
+## herons do not care how often she jumps.
+const FATIGUE_HOP := 0.06
+## Per second, while she is not in the air.
+const FATIGUE_RECOVER := 0.45
+## The free allowance. It has to cover what a careful player really does in a
+## busy moment -- traced from the skilled bots' peaks, that is a jump, a second
+## jump 0.4s later because the first went early, sometimes a third when two
+## hornets come down one lane back to back, and a run of hops while pads go at
+## once. Three quick jumps come to about 0.63, and a full suite run once
+## measured 0.65 against an allowance of 0.6. Mashing is a different order of
+## thing (2.4 jumps a second, barely touching the pad) and runs straight
+## through 0.7 in under two seconds.
+const FATIGUE_FREE := 0.7
+## At full fatigue: the hang time and arc shrink to this fraction ...
+const TIRED_HANG := 0.5
+## ... and the beat after landing grows to this.
+const TIRED_COOLDOWN := 0.45
 ## Seconds after the last hop before the character turns back upstream.
 const FACE_UPSTREAM_AFTER := 0.5
 const RECOVERY_TIME := 1.4
@@ -319,6 +360,8 @@ var _best_chain: int = 0
 var _score: int = 0
 var _hop_cooldown: float = 0.0
 var _idle_facing_timer: float = 0.0
+## 0 fresh, 1 spent. See FATIGUE_JUMP.
+var _fatigue: float = 0.0
 
 var _leaf_scene := preload("res://src/minigames/wind_leaf/leaf.tscn")
 var _hazard_scene := preload("res://src/minigames/wind_leaf/hazard.tscn")
@@ -387,6 +430,7 @@ func _process(delta: float) -> void:
 		return
 
 	_advance_river(delta)
+	_tick_fatigue(delta)
 	_tick_buffer(delta)
 	_tick_director(delta)
 	_tick_hazards(delta)
@@ -654,9 +698,45 @@ func _consume_buffer() -> void:
 	_hop_to(target)
 
 
+## --- fatigue -----------------------------------------------------------------
+
+## How tired her legs are past the free allowance: 0 until FATIGUE_FREE, 1 at
+## full fatigue. Everything fatigue does reads this one number.
+func tiredness() -> float:
+	return clampf((_fatigue - FATIGUE_FREE) / (1.0 - FATIGUE_FREE), 0.0, 1.0)
+
+
+## Legs rest whenever she is not in the air -- on a pad or in the water.
+func _tick_fatigue(delta: float) -> void:
+	if not _airborne:
+		_fatigue = maxf(_fatigue - FATIGUE_RECOVER * delta, 0.0)
+	# The bar only comes up once there is something to see. A meter that sits
+	# full for an entire normal run teaches a resource the player never has to
+	# think about; this one appears the moment the button is being leaned on.
+	if _fatigue > 0.05:
+		_hud.set_stamina(1.0 - _fatigue, tiredness() > 0.0)
+	else:
+		_hud.hide_stamina()
+
+
+func _tire(amount: float) -> void:
+	_fatigue = minf(_fatigue + amount, 1.0)
+
+
+## The jump's length and arc, scaled by how tired she is. The arc shrinking is
+## the cue as much as the bar is: a jump that visibly barely leaves the pad is
+## what being tired looks like.
+func _tired_factor() -> float:
+	return lerpf(1.0, TIRED_HANG, tiredness())
+
+
 ## Straight up and down. The only reason this exists is the hang time: a log
 ## passes underneath you, and nothing else in the game gives you that.
 func _jump_in_place() -> void:
+	# Read before tiring her, so the jump that crosses the line is still a
+	# full one and the change starts on the next.
+	var hang := _tired_factor()
+	_tire(FATIGUE_JUMP)
 	_hopping = true
 	_set_airborne(true)
 	_idle_facing_timer = FACE_UPSTREAM_AFTER
@@ -667,13 +747,17 @@ func _jump_in_place() -> void:
 	var tween := create_tween()
 	tween.tween_method(
 		func(t: float) -> void:
-			_player.position = from + Vector2(0, -sin(t * PI) * HOP_HEIGHT * 1.15)
+			_player.position = from + Vector2(0, -sin(t * PI) * HOP_HEIGHT * 1.15 * hang)
 			_player.set_jump_progress(t, 0),
-		0.0, 1.0, JUMP_TIME)
+		0.0, 1.0, JUMP_TIME * hang)
 	tween.tween_callback(_on_hop_landed)
 
 
 func _hop_to(target_lane: int) -> void:
+	# A hop keeps its length -- it is travel, and a shorter one would only land
+	# her sooner -- but its arc drops with the rest of her.
+	var lift := _tired_factor()
+	_tire(FATIGUE_HOP)
 	var direction := 1 if target_lane > _lane else -1
 	_player.set_facing(&"left" if direction < 0 else &"right")
 	_hopping = true
@@ -691,7 +775,7 @@ func _hop_to(target_lane: int) -> void:
 	var tween := create_tween()
 	tween.tween_method(
 		func(t: float) -> void:
-			_player.position = from.lerp(to, t) + Vector2(0, -sin(t * PI) * HOP_HEIGHT)
+			_player.position = from.lerp(to, t) + Vector2(0, -sin(t * PI) * HOP_HEIGHT * lift)
 			_player.set_jump_progress(t, direction),
 		0.0, 1.0, HOP_TIME)
 	tween.tween_callback(_on_hop_landed)
@@ -709,7 +793,7 @@ func _set_airborne(value: bool) -> void:
 func _on_hop_landed() -> void:
 	_hopping = false
 	_set_airborne(false)
-	_hop_cooldown = HOP_COOLDOWN
+	_hop_cooldown = lerpf(HOP_COOLDOWN, TIRED_COOLDOWN, tiredness())
 	_player.land()
 	_camera.kick(0.28)
 	_check_footing()

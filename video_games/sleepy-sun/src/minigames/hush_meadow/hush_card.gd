@@ -56,7 +56,10 @@ func _slide_controls() -> void:
 	# field and is visible through the backdrop, and a row of text through her
 	# is how the last game's card got reported as a bug.
 	build_row(74.0, true, "STICK", "move", &"jump_right")
-	build_row(122.0, false, "BUTTON", "sprint", &"jump_up", true)
+	# The button tosses a pebble now; there is no sprint. One word, the length
+	# "sprint" was: "toss a pebble" ran its last letters into the player
+	# standing behind the card, which is the row-through-her bug again.
+	build_row(122.0, false, "BUTTON", "pebble", &"jump_up", true)
 
 
 ## Two figures, one in and one out, because the lesson is the DIFFERENCE and a
@@ -80,12 +83,23 @@ func _slide_cover() -> void:
 ## A real bird and its real cone. Aimed straight at her, held calm, because the
 ## point is the shape of what it can see rather than what happens next.
 func _slide_eyes() -> void:
-	slide_title("BIRDS SEE IN A CONE", "walk behind them, not across them.")
+	# Both answers to a cone: go round it, or turn it. The pebble is taught
+	# here rather than on the controls slide, where one word is all there is
+	# room for -- this is where a player is asking what to do about a bird.
+	slide_title("BIRDS SEE IN A CONE", "walk behind them, or toss a pebble.")
 	var bird: PatrolBird = BIRD.instantiate()
 	bird.position = Vector2(152, 92)
 	art(bird)
-	bird.ready.connect(func() -> void: bird.face(Vector2.DOWN),
-			CONNECT_ONE_SHOT)
+	# art() adds it to a slide that is already in the tree, so the bird is
+	# ready by the time this line runs. It used to connect to `ready` here
+	# instead -- after the signal had already fired -- so the face() never
+	# happened, and the slide teaching "birds see in a cone" showed the cone
+	# pointing up and away from the girl it was meant to be looking at.
+	if bird.is_node_ready():
+		bird.face(Vector2.DOWN)
+	else:
+		bird.ready.connect(func() -> void: bird.face(Vector2.DOWN),
+				CONNECT_ONE_SHOT)
 	var seen := figure(Vector2(152, 158), &"jump_down", 1.3, Z_FIGURE)
 	pose(seen, 0)
 
@@ -102,7 +116,14 @@ func _slide_dew() -> void:
 	dew.patch = patch
 	dew.position = Vector2(26, -4)
 	patch.add_child(dew)
-	dew.ready.connect(dew.reveal, CONNECT_ONE_SHOT)
+	# The same trap as the bird on the slide before: the patch is already in
+	# the tree, so the dew is ready the moment it is added, and connecting to
+	# `ready` afterwards meant the reveal never ran. The one slide that
+	# demonstrates the rule the game hangs on showed no dew at all.
+	if dew.is_node_ready():
+		dew.reveal()
+	else:
+		dew.ready.connect(dew.reveal, CONNECT_ONE_SHOT)
 	patch.mark_dew()
 	var who := figure(Vector2(140, 132), &"jump_down", 1.3, Z_FIGURE)
 	pose(who, 0)

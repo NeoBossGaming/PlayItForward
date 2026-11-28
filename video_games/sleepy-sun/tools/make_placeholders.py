@@ -116,7 +116,7 @@ KEEP = {
     "hush_meadow/bird_0.png", "hush_meadow/bird_1.png",
     "hush_meadow/dew.png", "hush_meadow/dew_gold.png",
     "hush_meadow/petal.png", "hush_meadow/hedge.png", "hush_meadow/rock.png",
-    "hush_meadow/mote.png",
+    "hush_meadow/mote.png", "hush_meadow/pebble.png",
     "ui/icon_eye.png",
     "ui/icon_flag.png", "ui/icon_clock.png", "ui/pip.png",
     "ui/heart_full.png", "ui/heart_half.png", "ui/heart_empty.png",
@@ -2052,6 +2052,25 @@ def hush_meadow_ground():
 
         despeckle(img, wrap=False)
         save(img, "hush_meadow/grass_%d.png" % variant)
+
+    # --- the pebble -------------------------------------------------------
+    # What the button throws. Drawn by hand, pixel by pixel: at 7x6 there is
+    # no room for anything random. Pale on top and dark underneath so it
+    # reads as a stone in the air and on the grass, and warm grey rather
+    # than the cool grey of the rocks, so a pebble never looks like a small
+    # blocker that a bird cannot see past.
+    STONE = {"o": (52, 46, 44, 255), "s": (128, 120, 110, 255),
+             "l": (176, 168, 152, 255), "d": (92, 84, 78, 255)}
+    img, _ = canvas(7, 6)
+    stamp(img.load(), 7, 6, [
+        ".ooooo.",
+        "ollsso.",
+        "olssdo.",
+        "osddddo",
+        ".oddoo.",
+        "..oo...",
+    ], 0, 0, STONE, wrap=False)
+    save(img, "hush_meadow/pebble.png")
 
 
 def hush_meadow_art():

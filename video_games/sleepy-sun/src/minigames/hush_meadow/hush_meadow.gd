@@ -45,9 +45,22 @@ const Z_PROPS := 6
 ## resolves this by walking the chain rather than reading these constants back.
 const Z_PATCH := 14
 
-## Where the player may walk. Tighter than the viewport so nothing important
-## happens against an edge.
-const FIELD := Rect2(26, 46, 428, 196)
+## Where the player may walk, side to side and at the top -- tighter than the
+## viewport there, so nothing important happens against an edge. Its bottom is
+## the bottom of the screen at the start of a run; the line that actually
+## matters down there moves with the camera, see edge_y().
+const FIELD := Rect2(26, 46, 428, 224)
+## How far below the bottom of the screen the meadow can carry her. Neo asked
+## for the border to go "a little offscreen, but the player still gets
+## punished for doing so": her feet slip out of view, most of her does not, and
+## the nerve climbs the whole time. It was a wall 28px ABOVE the bottom of the
+## screen before, which read as an invisible fence in the middle of the grass.
+const OVERHANG := 16.0
+## Where she stands at the gun. Below centre, so there is more meadow ahead of
+## her than behind, and clear of the intro card's text rows -- HushCard's
+## SHE_IS_AT is this point, and a row of text through her is a bug report this
+## project has already had once.
+const START := Vector2(240, 164)
 ## Patches are built above this and freed below it.
 const SPAWN_ABOVE := 30.0
 const DESPAWN_BELOW := 56.0
@@ -60,11 +73,12 @@ const GENTLE_CEILING := 0.28
 const STEEP_TAU := 80.0
 
 ## Pixels per second the meadow slides -- and SHE slides with it, because she is
-## standing on it. Well under the walk speed at both ends: walking against the
-## meadow has to make real headway, or holding her ground stops being a choice
-## and starts being all she does. At the old 18 -> 52 against a walk of 70 she
-## would have made 18 px/s of headway late on, which is wading through glue.
-const SCROLL := Vector2(16.0, 38.0)
+## standing on it. It more than triples across a run: Neo asked for the
+## scrolling to get faster as time goes on, and 16 -> 38 crept up so evenly
+## that nobody noticed it happening. Well under the walk speed at both ends,
+## because walking against the meadow has to make real headway, or holding her
+## ground stops being a choice and starts being all she does.
+const SCROLL := Vector2(16.0, 56.0)
 ## The shade layer drifts at a different fraction AND is a different tile size
 ## (240 against 176), so the two periods never line up. Different size alone
 ## only makes the grid bigger. hush_test.gd asserts these stay unequal, because
@@ -72,11 +86,14 @@ const SCROLL := Vector2(16.0, 38.0)
 ## catch it.
 const SHADE_RATE := 0.62
 
-## Raised from 70 when the meadow started carrying her: walking up a field
-## that moves down is the game now, and 85 against a late scroll of 38 leaves
-## 47 px/s of headway -- still more than half her walk spent going somewhere.
-const WALK := 85.0
-const SPRINT := 1.75
+## 70, then 85 when the meadow started carrying her, then 95 when the sprint
+## went and the meadow got faster. Against a late scroll of 56 that leaves 39
+## px/s of headway in the open.
+##
+## There is no sprint. It was the one thing in the game that made her faster,
+## and Neo found it weird -- a button that turned a careful stealth game into a
+## dash. Walking is the only pace there is, so it has to be enough on its own.
+const WALK := 95.0
 ## A slow human. Subtracted from every reachability answer the director gives.
 const REACTION := 0.30
 
@@ -103,7 +120,12 @@ const REACTION := 0.30
 ## measured, not guessed -- because arrivals were down by just that much.
 ## These two numbers put arrivals back where they were (0.35/s early, 0.41/s
 ## late): riding changes how she has to move to collect, not what is on offer.
-const PATCH_GAP := Vector2(46.0, 92.0)
+## And the late end went 92 -> 136 when the scroll went 38 -> 56. Faster ground
+## at the same spacing delivered half as much cover again per second -- the
+## supply check read 2.0x where it had read 1.36x, and runs got longer, which
+## is the opposite of what a faster meadow is for. 136 keeps arrivals at 0.41/s
+## and lets the speed show up as cover further apart.
+const PATCH_GAP := Vector2(46.0, 136.0)
 ## Patches already grown when the game starts, so the first thing a player
 ## sees is a meadow rather than an empty field filling up.
 const SEED_PATCHES := 5
@@ -125,7 +147,6 @@ const RESCUE_WAIT := 1.6
 ## comes from the meadow thinning out instead.
 const BIRDS := Vector2(1.0, 5.0)
 const BIRD_SPEED := Vector2(23.0, 44.0)
-const SPRINT_NOISE_RADIUS := 72.0
 ## After being spotted, nothing can see you. Long enough to get off the spot --
 ## which, after the stun, has to mean further than a cone reaches (78 px).
 ##
@@ -169,20 +190,18 @@ const DEW_CALM := 0.42
 ## is the one number that rewards foraging without also rewarding hiding --
 ## a player sitting in grass never walks over a petal.
 const PETAL_CALM := 0.09
-## Per second while she is pinned against the bottom edge, whatever else is
-## true -- in grass or not, watched or not. Well above NERVE_SEEN, because this
-## is the meadow's one boundary and it has to read as one: a player who lets
-## the ground carry her off the bottom is not hiding, she is leaving.
+## Per second while she is over the bottom edge -- below the bottom of the
+## screen -- whatever else is true: in grass or not, watched or not. Well above
+## NERVE_SEEN, because this is the meadow's one boundary and it has to read as
+## one: a player who lets the ground carry her off the bottom is not hiding,
+## she is leaving.
 ##
 ## It is what makes standing still cost something. Before the meadow carried
 ## her, a player who never touched the stick stood in place while fresh cover
 ## arrived for free; now the ground takes her to the edge in a few seconds, and
 ## walking against it is the price of staying in the game. The same current
 ## Riverleap's river is.
-const NERVE_PINNED := 0.75
-## How close to the bottom counts as pinned. She is clamped to exactly the
-## edge, so this only has to absorb a frame's rounding.
-const PIN_MARGIN := 1.0
+const NERVE_OVER_EDGE := 0.75
 
 ## The worst thing that can happen, and still not instant death: about six of
 ## these fills the meter on its own. At 0.22 it was four, which on a game
@@ -204,6 +223,28 @@ const GOLD_RADIUS := 20.0
 const NERVE_CLOSE := 30.0
 const NERVE_NEAR := 60.0
 
+## --- the pebble --------------------------------------------------------------
+## What the button does now that it does not sprint. Toss a pebble and every
+## bird that hears it land goes to look -- flies there and stares at it for a
+## couple of seconds, cone and all, then goes back to its rounds.
+##
+## It is the stealth game's own verb, and the birds already had it: sprinting
+## used to make a bird come and investigate HER. The pebble turns that round,
+## so the same behaviour is something the player uses instead of something
+## that happens to them. A bird looking at a pebble is a bird not looking at
+## the gap she wants to cross -- and one thrown badly pulls the bird, and its
+## cone, straight over her.
+##
+## How far ahead it lands, in the direction she is pushing (or facing).
+const PEBBLE_RANGE := 80.0
+const PEBBLE_FLIGHT := 0.42
+const PEBBLE_ARC := 16.0
+## Birds within this of where it lands hear it.
+const PEBBLE_EARSHOT := 120.0
+## Seconds before she has another. Long enough that a bird cannot be kept
+## busy forever, which would turn the cones off.
+const PEBBLE_RECHARGE := 5.0
+
 ## --- scoring -----------------------------------------------------------------
 const SCORE_SPOTTED := -100
 const SCORE_PER_SECOND := Vector2(5.0, 22.0)
@@ -215,16 +256,20 @@ const SCORE_PER_SECOND := Vector2(5.0, 22.0)
 ## than as the game being hard. Set from the measured table rather than
 ## guessed.
 ##
-## 120 while she stood still on the screen and the meadow came to her. Once it
-## carried her, holding her ground stopped being free and runs got shorter --
-## the point of the change -- so par moved with them: 60 bot runs at 133 /
-## 216 / 300 ms averaged 108 / 85 / 95s (pooled mean 96, median 84, ten runs
-## at the suite's cap). A run of a minute and a half is a B; twice par, just
-## over three minutes, is an S.
-const PAR_SECONDS := 95.0
+## 120 while she stood still on the screen and the meadow came to her; 95 once
+## it carried her, because holding her ground stopped being free (60 runs,
+## 108 / 85 / 95s). Back to 120 when the sprint went and the meadow got
+## faster: 60 runs at 133 / 216 / 300 ms averaged 131 / 126 / 103s, pooled
+## mean and median both 120. Most of the change is that the bots stopped being
+## spotted -- they sprinted whenever they moved at full stick, and sprinting
+## made nearby birds come and look at her. The bots never throw pebbles, so
+## this is par for a player who never uses the button.
+const PAR_SECONDS := 120.0
 
 const BIRD_SCENE := preload("res://src/minigames/hush_meadow/bird.tscn")
 const PICKUP_SCENE := preload("res://src/minigames/hush_meadow/pickup.tscn")
+const PEBBLE_TEXTURE := preload("res://assets/game/hush_meadow/pebble.png")
+const DUST_TEXTURE := preload("res://assets/game/decor/dust.png")
 
 @onready var _player: TopDownPlayer = $Player
 @onready var _hud: HUD = $HUD
@@ -252,14 +297,21 @@ var _blockers: Array[Rect2] = []
 
 var _concealed: bool = false
 var _watched: bool = false
-## Against the bottom edge with the meadow still pulling. See NERVE_PINNED.
-var _pinned: bool = false
-## Seconds spent pinned this run. Not shown to the player; the suite prints it,
-## because a bot that spends its life on the edge is a bot that is not playing.
-var _pinned_time: float = 0.0
+## Below the bottom of the screen. See NERVE_OVER_EDGE.
+var _over_edge: bool = false
+## Seconds spent over the edge this run. Not shown to the player; the suite
+## prints it, because a bot that spends its life on the edge is not playing.
+var _over_edge_time: float = 0.0
 ## The edge is explained once a run, the first time it happens. After that the
 ## alarm says it, and a sentence every time would be a sentence nobody reads.
-var _pin_explained: bool = false
+var _edge_explained: bool = false
+## 0 just thrown, 1 ready. See PEBBLE_RECHARGE.
+var _pebble: float = 1.0
+var _pebbles_thrown: int = 0
+## The camera's resting centre and half the screen's height, read once, so the
+## bottom of the screen can be worked out from the zoom alone.
+var _view_centre_y: float = 135.0
+var _view_half_h: float = 135.0
 
 var _score: int = 0
 var _dew: int = 0
@@ -279,19 +331,14 @@ var _gold_live: MeadowPickup = null
 
 func _ready() -> void:
 	_rng.randomize()
-	# Below centre, so there is more meadow ahead of her than behind -- and
-	# high enough to clear the intro card's caption line, which at FIELD.end.y
-	# - 40 ran straight through her. That exact complaint was filed against
-	# the last game's card and it is the same 200px row of text.
-	_player.position = Vector2(FIELD.get_center().x,
-			FIELD.position.y + FIELD.size.y * 0.60)
+	_player.position = START
 	_player.speed = WALK
-	_player.sprint_multiplier = SPRINT
-	_player.can_sprint = true
+	# The button belongs to the pebble now; see _unhandled_input().
+	_player.can_sprint = false
 	_player.z_index = Z_PLAYER
-	_player.stamina_changed.connect(_hud.set_stamina)
-	# stamina_changed only fires when the meter moves, so the bar would be
-	# invisible until the first sprint without this.
+	_view_centre_y = _camera.position.y
+	_view_half_h = get_viewport_rect().size.y * 0.5
+	# The stamina bar is the pebble's: full means ready.
 	_hud.set_stamina(1.0, false)
 	_player.freeze()
 
@@ -314,7 +361,7 @@ func _ready() -> void:
 
 
 func control_hint() -> String:
-	return "STICK  move      BUTTON  sprint"
+	return "STICK  move      BUTTON  toss a pebble"
 
 
 func begin() -> void:
@@ -336,8 +383,10 @@ func _process(delta: float) -> void:
 	# drift take her past the edge.
 	_scroll_world(delta)
 	_tick_stun(delta)
-	_player.position = _player.position.clamp(FIELD.position, FIELD.end)
-	_update_pinned(delta)
+	_player.position = _player.position.clamp(FIELD.position,
+			Vector2(FIELD.end.x, floor_y()))
+	_update_over_edge(delta)
+	_tick_pebble(delta)
 	_update_concealment()
 	_update_birds(delta)
 	if _ending:
@@ -406,18 +455,111 @@ func _scroll_world(delta: float) -> void:
 
 ## --- the edge ----------------------------------------------------------------
 
-## Pinned is "the field stopped her and the meadow is still pulling". Not while
+## The bottom of what the player can actually see. The camera pushes in as the
+## meadow speeds up (GameCamera, "speed is sold with the camera"), so this rises
+## from 270 at the gun to about 254 late on. A fixed line would be offscreen
+## early and in plain view late; this one is always the screen's own edge.
+## From the zoom alone, not the camera's position, which trembles by fractions
+## of a pixel and would make the edge tremble with it.
+func edge_y() -> float:
+	return _view_centre_y + _view_half_h / _camera.zoom.y
+
+
+## As far down as the meadow can carry her: a little past the edge.
+func floor_y() -> float:
+	return edge_y() + OVERHANG
+
+
+## Over the edge is "her feet are below the bottom of the screen". Not while
 ## stunned: being spotted already cost her, and a freeze she cannot walk out
 ## of is not a decision she made.
-func _update_pinned(delta: float) -> void:
-	var pinned := sequence_started() and scroll_speed() > 0.0 and _stun <= 0.0 \
-			and not _ending and _player.position.y >= FIELD.end.y - PIN_MARGIN
-	if pinned:
-		_pinned_time += delta
-		if not _pin_explained:
-			_pin_explained = true
+func _update_over_edge(delta: float) -> void:
+	var over := sequence_started() and scroll_speed() > 0.0 and _stun <= 0.0 \
+			and not _ending and _player.position.y > edge_y()
+	if over:
+		_over_edge_time += delta
+		if not _edge_explained:
+			_edge_explained = true
 			_hud.toast("KEEP UP", Color(1.0, 0.62, 0.5), 1.0)
-	_pinned = pinned
+	_over_edge = over
+
+
+## --- the pebble --------------------------------------------------------------
+
+## One button, and it no longer sprints. The stick is read at the instant of
+## the press, as Riverleap reads it: point and press.
+func _unhandled_input(event: InputEvent) -> void:
+	if not running or _ending or _stun > 0.0:
+		return
+	if event.is_action_pressed(&"act"):
+		toss_pebble(Input.get_vector(&"move_left", &"move_right",
+				&"move_up", &"move_down"))
+
+
+func _tick_pebble(delta: float) -> void:
+	_pebble = minf(_pebble + delta / PEBBLE_RECHARGE, 1.0)
+	_hud.set_stamina(_pebble, false)
+
+
+## Throws one if she has one. `aim` is the stick; with it centred the pebble
+## goes the way she is facing. Returns whether anything was thrown, so the
+## suite can tell a refusal from a throw.
+func toss_pebble(aim: Vector2) -> bool:
+	if _pebble < 1.0:
+		Audio.sfx(&"tick", 0.7)
+		return false
+	_pebble = 0.0
+	_pebbles_thrown += 1
+	if aim.length() < 0.2:
+		aim = TopDownPlayer.DIRECTIONS.get(_player.facing, Vector2.UP)
+	var landing := (_player.position + aim.normalized() * PEBBLE_RANGE).clamp(
+			FIELD.position, Vector2(FIELD.end.x, edge_y()))
+
+	# Carried in the props layer, so the meadow scrolls it like everything
+	# else on the ground: where it lands is a place in the meadow, not on the
+	# screen, and the bird that goes to look finds it there.
+	var carrier := Node2D.new()
+	carrier.position = _player.position
+	_props_root.add_child(carrier)
+	var stone := Sprite2D.new()
+	stone.texture = PEBBLE_TEXTURE
+	# Over the grass while it flies, so it can be followed.
+	stone.z_index = Z_PATCH + 2
+	carrier.add_child(stone)
+	Audio.sfx(&"cast", 1.3)
+
+	var to := landing - _player.position
+	var tween := create_tween()
+	tween.tween_method(
+		func(t: float) -> void:
+			stone.position = to * t + Vector2(0.0, -sin(t * PI) * PEBBLE_ARC),
+		0.0, 1.0, PEBBLE_FLIGHT)
+	tween.tween_callback(_pebble_lands.bind(carrier, stone))
+	return true
+
+
+func _pebble_lands(carrier: Node2D, stone: Sprite2D) -> void:
+	if not is_instance_valid(carrier):
+		return
+	var at := carrier.position + stone.position
+	stone.z_index = Z_PROPS
+	Audio.sfx(&"step", 1.6)
+	for bird in _birds:
+		if bird.global_position.distance_to(at) <= PEBBLE_EARSHOT:
+			bird.investigate(at)
+	# A puff where it landed, so the player sees the place the birds heard.
+	var puff := Sprite2D.new()
+	puff.texture = DUST_TEXTURE
+	puff.position = stone.position
+	puff.z_index = Z_PATCH + 2
+	carrier.add_child(puff)
+	var fade := create_tween()
+	fade.tween_property(puff, "scale", Vector2(2.2, 2.2), 0.35)
+	fade.parallel().tween_property(puff, "modulate:a", 0.0, 0.35)
+	# The stone lies there a moment, then goes; the bird is already on its way.
+	fade.tween_interval(1.2)
+	fade.tween_property(stone, "modulate:a", 0.0, 0.5)
+	fade.tween_callback(carrier.queue_free)
 
 
 ## --- cover -------------------------------------------------------------------
@@ -478,7 +620,7 @@ func patch_is_usable(patch: MeadowPatch, from: Vector2, speed: float) -> bool:
 	var reach := reach_time(from, patch.position, WALK, speed)
 	if not is_finite(reach):
 		return false
-	if reach + REACTION > patch.life_left(speed, FIELD.end.y):
+	if reach + REACTION > patch.life_left(speed, edge_y()):
 		return false
 	for bird in _birds:
 		if bird.sees_point(patch.position):
@@ -709,7 +851,7 @@ func _tick_golden() -> void:
 	for patch in _patches:
 		if not patch_is_usable(patch, _player.position, speed):
 			continue
-		var life := patch.life_left(speed, FIELD.end.y)
+		var life := patch.life_left(speed, edge_y())
 		if life > best_life:
 			best_life = life
 			best = patch
@@ -742,11 +884,6 @@ func _update_birds(delta: float) -> void:
 		if _visible_from(bird.global_position, bird.facing):
 			_watched = true
 			break
-
-	if _player.sprinting:
-		for bird in _birds:
-			if bird.global_position.distance_to(_player.position) < SPRINT_NOISE_RADIUS:
-				bird.investigate(_player.position)
 
 
 func _launch_bird() -> void:
@@ -836,8 +973,8 @@ func _tick_nerve(delta: float) -> void:
 	var rise := 0.0
 	# The edge first: riding a patch down to the bottom and sitting in it is
 	# exactly the safe corner this rule exists to remove.
-	if _pinned:
-		rise = NERVE_PINNED
+	if _over_edge:
+		rise = NERVE_OVER_EDGE
 	elif _watched:
 		rise = NERVE_SEEN
 	elif _concealed:
@@ -863,7 +1000,7 @@ func _refresh_bar() -> void:
 	# a sentence while panicking. On for the bottom edge too, from the first
 	# frame: that is the one place the meter can be falling fast while it still
 	# looks healthy, and the fix is a single push of the stick.
-	_hud.set_alarm(1.0 if _nerve > 0.78 or _pinned else 0.0)
+	_hud.set_alarm(1.0 if _nerve > 0.78 or _over_edge else 0.0)
 
 
 func _current_score() -> int:
@@ -939,7 +1076,10 @@ func _seed_meadow() -> void:
 		var inset := MeadowPatch.PATCH_HALF.x + 6.0
 		var patch := MeadowPatch.build(_rng, Vector2(
 			_rng.randf_range(FIELD.position.x + inset, FIELD.end.x - inset),
-			_rng.randf_range(FIELD.position.y, FIELD.end.y - 20.0)))
+			# The ground the opening has always been seeded on: down to 48px
+			# above the bottom of the screen, as it was when the field ended
+			# 28px higher.
+			_rng.randf_range(FIELD.position.y, FIELD.end.y - 48.0)))
 		patch.z_index = Z_PATCH
 		_patches_root.add_child(patch)
 		_patches.append(patch)
@@ -953,7 +1093,7 @@ func _seed_meadow() -> void:
 				% ("hedge" if _rng.randf() < 0.5 else "rock"))
 		prop.position = Vector2(
 			_rng.randf_range(FIELD.position.x + 30.0, FIELD.end.x - 30.0),
-			_rng.randf_range(FIELD.position.y, FIELD.end.y))
+			_rng.randf_range(FIELD.position.y, FIELD.end.y - 28.0))
 		prop.z_index = Z_PROPS
 		_props_root.add_child(prop)
 		_blockers.append(Rect2(prop.position - Vector2(13, 10), Vector2(26, 20)))

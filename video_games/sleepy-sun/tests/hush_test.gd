@@ -63,7 +63,7 @@ const TRIALS := 6
 const ARRIVE := 7.0
 ## With nothing to walk at, the bot keeps itself above this fraction of the
 ## field. A little below the middle, which is about where a person stands.
-const STATION := 0.55
+const STATION := 0.48
 ## Seconds of life a patch should have left when the bot gets there, by
 ## preference. Below this it is a patch that delivers her onto the edge.
 const SPARE_LIFE := 2.0
@@ -122,6 +122,8 @@ func _ready() -> void:
 	_step("dew only shows in cover");     await _test_dew_only_shows_in_cover()
 	_step("she rides the meadow");        await _test_she_rides_the_meadow()
 	_step("the edge bites");             await _test_the_edge_bites()
+	_step("there is no sprint");         await _test_there_is_no_sprint()
+	_step("a pebble turns a head");      await _test_a_pebble_turns_a_head()
 	_step("there is always cover");       await _test_there_is_always_cover()
 	_step("dew outpaces the rise");       await _test_dew_can_outpace_the_rise()
 	_step("a cone gives you time");       await _test_a_cone_gives_you_time()
@@ -133,6 +135,7 @@ func _ready() -> void:
 	_step("cover thins out");             await _test_cover_thins_out()
 	_step("the golden can be caught");    await _test_the_golden_can_be_caught()
 	_step("the opening card");            await _test_the_opening_card()
+	_step("the card shows what it says"); await _test_the_card_shows_what_it_says()
 	_step("the art is pixel art");        await _test_the_art_is_pixel_art()
 	_step("")
 
@@ -405,21 +408,41 @@ func _test_she_rides_the_meadow() -> void:
 	_drop(game)
 
 
-## The price of riding. Pinned against the bottom, nerve climbs faster than it
-## does under a bird's eye -- in grass or not, because riding a patch down to
-## the edge and sitting in it is exactly the safe corner the rule removes. The
-## alarm says so from the first frame, and one push of the stick is the cure.
+## The price of riding, at the bottom of the SCREEN. Neo asked for the border
+## to sit "a little offscreen, but the player still gets punished for doing
+## so". So: the ground just above the bottom of the screen is free; past it the
+## nerve climbs faster than under a bird's eye, in grass or out; she can be
+## carried no more than OVERHANG below it; the alarm is up from the first
+## frame; and one push of the stick brings her back.
 func _test_the_edge_bites() -> void:
 	var game: Node = await _start()
 	await _play(game, launch_over() + 0.3)
 	# Nothing can see her, so what is measured is the edge and only the edge.
 	game._mercy = 99.0
+	var overhang: float = _const("OVERHANG")
+
 	game._nerve = 0.0
-	game._player.position = Vector2(field().get_center().x, field().end.y)
+	game._player.position = Vector2(field().get_center().x, _edge_of(game) - 6.0)
+	await _frames(1)
+	_check(not game._over_edge,
+			"6px above the bottom of the screen already counts as over the "
+			+ "edge -- the border has not moved down")
+
+	game._player.position = Vector2(field().get_center().x, _edge_of(game) + 200.0)
 	await _frames(2)
-	_check(game._pinned, "a player at the bottom edge is not counted as pinned")
+	var edge := _edge_of(game)
+	var y: float = game._player.position.y
+	# A fixed few pixels, not a fraction of OVERHANG: read from the game, an
+	# overhang set to zero would make this check ask for zero and pass.
+	_check(y > edge + 4.0,
+			"she stopped at %.1f, %.1fpx from the bottom of the screen -- the "
+			% [y, y - edge] + "meadow should carry her a little way past it")
+	_check(y <= edge + overhang + 0.5,
+			"she went %.1fpx past the bottom of the screen, more than the %.0f "
+			% [y - edge, overhang] + "it may carry her")
+	_check(game._over_edge, "below the bottom of the screen is not counted as over the edge")
 	var alarm: CanvasItem = game._hud.get_node("Root/Alarm")
-	_check(alarm.modulate.a > 0.0, "pinned at the edge with no alarm showing")
+	_check(alarm.modulate.a > 0.0, "over the edge with no alarm showing")
 
 	var from: float = game._nerve
 	var clock := 0.0
@@ -427,24 +450,109 @@ func _test_the_edge_bites() -> void:
 		await _frames(1)
 		clock += get_process_delta_time()
 	var rate: float = (game._nerve - from) / clock
-	print("  edge       nerve rose %.2f/s pinned, against %.2f/s seen"
-			% [rate, float(_const("NERVE_SEEN"))])
+	print("  edge       %.0fpx below the screen at most; nerve %.2f/s there, %.2f/s seen"
+			% [overhang, rate, float(_const("NERVE_SEEN"))])
 	_check(rate > float(_const("NERVE_SEEN")) * 1.3,
-			"pinned at the edge raised nerve %.2f/s, barely more than a bird's "
+			"over the edge raised nerve %.2f/s, barely more than a bird's "
 			% rate + "eye does -- the boundary does not read as one")
 
-	# One push gets her off.
+	# One push brings her back.
 	_hold(&"move_up")
 	clock = 0.0
-	while clock < 0.3:
+	while clock < 0.4:
 		await _frames(1)
 		clock += get_process_delta_time()
 	_release_all()
-	_check(not game._pinned,
-			"a third of a second of pushing up did not get her off the edge")
-	_check(game._player.position.y < field().end.y - 8.0,
-			"pushing up for a third of a second only moved her to %.1f, edge %.1f"
-			% [game._player.position.y, field().end.y])
+	_check(not game._over_edge,
+			"0.4s of pushing up did not bring her back over the edge")
+	_drop(game)
+
+
+## Neo: "remove sprint, it makes it so weird". Held while walking, the button
+## makes her no faster -- the walk is the only pace there is.
+func _test_there_is_no_sprint() -> void:
+	var game: Node = await _start()
+	await _play(game, launch_over() + 0.3)
+	game._mercy = 99.0
+	game._player.position = Vector2(field().position.x + 10.0, field().get_center().y)
+	_hold(&"move_right")
+	await _frames(1)
+	_hold(&"act")
+	await _play(game, 0.4)
+	var from: float = game._player.position.x
+	var clock := 0.0
+	var fastest := 0.0
+	while clock < 0.6:
+		var x: float = game._player.position.x
+		await _frames(1)
+		var dt := get_process_delta_time()
+		clock += dt
+		fastest = maxf(fastest, (float(game._player.position.x) - x) / dt)
+	_release_all()
+	print("  no sprint  button held while walking: %.0f px/s, walk is %.0f"
+			% [fastest, walk()])
+	_check(not game._player.can_sprint, "the player can still sprint")
+	_check(fastest <= walk() * 1.05,
+			"holding the button while walking moved her at %.0f px/s, faster than "
+			% fastest + "the %.0f walk -- the sprint is still in there" % walk())
+	_check(float(game._player.position.x) > from,
+			"she did not walk at all with the stick held")
+	_drop(game)
+
+
+## The button's new job. A pebble lands where she aims; a bird within earshot
+## goes to look -- flies there with its cone on it -- and there is not another
+## until it has recharged. Thrown through real input, stick then button, the
+## way a person does it.
+func _test_a_pebble_turns_a_head() -> void:
+	var game: Node = await _start()
+	await _play(game, launch_over() + 0.3)
+	game._mercy = 99.0
+	_check(not game._birds.is_empty(), "no bird to throw a pebble for")
+	if game._birds.is_empty():
+		_drop(game)
+		return
+	var bird: PatrolBird = game._birds[0]
+	var range_px: float = _const("PEBBLE_RANGE")
+	# Stand her so the pebble lands well inside the bird's earshot, in open
+	# field, to the bird's left.
+	var landing := Vector2(field().get_center().x, field().get_center().y - 20.0)
+	bird.drift(landing + Vector2(70.0, -10.0) - bird.global_position)
+	game._player.position = landing - Vector2(range_px, 0.0)
+	var drift_before: float = game._player.position.y
+
+	_hold(&"move_right")
+	await _frames(1)
+	_hold(&"act")
+	await _frames(1)
+	_release_all()
+	_check(game._pebbles_thrown == 1,
+			"pressing the button threw %d pebbles, expected one" % game._pebbles_thrown)
+	_check(not game.toss_pebble(Vector2.RIGHT),
+			"a second pebble went straight after the first -- it never has to "
+			+ "recharge, so a bird can be kept busy forever")
+
+	await _play(game, float(_const("PEBBLE_FLIGHT")) + 0.1)
+	var looking := bird._investigating > 0.0
+	var where: Vector2 = bird._investigate_point
+	# Where it should have landed, carried as far down as the meadow has moved.
+	var expected := landing + Vector2(0.0, float(game._player.position.y) - drift_before)
+	_check(looking, "a pebble landed %.0fpx from a bird and it did not come to look"
+			% landing.distance_to(bird.global_position))
+	_check(where.distance_to(expected) < 12.0,
+			"the bird went to look at %s, but the pebble landed near %s"
+			% [where.round(), expected.round()])
+	await _play(game, 0.8)
+	var facing_it: float = bird.facing.dot((bird._investigate_point
+			- bird.global_position).normalized())
+	_check(bird.global_position.distance_to(bird._investigate_point) < 6.0
+			or facing_it > 0.7,
+			"the bird is not looking at the pebble (facing %.2f)" % facing_it)
+
+	await _play(game, float(_const("PEBBLE_RECHARGE")))
+	_check(game.toss_pebble(Vector2.LEFT), "no pebble ready after a full recharge")
+	print("  pebble     a bird %.0fpx away went to look; recharge %.0fs"
+			% [70.0, float(_const("PEBBLE_RECHARGE"))])
 	_drop(game)
 
 
@@ -787,6 +895,48 @@ func _test_the_opening_card() -> void:
 	await _frames(2)
 
 
+## The two slides that teach the cone and the dew, built inside a card that is
+## really in the tree -- the only place their bug showed. Each set up its
+## subject by connecting to `ready` AFTER adding it to a live slide, by which
+## time the signal had fired: the bird looked up and away from the girl, and
+## the dew never appeared, on the slides about exactly those two things. No
+## check looked at either; a capture found both.
+func _test_the_card_shows_what_it_says() -> void:
+	var was_seen := StartCard.tutorial_seen
+	StartCard.tutorial_seen = false
+	var card := HushCard.new()
+	add_child(card)
+	await _frames(1)
+	card._build()
+
+	card._show_slide(2)
+	var bird: PatrolBird = null
+	for child in card._slide.get_children():
+		if child is PatrolBird:
+			bird = child
+	_check(bird != null, "the cone slide has no bird on it")
+	if bird != null:
+		_check(bird.facing.dot(Vector2.DOWN) > 0.99,
+				"the bird on the cone slide is looking along %s, not down at "
+				% bird.facing + "the girl it is there to be looking at")
+
+	card._show_slide(3)
+	var dew: MeadowPickup = null
+	for child in card._slide.get_children():
+		if child is MeadowPatch and not child.is_queued_for_deletion():
+			for inner in child.get_children():
+				if inner is MeadowPickup:
+					dew = inner
+	_check(dew != null, "the dew slide has no dew on it")
+	if dew != null:
+		_check(dew.revealed, "the dew on the dew slide is never revealed -- the "
+				+ "slide that demonstrates the game's rule shows nothing")
+
+	card.queue_free()
+	StartCard.tutorial_seen = was_seen
+	await _frames(2)
+
+
 # --- the bots ----------------------------------------------------------------
 
 func _bot(reaction_ms: int, mode: Mode, limit: float) -> float:
@@ -832,7 +982,7 @@ func _bot(reaction_ms: int, mode: Mode, limit: float) -> float:
 		# The edge is new information exactly as a cone is: the alarm comes
 		# on, and a person notices it a reaction time later and moves.
 		var settled: bool = is_instance_valid(aim_at) and not game._watched \
-				and not game._pinned and _toward(game, aim_at) != Vector2.ZERO
+				and not game._over_edge and _toward(game, aim_at) != Vector2.ZERO
 		if not settled and decisions.is_empty():
 			decisions.append([clock + lag, _choose(game, mode)])
 		while not decisions.is_empty() and float(decisions[0][0]) <= clock:
@@ -849,7 +999,7 @@ func _bot(reaction_ms: int, mode: Mode, limit: float) -> float:
 
 	var held: float = game._survived
 	_last_run = "%d dew, %d petals, %d spotted, %.1fs pinned" % [game._dew,
-			game._petals, game._spotted, game._pinned_time]
+			game._petals, game._spotted, game._over_edge_time]
 	_last_dew = game._dew
 	_last_spotted = game._spotted
 	_runs += 1
@@ -872,7 +1022,7 @@ func _choose(game: Node, mode: Mode) -> Node2D:
 	# _drive() walks her up -- the one push of the stick the alarm asks for.
 	# Without this the bot sat on the edge for over a second at a time, a
 	# whole death's worth of nerve, which measured the bot and not the game.
-	if game._pinned:
+	if game._over_edge:
 		return null
 
 	# Being looked at beats everything: the nearest grass, cone or no cone.
@@ -886,7 +1036,7 @@ func _choose(game: Node, mode: Mode) -> Node2D:
 	if mode == Mode.HIDE:
 		# Rides whatever it is in, sitting in the middle of it where cover
 		# lasts longest, and only looks for another when that one is leaving.
-		if standing != null and standing.position.y < field().end.y - 24.0:
+		if standing != null and standing.position.y < _edge_of(game) - 24.0:
 			return standing
 		return _best_patch(game, me, false)
 
@@ -900,7 +1050,7 @@ func _choose(game: Node, mode: Mode) -> Node2D:
 		# patch goes over the edge.
 		for child in standing.get_children():
 			var dew := child as MeadowPickup
-			if dew != null and dew.revealed and _clear_of_edge(dew):
+			if dew != null and dew.revealed and _clear_of_edge(game, dew):
 				return dew
 	# Nothing left where she is standing, so move on at once. An earlier
 	# version waited for the patch to start leaving before looking for the
@@ -915,8 +1065,8 @@ func _choose(game: Node, mode: Mode) -> Node2D:
 	# bird and goes when it looks away.
 	if standing != null and goal != null \
 			and _route_watched(game, me, goal.position) \
-			and _life_left(standing, game.scroll_speed()) > 1.2 \
-			and me.y < field().end.y - EDGE_ROOM:
+			and _life_left(standing, game.scroll_speed(), _edge_of(game)) > 1.2 \
+			and me.y < _edge_of(game) - EDGE_ROOM:
 		return standing
 	return goal
 
@@ -930,8 +1080,8 @@ func _choose(game: Node, mode: Mode) -> Node2D:
 ## doing what a hider does, and _choose() already moves it on before that
 ## patch reaches the bottom.
 ##
-## Short of full stick, so _steer() does not sprint. Holding your ground is not
-## a long crossing, and sprinting brings birds.
+## Short of full stick, which is a habit from when full stick sprinted; there is
+## no sprint now and it changes nothing.
 func _drive(game: Node, target: Node2D) -> void:
 	var direction := _toward(game, target)
 	if not is_instance_valid(target):
@@ -963,7 +1113,7 @@ func _best_patch(game: Node, from: Vector2, urgent: bool,
 		var t := _catch_time(from, patch.position, speed)
 		if not is_finite(t):
 			continue
-		if t + reaction() > _life_left(patch, speed):
+		if t + reaction() > _life_left(patch, speed, _edge_of(game)):
 			continue
 		if not urgent and _watched_spot(game, patch.position):
 			continue
@@ -999,7 +1149,7 @@ func _best_patch(game: Node, from: Vector2, urgent: bool,
 		# one. As a cost rather than a rule the bot oscillated: walk down to a
 		# low patch, get pinned, walk up, choose it again -- a run that died
 		# at 7s on the edge with nothing looking at it.
-		if not urgent and _life_left(patch, speed) - t < SPARE_LIFE:
+		if not urgent and _life_left(patch, speed, _edge_of(game)) - t < SPARE_LIFE:
 			continue
 		if want_dew and not _holds_dew(patch):
 			cost += 9.0
@@ -1011,8 +1161,8 @@ func _best_patch(game: Node, from: Vector2, urgent: bool,
 
 ## Not down where taking it means standing on the edge. A person who has seen
 ## the alarm once leaves the last strip of the meadow alone.
-static func _clear_of_edge(thing: Node2D) -> bool:
-	return thing.global_position.y < field().end.y - EDGE_ROOM
+func _clear_of_edge(game: Node, thing: Node2D) -> bool:
+	return thing.global_position.y < _edge_of(game) - EDGE_ROOM
 
 
 func _holds_dew(patch: MeadowPatch) -> bool:
@@ -1052,7 +1202,7 @@ func _nearest_loose(game: Node, from: Vector2) -> MeadowPickup:
 	var best_d := INF
 	for child in game._pickups_root.get_children():
 		var petal := child as MeadowPickup
-		if petal == null or not petal.revealed or not _clear_of_edge(petal):
+		if petal == null or not petal.revealed or not _clear_of_edge(game, petal):
 			continue
 		var d: float = petal.global_position.distance_to(from)
 		if d < best_d:
@@ -1075,12 +1225,9 @@ func _steer(direction: Vector2) -> void:
 		_hold(&"move_up"); _release(&"move_down")
 	else:
 		_release(&"move_up"); _release(&"move_down")
-	# Sprinting rustles and brings a bird over, so the bot only spends it on a
-	# long crossing -- which is the trade the game is offering.
-	if direction.length() > 0.9:
-		_hold(&"act")
-	else:
-		_release(&"act")
+	# The button is left alone. It used to sprint; it tosses a pebble now, and
+	# the bots do not throw them -- so the difficulty table is a player who
+	# never uses it, which is the floor par should be set from.
 
 
 # --- the guarantee, computed here --------------------------------------------
@@ -1110,10 +1257,21 @@ static func _catch_time(from: Vector2, target: Vector2, speed: float) -> float:
 	return maxf(walking, (entry - target.y) / speed)
 
 
-static func _life_left(patch: MeadowPatch, speed: float) -> float:
+## The bottom of the screen, worked out here from the camera's zoom rather than
+## asked of the game's edge_y(). The camera pushes in as the meadow speeds up,
+## so this rises from 270 to about 254 over a run.
+static func _edge_of(game: Node) -> float:
+	var half := float(ProjectSettings.get_setting(
+			"display/window/size/viewport_height")) * 0.5
+	return half + half / (game._camera as Camera2D).zoom.y
+
+
+## Seconds before a patch reaches the bottom of the screen, where being in it
+## stops counting -- being over the edge outranks being in grass.
+static func _life_left(patch: MeadowPatch, speed: float, edge: float) -> float:
 	if speed <= 0.0:
 		return INF
-	return maxf((field().end.y - patch.position.y) / speed, 0.0)
+	return maxf((edge - patch.position.y) / speed, 0.0)
 
 
 func _watched_spot(game: Node, point: Vector2) -> bool:
@@ -1131,7 +1289,7 @@ func _usable_count(game: Node, from: Vector2) -> int:
 	var count := 0
 	for patch in game._patches:
 		var t := _catch_time(from, patch.position, speed)
-		if not is_finite(t) or t + reaction() > _life_left(patch, speed):
+		if not is_finite(t) or t + reaction() > _life_left(patch, speed, _edge_of(game)):
 			continue
 		if _watched_spot(game, patch.position):
 			continue
@@ -1174,7 +1332,7 @@ func _nearest_usable(game: Node, from: Vector2, on_field: bool = false) -> float
 		if on_field and patch.position.y < field().position.y:
 			continue
 		var t := _catch_time(from, patch.position, speed)
-		if not is_finite(t) or t + reaction() > _life_left(patch, speed):
+		if not is_finite(t) or t + reaction() > _life_left(patch, speed, _edge_of(game)):
 			continue
 		if _watched_spot(game, patch.position):
 			continue

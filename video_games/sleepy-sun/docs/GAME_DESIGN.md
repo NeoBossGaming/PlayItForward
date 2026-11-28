@@ -687,6 +687,42 @@ blob: a dark blob on dark water is exactly the thing nobody sees coming.
   Mechanically, moving still costs two inputs: that is the change that makes
   everything else harder, and the gentle first minute exists to absorb it.
 
+### Mashing tires her legs
+
+Neo: *"in case someone spams jumps"* — add fatigue. The reason it needed doing
+is arithmetic. A jump keeps her in the air 0.32 s, a hornet only hits a player
+standing on the pad, and a press made mid-air is buffered for the landing. So
+drumming the button kept her airborne **76 %** of the time with no thought at
+all, which made the hang time a shield rather than a dodge.
+
+Every jump in place now costs fatigue (0.24) and every hop a little (0.06);
+standing on a pad rests it at 0.45/s. **Below 0.70 nothing changes.** Past it
+the jump gets lower and shorter and the beat before the next one stretches,
+from 0.10 s toward 0.45 s. A masher is past it in under two seconds and ends
+up in the air **36 %** of the time. It never locks out — a tired jump is
+still a jump, because a dead button while a hornet comes down reads as the game
+cheating. The arc visibly shrinks, and a bar appears under the hearts the
+moment fatigue is above nothing (the HUD moves its stamina bar there whenever a
+game shows lives; at its usual spot it ran through the heart plate).
+
+Two things the measurement decided rather than the first guess:
+
+- **The free allowance has to cover busy honest play.** The first numbers
+  (0.25 per jump, 0.14 per hop, free below 0.50) taxed the skilled bots, which
+  reached 0.64. Their peaks, logged action by action, were a jump followed
+  0.4 s later by a second one because the first went early, and runs of hops
+  while several pads went at once. Retuned with the free line at 0.60, a full
+  suite run still found one at 0.65 — two hornets down one lane, three quick
+  jumps, about 0.63 by arithmetic — so the line is 0.70. `riverleap_test.gd`
+  asserts every skilled run stays under it, so a later tuning pass cannot
+  quietly make the ordinary game harder.
+- **Hops cannot carry the weight.** Late in a run the skilled bot hops eight
+  times in five seconds, close to the rate of someone hammering left-right, so
+  any hop cost heavy enough to stop hop-mashing would tax real play. Hop-mashing
+  is left mostly alone, and that is acceptable because it is a weak shield where
+  jump-mashing was a strong one: it puts her on a pad in one lane or the other
+  half the time, and sinking pads and herons do not care how often she jumps.
+
 ### How the director chooses which pad falls
 
 Random, **with the player's position as a veto rather than a bias.**
@@ -1339,7 +1375,7 @@ rather than something that comes to you.
 | open ground, unseen | +0.022/s → +0.070/s |
 | inside a bird's cone | **+0.42/s** |
 | inside grass | +0.016/s — frozen, never lowered |
-| pinned against the bottom edge | **+0.75/s** — overrides grass and cones |
+| below the bottom of the screen | **+0.75/s** — overrides grass and cones |
 | dew collected | −0.42 |
 | petal collected | −0.09 |
 | spotted | +0.18, a swoop, a stun, −100 points |
@@ -1358,18 +1394,21 @@ somewhere nobody can see: a target of **seven measured as 2.2 patches actually
 on the field**, and lowering it to three changed almost nothing.
 
 Density in **space** is the right control for a scrolling world — the river
-works the same way. `PATCH_GAP` runs **46 px → 92 px** of meadow between stands
-of grass: 3.6 patches on the field early, 2.8 late, and cover from 69 px away
-from an average spot to 108 px.
+works the same way. `PATCH_GAP` runs **46 px → 136 px** of meadow between
+stands of grass: 4.2 patches on the field early, 2.6 late, and cover from 69 px
+away from an average spot to 150 px.
 
 It was 52 → 128 while the meadow ran at 18 → 52 px/s, and the gap had to move
 with the scroll, because patches **arrive** at `scroll / gap` per second. When
 the scroll slowed to 16 → 38 for the change below, the old gap starved the
 meadow — late dew worth 0.98× the open rise — and even at 100 the bots found 9 %
 less dew per second than before, which is exactly how far arrivals had fallen.
-46 → 92 puts arrivals back where they were. The late game's thinning is gentler
-in space than it was (108 px, not 191) because the pressure moved: holding your
-ground against 38 px/s is now most of it.
+46 → 92 put arrivals back where they were. Then the scroll went to 16 → 56
+(below) and the same reasoning ran the other way: faster ground at the same
+spacing delivered half as much cover again per second, the late supply check
+read 2.0× where it had read 1.36×, and runs got longer — the opposite of what
+a faster meadow is for. 136 keeps late arrivals at 0.41/s and lets the speed
+show up as cover further apart.
 
 ### Where the late game's pressure is allowed to come from
 
@@ -1422,12 +1461,23 @@ move with the ground. `hush_test.gd` now checks she moves exactly as far as a
 patch does, and it was verified by deleting the one line that carries her.
 
 The fix Neo chose has a second half. Carried, a player who never touches the
-stick reaches the bottom edge about six seconds after GO, so the edge became the
-meadow's one boundary: **pinned against it, nerve rises at 0.75/s** — nearly
-twice what a bird's eye costs, in grass or out, because riding a patch down to
-the edge and sitting in it is exactly the safe corner this design removes. The
-HUD's edge alarm comes on from the first pinned frame and the first pin of a
-run says KEEP UP once. One push of the stick gets her off.
+stick drifts to the bottom, so the bottom became the meadow's one boundary:
+**below the bottom of the screen, nerve rises at 0.75/s** — nearly twice what a
+bird's eye costs, in grass or out, because riding a patch off the bottom and
+sitting in it is exactly the safe corner this design removes. The HUD's edge
+alarm comes on from the first frame over and the first time in a run says KEEP
+UP once. One push of the stick brings her back.
+
+It began as a wall 28 px *above* the bottom of the screen, which read as an
+invisible fence in the middle of the grass. Neo asked for it to sit *"a little
+offscreen, but the player still gets punished for doing so"*. The line is now
+the bottom of the screen itself, and the meadow can carry her up to `OVERHANG`
+(16 px) past it — her feet go out of view, her head and shoulders do not. The
+line is worked out every frame from the camera's zoom (`edge_y()`), because the
+camera pushes in as the meadow speeds up: the bottom of the screen is y 270 at
+the gun and about 254 late. A fixed line would be offscreen early and in plain
+view late. Cover counts as lasting until it reaches that same line, since being
+over the edge outranks being in grass.
 
 This closed a real hole. Standing still used to be free — fresh cover arrived
 on its own — and now it costs ground, which is the relationship Riverleap has
@@ -1436,12 +1486,14 @@ right.
 
 What changed with it, and why each number moved:
 
-- **`WALK` 70 → 85, `SCROLL` 18 → 52 became 16 → 38.** Before, standing still
-  on screen meant being lifted up through the meadow for free at the scroll
-  speed, so her approach to new cover — which always arrives from the top — was
-  walk *plus* scroll: 122 px/s late. Riding takes that lift away. At the old
-  numbers she would have made 18 px/s of headway late on; now it is 47. A faster
-  walk (92) was measured and bought nothing, so it was not kept.
+- **`WALK` 70 → 85 → 95, `SCROLL` 18 → 52 became 16 → 38, then 16 → 56.**
+  Before, standing still on screen meant being lifted up through the meadow
+  for free at the scroll speed, so her approach to new cover — which always
+  arrives from the top — was walk *plus* scroll: 122 px/s late. Riding takes
+  that lift away. 16 → 38 was the first cut; Neo then asked for the scrolling
+  to get faster as time goes on, and it had crept up so evenly nobody noticed.
+  It now more than triples across a run (about 32 px/s at a minute, 45 at two,
+  50 at three), with the walk raised to 95 so the late headway is still 39.
 - **`MERCY_SECONDS` 1.1 → 1.6.** After a spotting the bird swoops onto her, then
   flies back along its lane. While she was pinned to the screen the meadow's
   drift separated them during her mercy window; once they rode it together, a
@@ -1449,12 +1501,37 @@ What changed with it, and why each number moved:
   caught her again the moment mercy ran out — 0.65 s of movement after the
   stun, 55 px, inside a 78 px cone. Found in a traced run that died at 13 s.
 - **The bottom edge costs a stranger something.** A player who touches nothing
-  lasts **6 seconds** once the meadow is up to speed (the run is over about 8 s
-  after GO), against 35 s before. That is the
+  lasts **7.7 seconds** once the meadow is up to speed, against 35 s before the
+  meadow carried her (and 6.2 while the wall sat 28 px higher). That is the
   direct price of the rule Neo chose, and it is the one number here that runs
   against the gentle-opening principle in §5. The alarm and KEEP UP are what
   stand between a confused first-timer and it. If it proves harsh at the
-  cabinet, `NERVE_PINNED` is the single knob.
+  cabinet, `NERVE_OVER_EDGE` is the single knob.
+
+### The button tosses a pebble
+
+There was a sprint: the button made her 1.75× faster while stamina lasted, and
+was loud enough that a nearby bird came to look. Neo: *"remove sprint, it makes
+it so weird"* — a dash button in a careful stealth game — *"and then just
+figure out another use for the button."*
+
+The button tosses a pebble 80 px the way she is pushing the stick (or facing,
+with it centred). Every bird within 120 px of where it lands goes to look:
+flies there and stares at it for a couple of seconds, cone and all, then goes
+back to its rounds. One every five seconds; the stamina bar became the pebble
+meter, full meaning ready.
+
+It is the birds' own behaviour turned round. Sprinting already made a bird
+`investigate()` — but it investigated *her*, a thing that happened to the
+player. The pebble makes the same behaviour something the player does. A bird
+looking at a pebble is a bird not looking at the gap she wants to cross; a
+pebble thrown badly pulls the bird, and its cone, straight over her. The
+pebble rides the meadow like everything else on the ground, so the place the
+bird heard is a place in the meadow, not on the screen.
+
+The controls slide could only fit one word ("pebble") without the row running
+into the player standing behind the card, so the purpose is taught on the
+cone slide instead: *walk behind them, or toss a pebble.*
 
 ### Two things that were invisible until somebody looked
 
@@ -1478,27 +1555,35 @@ Bots at three reaction times, **twenty runs each**:
 
 | | 133 ms | 216 ms | 300 ms |
 |---|---|---|---|
-| survived | 108 s | 85 s | 95 s |
+| survived | 131 s | 126 s | 103 s |
 
-Pooled: mean 96 s, median 84 s, ten of the sixty at the suite's 170 s cap.
-`PAR_SECONDS` is **95**, set from that table, so par (a minute and a half) is a
-B and twice par, just over three minutes, is an S. It was 120 against a table
-of 119 / 119 / 108 before she rode the meadow; runs are shorter now because
-holding your ground is no longer free, which is the point, and par moved with
-them so nobody is silently regraded.
+Pooled: mean and median both 120 s, ten of the sixty at the suite's 170 s cap.
+`PAR_SECONDS` is **120**, set from that table, so par (two minutes) is a B and
+twice par is an S. The bots never throw pebbles, so this is par for a player
+who never uses the button.
+
+Par has moved twice in two rounds, and both moves are measured. It went 120 →
+95 when she started riding the meadow, because holding your ground stopped
+being free (108 / 85 / 95 s). It came back to 120 when the sprint went — and
+mostly not because of the faster meadow or the pebble. The bots had sprinted
+at every full-stick move, and sprinting brought birds to look at her, so they
+were being spotted twice as often as the game asked: spottings per 100 s fell
+from 9.1 to 4.8 the moment the sprint was gone.
 
 Sixty runs, not the suite's eighteen, because eighteen swing too much to set a
 number from: the unchanged old build read 119 s on 4.7 and 136 s on 4.6 at the
 216 ms column. The comparison that was stable was **rates per 100 s of
 survival** — and by those the riding meadow is nearly the same game as before:
 
-| per 100 s | watched | spotted | dew | petals | pinned |
+| per 100 s | watched | spotted | dew | petals | over the edge |
 |---|---|---|---|---|---|
 | before riding | 3.3 s | 10.1 | 19.6 | 20.2 | — |
-| riding, as shipped | 2.9 s | 9.1 | 19.2 | 21.6 | 0.17 s |
+| riding, with sprint | 2.9 s | 9.1 | 19.2 | 21.6 | 0.17 s |
+| no sprint, faster meadow | 2.0 s | 4.8 | 17.9 | 21.8 | 0.41 s |
 
-Early deaths did not get more common: runs ending inside 45 s were 8 % of sixty
-against 17 % of eighteen before.
+Time over the edge doubled, which is the faster meadow pushing harder. Early
+deaths are rarer than they have ever been: 2 % of sixty runs ended inside
+45 s, against 8 % with the sprint and 17 % before riding.
 
 Reaction time matters less here than in either other game, and that is honest
 rather than a tuning failure: nothing in this game has to be dodged on reflex.
@@ -1510,7 +1595,7 @@ lasted. Survival time cannot carry it: six pairs of whole runs on one unchanged
 build gave hiding 61 s / 87 s / 96 s against foraging 137 s / 102 s / 88 s, so
 the claim came out true, false and true on the same code. Dew rate is stable
 and is the claim anyway, since dew is the only thing that lowers the meter:
-foraging finds **0.180 dew/s against hiding's 0.043** (0.177 against 0.062
+foraging finds **0.183 dew/s against hiding's 0.056** (0.177 against 0.062
 before riding — a hider who rides her patch to the edge now pays for it).
 
 ---
@@ -1541,6 +1626,14 @@ others took its place:
   later tuning pass makes the opening brutal.
 - **A run does end** — a bot that never touches the controls must lose all five
   lives and report exactly once. Losing is the endless loop's only exit.
+- **Mashing tires her, and nothing else does** — mashing the button must drop
+  her time in the air from about 76 % to under 45 % without ever reaching
+  zero, and every skilled bot run must stay under the fatigue that changes
+  anything. The first half was verified by setting the costs to zero (73 %
+  airborne after four seconds); the second caught two tunings taxing ordinary
+  play, at 0.64 and 0.65. The mashing is done with the river held in its
+  launch: the first version let her fall in, the water rested her legs, and on
+  4.6 it read fatigue 0.38 at the end of a mash that had worked perfectly.
 - **Hazards can be reacted to** — measured on standalone hazards at the worst
   case the game can produce: a hornet at its top airspeed must be on
   screen ≥ 0.40 s before it strikes, and a heron's ring must be up for its
@@ -1651,9 +1744,22 @@ than the one a person does.
   patch has. The regression test for Neo's report, and the reason the suite's
   reach maths may treat her as only walking. Verified by deleting the line that
   carries her: it fails with the bug's own description.
-- **The edge bites** — pinned at the bottom, nerve rises well above a bird's
-  rate, the alarm is on, and a third of a second of pushing up frees her.
-  Verified by setting the pinned rate to the seen rate.
+- **The edge bites, a little offscreen** — the ground just above the bottom of
+  the screen is free; past it the meadow carries her at least a few pixels and
+  at most `OVERHANG`, nerve rises well above a bird's rate, the alarm is on,
+  and pushing up brings her back. The bottom of the screen is worked out in
+  the test from the camera's zoom, not asked of the game. Verified by setting
+  the overhang to zero and the over-edge rate to the seen rate.
+- **There is no sprint** — the button held while walking moves her at exactly
+  `WALK`. Verified by switching sprint back on: 166 px/s.
+- **A pebble turns a head** — thrown through real input, stick then button; a
+  bird within earshot flies to where it landed with its cone on it, and a
+  second throw is refused until it recharges. Verified by taking the
+  `investigate()` call out.
+- **The card shows what it says** — the cone slide's bird faces the girl and
+  the dew slide's dew is revealed, built inside a card that is really in the
+  tree. Both were broken and found by a capture, not a check; verified
+  against the old card, which fails both.
 - **The art is pixel art** — every large layer's mean run, measured on the
   imported texture. Acorn Storm's suite holds the same check for its two.
 - Plus the curve, the two ground layers staying on different periods and
@@ -1662,11 +1768,12 @@ than the one a person does.
 
 The bots carry more judgement than they did, and each piece was added because a
 traced death showed the bot doing something no person would: it re-decides
-when pinned (after its reaction time, as a person notices the alarm), never
-walks *down* to a patch that will carry it onto the edge, keeps a berth from
-birds rather than only from where they are looking, and does not wait at the
-top edge for grass that has not arrived. Without them the difficulty table
-measured a bot sitting on the edge.
+when over the edge (after its reaction time, as a person notices the alarm),
+never walks *down* to a patch that will carry it off the bottom, keeps a berth
+from birds rather than only from where they are looking, and does not wait at
+the top edge for grass that has not arrived. Without them the difficulty table
+measured a bot sitting on the edge. They never press the button: the table is
+a player who never throws a pebble.
 
 ### And a third suite, for what sits between them
 
@@ -1869,6 +1976,18 @@ Eight notes that cost real time to learn:
   errors because the theme loads before its fonts exist, so every suite passed
   and the run said FAILED. `run_tests.sh` now warms a cold cache with one
   unjudged import; the judged one still reports anything that stays broken.
+- **A signal connected after it fires never fires.** Two intro-card slides set
+  their subject up with `node.ready.connect(...)` on the line after adding the
+  node to a slide that was already in the tree. Adding it ran `_ready()` and
+  emitted `ready` on the spot, so the connection was a line late: the cone
+  slide's bird looked away from the girl and the dew slide never showed its
+  dew. Nothing errors, nothing warns. Check `is_node_ready()` first.
+- **When you take a feature away, check what the bot was doing with it.**
+  Removing Hush Meadow's sprint made runs *longer*, by a quarter. The bot had
+  sprinted at every full-stick move, and sprinting made nearby birds come and
+  look at her; it was being spotted twice as often as it needed to be, and par
+  had been set against that. Spottings per 100 s halved the moment the sprint
+  went, and par went back to where it was before.
 
 ---
 

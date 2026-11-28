@@ -71,6 +71,9 @@ var _toast_tween: Tween
 var _multiplier_value: int = 1
 var _alarm_pulse: float = 0.0
 var _life_segments: Array[TextureRect] = []
+## Where the scene puts the stamina bar. It moves under the hearts in a game
+## that shows them -- see set_stamina().
+var _stamina_home: Vector2 = Vector2.ZERO
 var _shown_halves: int = -1
 
 
@@ -86,6 +89,7 @@ func _ready() -> void:
 			BAR.position.y + (BAR.size.y - 9.0) * 0.5)
 	_meter_mark.size = Vector2(7.0, 7.0)
 	_build_lives()
+	_stamina_home = _stamina.position
 
 	_meter_track.visible = false
 	_meter_fill.visible = false
@@ -279,8 +283,14 @@ func set_pips(filled: int, count: int, colour := Color(0.8, 1.0, 0.85)) -> void:
 
 ## Shown only by the games with sprint. Flashes red while spent, so the reason
 ## the player suddenly stopped accelerating is visible rather than mysterious.
+## Under the hearts when a game shows them, otherwise where the scene put it.
+## Riverleap's fatigue bar sits in the same corner as its lives, and at its
+## home position it ran straight through the second row of the heart plate.
 func set_stamina(value: float, is_exhausted: bool) -> void:
 	_stamina.visible = true
+	_stamina.position = Vector2(LIFE_ORIGIN.x,
+			LIFE_ORIGIN.y + LIFE_SEGMENT.y + LIFE_PAD * 2.0 + 3.0) \
+			if _lives.visible else _stamina_home
 	_stamina.value = clampf(value, 0.0, 1.0) * 100.0
 	_stamina.modulate = Color(1, 0.42, 0.38) if is_exhausted else Color(0.55, 0.9, 1.0)
 
